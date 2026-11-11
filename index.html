@@ -7,7 +7,6 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Bannerfall</title>
-<link rel="stylesheet" href="src/style.css">
 <script>
   // Show any error on screen so problems are visible on a phone (no dev tools there).
   window.addEventListener('error', function (e) {
@@ -17,41 +16,106 @@
     d.textContent += 'Error: ' + (e.message || 'resource failed') + src + (e.filename ? ' @ ' + e.filename + ':' + e.lineno : '') + '\n';
   }, true);
 </script>
-<script type="importmap">
-{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }
+<script>
+  // ===== Game version: bump on every change you publish (see CLAUDE.md). =====
+  window.BF_VERSION = '0.2.0';
+  // Every game file is loaded as file.js?v=VERSION so phones never mix old and new files from the browser cache.
+  // (On localhost a timestamp is used instead, so edits show up immediately while developing.)
+  (function () {
+    var local = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+    var v = local ? Date.now() : window.BF_VERSION;
+    var mods = ['main', 'world', 'util', 'geo', 'data', 'models', 'game', 'path', 'ai', 'rts', 'pov', 'hud'];
+    var imports = {
+      'three': 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js',
+      'three/addons/': 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/'
+    };
+    mods.forEach(function (m) { imports[new URL('src/' + m + '.js', location.href).href] = new URL('src/' + m + '.js?v=' + v, location.href).href; });
+    document.write('<script type="importmap">' + JSON.stringify({ imports: imports }) + '<\/script>');
+    document.write('<link rel="stylesheet" href="src/style.css?v=' + v + '">');
+  })();
 </script>
 </head>
 <body>
 <canvas id="gl"></canvas>
+<canvas id="ov"></canvas>
 <div id="box" class="hide"></div>
 <div id="loading">Raising the banners…</div>
 
-<!-- Command (aerial) view HUD -->
+<!-- ============ command view HUD ============ -->
 <div id="hud" class="hide">
-  <div id="topbar"><span class="brand">BANNERFALL</span><span id="sel">No units selected</span><span id="ver"></span></div>
-  <div id="cmd" class="bar">
-    <button class="btn" id="bAll">Army<small>select all</small></button>
-    <button class="btn hide" id="bClear">&#10005;<small>deselect</small></button>
-    <button class="btn" id="bRide">&#9876; Ride<small>3rd person</small></button>
-    <button class="btn" id="bLead">&#9873; Lead<small>as hero</small></button>
-    <button class="btn" id="bFs">&#x26F6;<small>full</small></button>
+  <div id="top">
+    <div class="res" title="Food"><i class="ic f"></i><span id="rf">0</span></div>
+    <div class="res" title="Wood"><i class="ic w"></i><span id="rw">0</span></div>
+    <div class="res" title="Gold"><i class="ic g"></i><span id="rg">0</span></div>
+    <div class="res" title="Population"><i class="ic p"></i><span id="rp">0/0</span></div>
+    <div id="clock">0:00</div>
+    <div id="info"></div>
+    <span id="ver"></span>
+    <button class="btn sm" id="bPause">&#10074;&#10074;</button>
   </div>
-  <div id="help"></div>
+  <div id="quick">
+    <button class="btn" id="bAll">Army<small>select</small></button>
+    <button class="btn" id="bIdle">Idle<small>peasant</small></button>
+    <button class="btn" id="bRide">&#9876; Ride<small>unit</small></button>
+    <button class="btn" id="bLead">&#9873; Lead<small>hero</small></button>
+  </div>
+  <div id="bottom">
+    <canvas id="mini" width="128" height="128"></canvas>
+    <div id="selp"><div id="selname">Nothing selected</div><div id="seldesc"></div><div id="selq"></div></div>
+    <div id="card"></div>
+  </div>
+  <div id="place" class="hide"><span id="ptxt">Tap the map to place</span><button class="btn" id="pok">&#10003;</button><button class="btn" id="pno">&#10005;</button></div>
 </div>
 
-<!-- 1st/3rd person HUD -->
+<!-- ============ 1st / 3rd person HUD ============ -->
 <div id="pov" class="hide">
   <div id="joy" class="hide"><div id="knob"></div></div>
   <div id="xhair" class="hide"></div>
-  <div id="pvname"></div>
-  <div id="povbar" class="bar">
+  <div id="pvname"><span id="pvn"></span><div class="hpbar"><div id="pvhp"></div></div></div>
+  <div id="povbar">
     <button class="btn" id="bExit">&#9873; Command<small>view</small></button>
     <button class="btn" id="bView">1st<small>person</small></button>
+  </div>
+  <div id="povact">
+    <button class="btn big" id="bFollow">Follow<small>me!</small></button>
+    <button class="btn big red" id="bStrike">&#9876;<small>strike</small></button>
   </div>
   <div id="povhelp"></div>
 </div>
 
+<div id="toasts"></div>
+
+<!-- ============ screens ============ -->
+<div id="title" class="scr hide">
+  <h1>BANNERFALL</h1>
+  <h2>Command the field from above. Then ride into it.</h2>
+  <div class="panel">
+    <div class="row" id="modes"></div>
+    <p id="modeDesc"></p>
+    <div class="row"><span class="lbl">Enemy</span><button class="btn sb" data-d="0">Squire<small>easy</small></button><button class="btn sb" data-d="1">Knight<small>normal</small></button><button class="btn sb" data-d="2">Warlord<small>hard</small></button></div>
+    <div class="row"><span class="lbl">Graphics</span><button class="btn sb" data-q="low">Low</button><button class="btn sb" data-q="med">Medium</button><button class="btn sb" data-q="high">High</button></div>
+    <div class="row"><button class="btn" id="bHelp">How to play</button><button class="btn go" id="bStart">&#9876; Begin</button></div>
+  </div>
+</div>
+<div id="help" class="scr hide">
+  <div class="panel text">
+    <p><b>Goal (Skirmish):</b> peasants gather food (berry bushes, farms), wood (trees) and gold (mines) and carry it to your Town Hall or a Storehouse. Build Houses for more population, a Barracks for soldiers and a Stable for knights. Destroy the enemy Town Hall.</p>
+    <p><b>Phone:</b> drag to pan, pinch to zoom, twist to rotate. Tap a unit to select it; double-tap for all of that type; hold then drag to box-select. With units selected, tap the ground to move, an enemy to attack, a tree/bush/mine to gather. The command panel (bottom right) builds and trains. Tap the minimap to jump.</p>
+    <p><b>PC:</b> WASD/arrows pan, Q/E rotate, wheel zoom. Left-click select, drag to box, Shift adds, double-click selects a type. Right-click to order. Command panel keys: Z X C V B N M. I = idle peasant, Ctrl+A = army, Tab = ride selected unit, H = lead as hero, P = pause.</p>
+    <p><b>Riding:</b> left thumb moves, right thumb looks, Strike attacks, Follow me makes nearby troops follow you. PC: click to aim, WASD, left-click strike, F follow, V switches 1st/3rd, Tab returns.</p>
+    <button class="btn" id="bHelpBack">&#8592; Back</button>
+  </div>
+</div>
+<div id="pause" class="scr hide">
+  <h1>PAUSED</h1>
+  <div class="row"><button class="btn" id="bResume">Resume</button><button class="btn" id="bRestart">Restart</button><button class="btn" id="bQuit">Main menu</button><button class="btn" id="bFs">Fullscreen</button></div>
+</div>
+<div id="end" class="scr hide">
+  <h1 id="endT">VICTORY</h1><h2 id="endS"></h2>
+  <div class="row"><button class="btn" id="bAgain">Play again</button><button class="btn" id="bMenu">Main menu</button><button class="btn" id="bLook">Look around</button></div>
+</div>
+
 <div id="err" class="hide"></div>
-<script type="module" src="src/main.js"></script>
+<script type="module">import './src/main.js';</script>
 </body>
 </html>

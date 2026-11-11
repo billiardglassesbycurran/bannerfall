@@ -34,28 +34,38 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
 - Work in small steps; each commit should leave the game playable.
 - Push to `main` on GitHub so the owner can test on their phone (pushing = publishing to the live site).
 - Never force-push or rewrite history on `main`. Never commit secrets or tokens.
-- **Bump `VERSION` in `src/main.js` on every change you push** — it's shown top-right in the game so the owner
+- **Bump `window.BF_VERSION` in `index.html` on every change you push** — it's shown top-right in the game so the owner
+  can confirm their phone has the newest build, and it cache-busts every game file (`file.js?v=VERSION`) so phones never
+  mix old and new files. New `src/*.js` modules must be added to the `mods` list in `index.html`.
   can confirm their phone has the newest build.
 
 ## Code map
-- `index.html` — page shell, HUD buttons, import map, on-screen error box (shows JS errors on phones).
-- `src/main.js` — renderer, scene, lighting, spawning units, mode switching (command ⇄ 1st/3rd person), HUD, input routing, game loop.
-- `src/terrain.js` — heightmap (noise ported from the prototype), `heightAt()`, `walkable()`, water, trees.
-- `src/units.js` — unit figures built from primitives, team colours, movement/animation, separation, banners.
-- `src/rts.js` — aerial camera, selection (click/tap/box/double-tap), move orders, touch pan/pinch/twist.
-- `src/pov.js` — 1st/3rd-person camera and control (WASD + pointer-lock mouse; touch joystick + look drag).
-- `window.bannerfall` exposes game state for debugging in the browser console.
+- `index.html` — page shell, all HUD/menu markup, version + import map (cache-busting), on-screen error box.
+- `src/main.js` — renderer, lighting, quality levels, title menu, game-mode setup, 1st/3rd-person switching, input routing, main loop.
+- `src/data.js` — unit/building stats, difficulty levels, game modes (balance ported from the prototype).
+- `src/world.js` — heightmap, walkability grid, roads, resources (trees/berries/gold), grass/rocks, water, sky, minimap colours.
+- `src/models.js` — unit figures (GPU-instanced per team+type: keeps big armies fast), knight + horse, building models, arrows.
+- `src/geo.js` — helpers to bake colours into geometry and merge parts into one mesh.
+- `src/game.js` — simulation: spawning, orders, gathering, building, training, combat, projectiles, win/lose.
+- `src/path.js` — A* pathfinding on the grid. `src/ai.js` — enemy AI for Skirmish, Battle, Survival.
+- `src/rts.js` — aerial camera, picking, selection, touch/mouse orders. `src/pov.js` — 1st/3rd person, strike, Follow me.
+- `src/hud.js` — resource bar, selection panel, command card, minimap, health bars, toasts.
+- `window.bannerfall` exposes app state for debugging; `#play=skirmish,1` in the URL skips the menu (mode, difficulty 0-2).
 
 ## Testing before you push
 - Run the local preview (`.claude/launch.json`) and check: no errors in the console or the red error box,
   select + move from above, Ride/Lead into 3rd person, toggle 1st person, return to command view.
 - Check a phone-sized landscape viewport (e.g. 740×360) with touch emulation as well as desktop.
+- The simulation can be fast-forwarded headlessly from the console to test AI/economy, e.g.
+  `for (let i=0;i<6000;i++){bannerfall.game.update(.05);bannerfall.ai.update(.05)}`.
+- When the preview pane is hidden the browser pauses animation frames, so drive tests with screenshots or the loop above.
 - Note: macOS blocks the preview server from reading the Desktop folder, so the preview serves a copy —
   sync it first: `rsync -a --delete --exclude .git --exclude .claude ./ <DocumentRoot from .claude/launch.json>/`.
 
-## Roadmap (smallest playable first)
-1. ✅ Terrain, a few units, select & move from above, drop into a unit's 3rd-person view.
-2. Pathfinding around trees/water (A* on the grid, like the prototype).
-3. Combat in both views (strike/block in 3rd person, auto-attack in command view), health, death.
-4. Enemy AI, then economy (peasants, food/wood/gold), buildings, training units.
-5. Minimap, graphics quality setting, sound, menus, maps & campaign from the prototype.
+## Roadmap
+1. ✅ v0.1 Terrain, units, select & move from above, 3rd-person view.
+2. ✅ v0.2 Graphics pass; economy, buildings, training, combat, pathfinding, enemy AI; Skirmish / Battle / Survival modes.
+3. Ages & upgrades (Feudal/Kingdom, blacksmith, from the prototype), walls, catapults.
+4. Fog of war, control groups, formations UI, sound and music.
+5. Campaign missions and more maps (the prototype has Riverlands / Highland Pass / Forest Valley and 4 missions).
+6. 3rd-person polish: blocking, charge ability, mounted hero, camera avoiding trees.
