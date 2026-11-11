@@ -11,11 +11,49 @@ export const WL = -0.45;
 export const BASES = [{ x: 24, z: 104 }, { x: 104, z: 24 }];
 // A river winds between the two bases (bridge in the middle, shallow fords near each end) — layout from the prototype.
 export const BRIDGE = { x: 64, z: 64 };
-export const FORDS = [[37.2, 32.8], [90.8, 95.2]];
-const ROADS = [[[24, 104], [44, 76], [64, 64], [84, 52], [104, 24]], [[24, 104], [18, 62], [37, 33], [66, 20], [104, 24]], [[24, 104], [62, 110], [91, 95], [110, 62], [104, 24]]];
+const RIVER_ROADS = [[[24, 104], [44, 76], [64, 64], [84, 52], [104, 24]], [[24, 104], [18, 62], [37, 33], [66, 20], [104, 24]], [[24, 104], [62, 110], [91, 95], [110, 62], [104, 24]]];
+const RIVER_GROVES = [[12, 72, 7], [46, 120, 6], [30, 84, 3.5], [44, 62, 6], [68, 98, 6], [18, 44, 7], [86, 118, 6], [64, 22, 5]];
+// ---------------- maps ----------------
+// The map is built once when the page loads; picking another map on the title screen reloads the page.
+export const MAP_LIST = {
+  riverlands: { name: 'Riverlands', desc: 'A winding river splits the land: one bridge and two shallow fords. Docks, fishing and warships.' },
+  highland: { name: 'Highland Pass', desc: 'A mountain ridge with three narrow passes. Hold the high ground; gold in the hills, no sea.' },
+  forest: { name: 'Forest Valley', desc: 'Thick forest everywhere: winding paths, clearings, two ponds. Lots of wood; easy to ambush, hard to scout.' },
+  random: { name: 'Random', desc: 'A new land every game: river, ridge or forest lakes, with hills and woods in new places.' },
+};
+function pickMap() {
+  let id = 'riverlands', seed = 1;
+  try {
+    const h = /map=(\w+)(?:,(\d+))?/.exec(location.hash);
+    if (h) { id = h[1]; seed = +h[2] || 1; } else { id = localStorage.getItem('bf.map') || id; seed = +localStorage.getItem('bf.mapSeed') || 1; }
+  } catch { /* ignore */ }
+  return MAP_LIST[id] ? { id, seed } : { id: 'riverlands', seed: 1 };
+}
+function makeMap({ id, seed }) {
+  const base = { id, seed, name: MAP_LIST[id].name, river: false, bridge: false, fords: [], roads: RIVER_ROADS, groves: RIVER_GROVES, scatter: 170, hills: 7, off: 0, ridge: null, ponds: [], clear: [] };
+  if (id === 'riverlands') return { ...base, river: true, bridge: true, fords: [[37.2, 32.8], [90.8, 95.2]] };
+  if (id === 'highland') return { ...base, hills: 10, off: 23, scatter: 110,
+    roads: [[[24, 104], [44, 76], [64, 64], [84, 52], [104, 24]], [[24, 104], [20, 62], [39, 41], [66, 22], [104, 24]], [[24, 104], [62, 106], [89, 87], [108, 62], [104, 24]]],
+    ridge: { h: 11, w: 8, passes: [[39, 41, 4.5], [64, 64, 6], [89, 87, 4.5]] }, groves: [[12, 72, 6], [46, 120, 5], [30, 84, 3], [18, 44, 6], [86, 118, 5], [70, 100, 4]], hillGold: true };
+  if (id === 'forest') return { ...base, off: 51, hills: 5, scatter: 330, ponds: [[44, 44, 6.5], [84, 84, 6.5]],
+    groves: [[12, 72, 9], [46, 120, 8], [44, 62, 8], [68, 98, 8], [18, 44, 9], [86, 118, 8], [64, 22, 7], [64, 106, 7], [22, 64, 7]], clear: [[46, 82, 9], [82, 46, 9], [64, 64, 7]] };
+  // random: seeded, mirrored so both sides are fair
+  const r = mulberry32(seed * 7919 + 13), kind = r() < .45 ? 'river' : r() < .55 ? 'ridge' : 'ponds';
+  const groves = []; for (let i = 0; i < 9; i++) { const x = 8 + r() * 70, z = 30 + r() * 90; if (z > SIZE - x + 10) continue; groves.push([x, z, 4 + r() * 5]); }
+  const m = { ...base, off: 100 + seed % 997, hills: 5 + r() * 6, scatter: 110 + r() * 200 | 0, groves, clear: [[46, 82, 8], [82, 46, 8], [64, 64, 6]] };
+  if (kind === 'river') Object.assign(m, { river: true, bridge: true, fords: [[37.2, 32.8], [90.8, 95.2]] });
+  else if (kind === 'ridge') Object.assign(m, { ridge: { h: 8 + r() * 5, w: 7 + r() * 2, passes: [[39, 41, 4.5], [64, 64, 5 + r() * 2], [89, 87, 4.5]] }, roads: [[[24, 104], [44, 76], [64, 64], [84, 52], [104, 24]], [[24, 104], [20, 62], [39, 41], [66, 22], [104, 24]], [[24, 104], [62, 106], [89, 87], [108, 62], [104, 24]]], hillGold: true });
+  else { const a = 30 + r() * 20; m.ponds = [[a, a, 5 + r() * 3], [SIZE - a, SIZE - a, 5 + r() * 3]]; }
+  m.name += ` (${kind === 'river' ? 'river' : kind === 'ridge' ? 'mountains' : 'lakes'} #${seed})`;
+  return m;
+}
+export const MAP = makeMap(pickMap());
+export const FORDS = MAP.fords;
+const ROADS = MAP.roads;
 export function riverDist(x, z) { return Math.abs((x - z) / Math.SQRT2 + Math.sin((x + z - 128) * .045) * 6); }
 /** Height of the bridge deck at (x,z), or -99 if not on the bridge. */
 export function bridgeAt(x, z) {
+  if (!MAP.bridge) return -99;
   const u = ((x - BRIDGE.x) - (z - BRIDGE.z)) / Math.SQRT2, v = ((x - BRIDGE.x) + (z - BRIDGE.z)) / Math.SQRT2;
   return Math.abs(u) < 7 && Math.abs(v) < 1.6 ? WL + .75 + .45 * (1 - (u / 7) ** 2) : -99;
 }
@@ -27,12 +65,19 @@ function distToRoad(x, z) {
   return best + (vnoise(x * .15, z * .15) - .5) * 1.2;
 }
 function rawH(x, z) {
-  let h = 1.0 + (fbm(x * .022 + 11, z * .022) - .5) * 7 + (fbm(x * .09 + 40, z * .09) - .5) * 1.4;
+  let h = 1.0 + (fbm(x * .022 + 11 + MAP.off, z * .022 + MAP.off * .7) - .5) * MAP.hills + (fbm(x * .09 + 40 + MAP.off, z * .09) - .5) * 1.4;
   const e = Math.min(x, z, SIZE - x, SIZE - z);
   if (e < 14) { const k = (14 - e) / 14; h += k * k * 20 * (.55 + .9 * fbm(x * .06 + 7, z * .06)); }
   for (const b of BASES) { const d = Math.hypot(x - b.x, z - b.z); if (d < 20) h = lerp(h, 1.0, smooth(clamp((20 - d) / 8, 0, 1))); }
   h = Math.max(h, WL + .4);
   const rd = distToRoad(x, z); if (rd < 4) h = lerp(h, h * .7 + .35, smooth((4 - rd) / 4) * .7);
+  if (MAP.ridge) { // mountain ridge along the frontier, cut by passes
+    const R = MAP.ridge, d = riverDist(x, z) + (vnoise(x * .2, z * .2) - .5) * 2.5;
+    let pass = 1; for (const [px, pz, pr] of R.passes) pass = Math.min(pass, smooth(clamp((Math.hypot(x - px, z - pz) - pr) / 5, 0, 1)));
+    h += R.h * (.75 + .5 * fbm(x * .08 + 3, z * .08)) * smooth(clamp((R.w - d) / (R.w * .7), 0, 1)) * pass;
+  }
+  for (const [px, pz, pr] of MAP.ponds) { const d = Math.hypot(x - px, z - pz) + (vnoise(x * .3, z * .3) - .5) * 1.5; if (d < pr + 2.5) h = Math.min(h, lerp(h, WL - 1.6, smooth(clamp((pr + 2.5 - d) / 3, 0, 1)))); }
+  if (!MAP.river) return h;
   // river: deep channel, shallow at the two fords
   const d = riverDist(x, z) + (vnoise(x * .3, z * .3) - .5) * 1.2;
   let depth = 2.4 * smooth(clamp((6 - d) / 3.5, 0, 1));
@@ -89,7 +134,7 @@ function addRes(rt, x, z, amt, cells, r) {
 const cellFree0 = (cx, cz) => cx >= 0 && cz >= 0 && cx < N && cz < N && blocked[cz * N + cx] === 0;
 function addTree(x, z) {
   const cx = x | 0, cz = z | 0; if (!cellFree0(cx, cz) || heightAt(cx + .5, cz + .5) < WL + .5 || heightAt(cx + .5, cz + .5) > 12) return;
-  if (distToRoad(cx + .5, cz + .5) < 3) return;
+  if (distToRoad(cx + .5, cz + .5) < 3 || MAP.clear.some(([px, pz, pr]) => Math.hypot(x - px, z - pz) < pr)) return;
   addRes('w', cx + .5 + (hash2(cx, cz) - .5) * .3, cz + .5 + (hash2(cz, cx) - .5) * .3, 100, [cz * N + cx], .45);
 }
 function addBerry(x, z) {
@@ -108,14 +153,16 @@ mirror(addMine, 36, 112, 2500); mirror(addMine, 14, 90, 2000);
 for (const [x, z] of [[33, 96], [SIZE - 33, SIZE - 96]]) berryPatch(x, z, 7);
 mirror(addMine, 66, 44, 3000);
 for (const [x, z] of [[58, 92], [SIZE - 58, SIZE - 92]]) berryPatch(x, z, 6);
-const groves = [[12, 72, 7], [46, 120, 6], [30, 84, 3.5], [44, 62, 6], [68, 98, 6], [18, 44, 7], [86, 118, 6], [64, 22, 5]];
+const groves = MAP.groves;
+if (MAP.hillGold) { mirror(addMine, 50, 28, 2500); mirror(addMine, 28, 50, 2000); } // extra gold up in the hills
 for (const [gx, gz, gr] of groves) for (let k = 0; k < gr * gr * 1.7; k++) {
   const a = R() * TAU, d = Math.sqrt(R()) * gr, x = gx + Math.cos(a) * d, z = gz + Math.sin(a) * d;
   if (!nearBase(x, z, 13) && !nearBase(SIZE - x, SIZE - z, 13)) mirror(addTree, x, z);
 }
-for (let k = 0; k < 170; k++) { const x = rr(6, 122), z = rr(6, 122); if (z > SIZE - x) continue; if (!nearBase(x, z, 14) && !nearBase(SIZE - x, SIZE - z, 14)) mirror(addTree, x, z); }
+for (let k = 0; k < MAP.scatter; k++) { const x = rr(6, 122), z = rr(6, 122); if (z > SIZE - x) continue; if (!nearBase(x, z, 14) && !nearBase(SIZE - x, SIZE - z, 14)) mirror(addTree, x, z); }
 // fish shoals along the river (only fishing boats can catch them; they don't block boats)
-for (const sv of [52, 92, 108, 148, 164, 204]) {
+for (const [px, pz, pr] of MAP.ponds) for (let k = 0; k < 2; k++) resources.push({ id: nextResId++, kind: 'res', rt: 'f', fish: true, x: px + (k ? .35 : -.35) * pr, z: pz + (k ? -.3 : .3) * pr, amt: 250, max: 250, r: 1.2, cells: [], alive: true });
+if (MAP.river) for (const sv of [52, 92, 108, 148, 164, 204]) {
   const dxz = -Math.SQRT2 * Math.sin((sv - 128) * .045) * 6, x = (sv + dxz) / 2, z = (sv - dxz) / 2;
   resources.push({ id: nextResId++, kind: 'res', rt: 'f', fish: true, x, z, amt: 250, max: 250, r: 1.2, cells: [], alive: true });
 }

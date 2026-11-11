@@ -1,12 +1,12 @@
 // Battle mode battlefield: three banners to capture. Every banner you hold brings reinforcements from your reserves;
 // hold all three long enough and the enemy army breaks. So it's not just "whoever has more wins": positioning matters.
 import * as THREE from 'three';
-import { groundY, cellWalk } from './world.js';
+import { groundY, cellWalk, MAP } from './world.js';
 import { nearestWalkable } from './path.js';
 import { TEAM } from './models.js';
 
 const R = 5.5, CAPTURE = 9, WAVE = 25, BREAK = 45;
-const NAMES = ['Left Hill', 'Bridge', 'Right Hill'];
+const NAMES = ['Left Hill', MAP.bridge ? 'Bridge' : 'Centre', 'Right Hill'];
 const POOL = [['sword', 4], ['spear', 4], ['archer', 3], ['crossbow', 2], ['lightcav', 2], ['knight', 1], ['horsearcher', 1], ['unique', 2]];
 
 export class Field {

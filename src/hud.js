@@ -192,16 +192,31 @@ export class HUD {
       const fc = this.fogCan || (this.fogCan = Object.assign(document.createElement('canvas'), { width: N, height: N }));
       fc.getContext('2d').putImageData(img, 0, 0); c.imageSmoothingEnabled = true; c.drawImage(fc, 0, 0, N * K, N * K);
     }
-    // the part of the map you're looking at: a clean white box, rotated with the camera
-    const rts = this.a.rts, cam = this.a.camera, ray = new THREE.Raycaster(), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -rts.focus.y), hit = new THREE.Vector3();
-    const at = (sx, sy) => { ray.setFromCamera(new THREE.Vector2(sx * 2 - 1, -(sy * 2 - 1)), cam); return ray.ray.intersectPlane(plane, hit) ? hit.clone() : null; };
-    const L = at(0, .5), Rr = at(1, .5), T = at(.5, .02) || at(.5, .2), B = at(.5, .98);
-    if (L && Rr && B) {
-      const w = L.distanceTo(Rr), far = T ? T : B.clone().lerp(rts.focus, 3), d = Math.min(B.distanceTo(far), w * 1.6);
-      const fx = -Math.sin(rts.yaw), fz = -Math.cos(rts.yaw), rx = -fz, rz = fx, cx = (B.x + B.x + fx * d) / 2, cz = (B.z + B.z + fz * d) / 2;
-      const pts = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, bb]) => [(cx + rx * a * w / 2 + fx * bb * d / 2) * K, (cz + rz * a * w / 2 + fz * bb * d / 2) * K]);
-      c.lineWidth = 3; c.strokeStyle = 'rgba(0,0,0,.45)'; c.beginPath(); pts.forEach((p, i) => i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1])); c.closePath(); c.stroke();
-      c.lineWidth = 1.5; c.strokeStyle = '#ffffff'; c.stroke();
+    // the part of the map you're looking at: a clean white rectangle, turned with the camera. It's fitted to the
+    // visible play area (between the top bar and the bottom panel), so it matches what's on screen.
+    const rts = this.a.rts, cam = this.a.camera, ray = this.ray || (this.ray = new THREE.Raycaster()), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -rts.focus.y);
+    const topY = (document.getElementById('top')?.offsetHeight || 0) / innerHeight, botY = 1 - (document.getElementById('bottom')?.offsetHeight || 0) / innerHeight;
+    const at = (sx, sy) => { ray.setFromCamera(new THREE.Vector2(sx * 2 - 1, -(sy * 2 - 1)), cam); const h = new THREE.Vector3(); return ray.ray.intersectPlane(plane, h) ? h : null; };
+    const nl = at(0, botY), nr = at(1, botY);
+    if (nl && nr) {
+      const fx = -Math.sin(rts.yaw), fz = -Math.cos(rts.yaw), rx = -fz, rz = fx; // camera forward / right on the ground
+      const near = nl.clone().add(nr).multiplyScalar(.5), nearW = nl.distanceTo(nr);
+      let fl = at(0, topY), fr = at(1, topY);
+      const maxD = nearW * 1.4; // looking toward the horizon: cap how far the box reaches
+      if (!fl || !fr || fl.distanceTo(near) > maxD * 1.6) { fl = near.clone().add(new THREE.Vector3(fx * maxD - rx * nearW * .7, 0, fz * maxD - rz * nearW * .7)); fr = near.clone().add(new THREE.Vector3(fx * maxD + rx * nearW * .7, 0, fz * maxD + rz * nearW * .7)); }
+      const far = fl.clone().add(fr).multiplyScalar(.5);
+      const w = (nearW + Math.min(fl.distanceTo(fr), nearW * 1.8)) / 2, d = Math.max(4, (far.x - near.x) * fx + (far.z - near.z) * fz);
+      const cx = near.x + fx * d / 2, cz = near.z + fz * d / 2;
+      const pts = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b2]) => [(cx + rx * a * w / 2 + fx * b2 * d / 2) * K, (cz + rz * a * w / 2 + fz * b2 * d / 2) * K]);
+      const path = () => { c.beginPath(); pts.forEach((p, i) => i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1])); c.closePath(); };
+      c.save(); c.beginPath(); c.rect(0, 0, N * K, N * K); c.clip();
+      path(); c.fillStyle = 'rgba(255,255,255,.10)'; c.fill();
+      c.lineJoin = 'round'; c.lineWidth = 4.5; c.strokeStyle = 'rgba(0,0,0,.55)'; c.stroke();
+      c.lineWidth = 2.2; c.strokeStyle = '#ffffff'; c.stroke();
+      // small arrow on the far edge shows which way you're facing
+      const ax = (pts[2][0] + pts[3][0]) / 2, az = (pts[2][1] + pts[3][1]) / 2;
+      c.fillStyle = '#ffffff'; c.beginPath(); c.moveTo(ax + fx * 9, az + fz * 9); c.lineTo(ax + rx * 6, az + rz * 6); c.lineTo(ax - rx * 6, az - rz * 6); c.closePath(); c.fill();
+      c.restore();
     }
     // red pulses where you're under attack
     const now = performance.now(); this.pings = this.pings.filter(p => now - p.t < 3000);

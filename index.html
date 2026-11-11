@@ -21,7 +21,7 @@
 </script>
 <script>
   // ===== Game version: bump on every change you publish (see CLAUDE.md). =====
-  window.BF_VERSION = '0.13.0';
+  window.BF_VERSION = '0.14.0';
   // Every game file is loaded as file.js?v=VERSION so phones never mix old and new files from the browser cache.
   // (On localhost a timestamp is used instead, so edits show up immediately while developing.)
   (function () {
@@ -56,11 +56,12 @@
     <div id="clock">0:00</div>
     <div id="info"></div>
     <span id="ver"></span>
+    <button class="btn sm" id="bMap" title="Show or hide the minimap">&#128506;</button>
     <button class="btn sm" id="bPause">&#10074;&#10074;</button>
   </div>
+  <div id="miniw"><canvas id="mini" width="256" height="256"></canvas>
+    <div id="minib"><button class="cbtn" id="bRotL" title="Rotate left (Q)">&#10226;</button><button class="cbtn" id="bNorth" title="Reset view (Home)">N</button><button class="cbtn" id="bRotR" title="Rotate right (E)">&#10227;</button></div></div>
   <div id="bottom">
-    <div id="miniw"><canvas id="mini" width="256" height="256"></canvas>
-      <button class="cbtn" id="bRotL" title="Rotate left (Q)">&#10226;</button><button class="cbtn" id="bRotR" title="Rotate right (E)">&#10227;</button><button class="cbtn" id="bNorth" title="Reset view (Home)">N</button></div>
     <div id="selp"><div id="selname">Nothing selected</div><div id="seldesc"></div><div id="selq"></div></div>
     <div id="quick">
         <button class="btn" id="bAll">Army<small>select</small></button>
@@ -104,6 +105,8 @@
   <div class="panel">
     <div class="row" id="modes"></div>
     <p id="modeDesc"></p>
+    <div class="row" id="maps"><span class="lbl">Map</span></div>
+    <p id="mapDesc"></p>
     <div class="row" id="civs"><span class="lbl">Your people</span></div>
     <div id="civInfo"></div>
     <div class="row"><span class="lbl">Enemy</span><button class="btn sb" data-d="0">Squire<small>easy</small></button><button class="btn sb" data-d="1">Knight<small>normal</small></button><button class="btn sb" data-d="2">Warlord<small>hard</small></button></div>
@@ -136,6 +139,7 @@
     <label class="set">Unit voices <input type="checkbox" id="sVoice"></label>
     <label class="set">Bigger buttons <input type="checkbox" id="sBig"></label>
     <label class="set">Pause when the game is in the background <input type="checkbox" id="sAuto"></label>
+    <label class="set">Minimap at the bottom (instead of top-left) <input type="checkbox" id="sMapBot"></label>
     <label class="set">Fog of war (new games; not in Battle mode) <input type="checkbox" id="sFog"></label>
     <div class="row"><button class="btn" id="bSetBack">&#8592; Done</button></div>
   </div>

@@ -1,11 +1,11 @@
 // Save & resume: the running game is stored on this device (localStorage) and can be continued after a reload.
-import { resources, takeRes } from './world.js';
+import { resources, takeRes, MAP } from './world.js';
 
 const KEY = 'bf.save';
 const round = v => Math.round(v * 100) / 100;
 
 export function hasSave() { try { return !!localStorage.getItem(KEY); } catch { return false; } }
-export function saveInfo() { try { const d = JSON.parse(localStorage.getItem(KEY)); return d && { mode: d.mode, civs: d.civs, time: d.time, map: d.map, when: d.when }; } catch { return null; } }
+export function saveInfo() { try { const d = JSON.parse(localStorage.getItem(KEY)); return d && { mode: d.mode, civs: d.civs, time: d.time, map: d.map, seed: d.seed, when: d.when }; } catch { return null; } }
 export function clearSave() { try { localStorage.removeItem(KEY); } catch { /* ignore */ } }
 
 export function saveGame(app) {
@@ -19,7 +19,7 @@ export function saveGame(app) {
     return { type: 'idle' };
   };
   const data = {
-    v: 1, when: Date.now(), mode: g.mode, diff: g.diff, civs: g.civKeys, map: app.mapId || 'riverlands', time: round(g.time), campaign: app.campaign?.id ?? null,
+    v: 1, when: Date.now(), mode: g.mode, diff: g.diff, civs: g.civKeys, map: MAP.id, seed: MAP.seed, time: round(g.time), campaign: app.campaign?.id ?? null,
     T: g.T.map(T => ({ f: T.f | 0, w: T.w | 0, g: T.g | 0, age: T.age, techs: [...T.techs], carry: T.carry, gm: T.gm, fish: T.fish, farm: T.farm, bldHp: T.bldHp, hallLost: T.hallLost })),
     res: resources.map(r => [r.id, Math.round(r.alive ? r.amt : 0)]),
     blds: g.blds.filter(b => b.alive).map(b => ({ type: b.type, team: b.team, cx: b.cx, cz: b.cz, built: b.built, progress: round(b.progress), hp: Math.round(b.hp), food: Math.round(b.food || 0), queue: b.queue.map(q => ({ ...q, t: round(q.t) })), rally: b.rally ? { x: round(b.rally.x), z: round(b.rally.z) } : null })),

@@ -1,7 +1,7 @@
 // Bannerfall — entry point: renderer, lighting, menus, game modes, input routing and the main loop.
 import * as THREE from 'three';
 import { FOW, FogOfWar } from './fow.js'; // must load before any material is made
-import { SIZE, BASES, WL, CLOUDS, buildDistant, buildTerrain, buildWater, buildSky, buildResources, buildBridge, buildFish, updateFish, heightAt } from './world.js';
+import { MAP, MAP_LIST, SIZE, BASES, WL, CLOUDS, buildDistant, buildTerrain, buildWater, buildSky, buildResources, buildBridge, buildFish, updateFish, heightAt } from './world.js';
 import { BD, DIFF, MODES, CIVS, CIV_LIST, UD, TECH, AGES } from './data.js';
 import { FX } from './effects.js';
 import { Tutorial } from './tutorial.js';
@@ -74,7 +74,7 @@ const terrain = buildTerrain(Q, A.ok ? { grass: A.grass, dirt: A.dirt, rock: A.r
 const water = buildWater(Q);
 scene.add(buildSky(), terrain, water);
 buildResources(scene, Q);
-buildBridge(scene, Q.shadow > 0);
+if (MAP.bridge) buildBridge(scene, Q.shadow > 0);
 buildDistant(scene);
 buildFish(scene);
 const figures = new Figures(scene, Q.shadow > 0);
@@ -110,10 +110,11 @@ const app = {
 app.scene = scene; app.renderer = renderer;
 const fx = new FX(scene), sound = new Sound();
 // ---------------- player settings (saved on this device) ----------------
-const SET_DEFAULT = { look: 1, cam: 1, vol: .7, music: true, voice: true, big: false, auto: true, fog: true };
+const SET_DEFAULT = { look: 1, cam: 1, vol: .7, music: true, voice: true, big: false, auto: true, fog: true, mapBot: false, mapOff: false };
 app.settings = { ...SET_DEFAULT }; try { Object.assign(app.settings, JSON.parse(localStorage.getItem('bf.settings') || '{}')); } catch { /* ignore */ }
 function applySettings() {
   document.body.classList.toggle('bigui', !!app.settings.big); sound.setVolume?.(app.settings.vol);
+  const mw = document.getElementById('miniw'); mw.classList.toggle('bottom', !!app.settings.mapBot); mw.classList.toggle('off', !!app.settings.mapOff); document.getElementById('bMap').classList.toggle('on', !app.settings.mapOff);
   try { localStorage.setItem('bf.settings', JSON.stringify(app.settings)); } catch { /* ignore */ }
 }
 app.fx = fx; app.sound = sound;
@@ -350,6 +351,8 @@ onBtn('bFollow', () => pov.toggleFollow());
 onBtn('bAct', () => pov.act());
 onBtn('bMount', () => pov.toggleMount());
 onBtn('bPause', () => setPause(true));
+onBtn('bMap', () => { app.settings.mapOff = !app.settings.mapOff; applySettings(); });
+$('miniw').addEventListener('pointerdown', e => e.stopPropagation());
 onBtn('bResume', () => setPause(false));
 onBtn('bRestart', () => reloadTo(playHash()));
 onBtn('bQuit', () => reloadTo(''));
@@ -380,8 +383,11 @@ function refreshMenu() {
   for (const b of document.querySelectorAll('[data-d]')) b.classList.toggle('on', +b.dataset.d === app.cfg.diff);
   for (const b of document.querySelectorAll('[data-q]')) b.classList.toggle('on', b.dataset.q === qLevel);
   $('modeDesc').textContent = MODES[app.cfg.mode].desc;
+  for (const b of document.querySelectorAll('[data-map]')) b.classList.toggle('on', b.dataset.map === (app.cfg.map || 'riverlands'));
+  $('mapDesc').textContent = MAP_LIST[app.cfg.map || 'riverlands'].desc;
 }
 try { const s = JSON.parse(localStorage.getItem('bf.cfg') || 'null'); if (s && MODES[s.mode]) app.cfg = s; } catch { /* ignore */ }
+for (const [k, m] of Object.entries(MAP_LIST)) { const b = document.createElement('button'); b.className = 'btn'; b.dataset.map = k; b.textContent = m.name; $('maps').appendChild(b); b.addEventListener('click', () => { app.cfg.map = k; refreshMenu(); }); }
 for (const b of document.querySelectorAll('[data-mode]')) b.addEventListener('click', () => { app.cfg.mode = b.dataset.mode; refreshMenu(); });
 for (const b of document.querySelectorAll('[data-d]')) b.addEventListener('click', () => { app.cfg.diff = +b.dataset.d; refreshMenu(); });
 for (const b of document.querySelectorAll('[data-q]')) b.addEventListener('click', () => {
@@ -392,12 +398,12 @@ for (const b of document.querySelectorAll('[data-q]')) b.addEventListener('click
 onBtn('bTutSkip', () => app.tut?.skip());
 onBtn('bHelp', () => { $('help').classList.remove('hide'); });
 const openSettings = () => {
-  const S = app.settings; $('sLook').value = S.look; $('sCam').value = S.cam; $('sVol').value = S.vol; $('sMusic').checked = S.music; $('sVoice').checked = S.voice; $('sBig').checked = S.big; $('sAuto').checked = S.auto; $('sFog').checked = S.fog;
+  const S = app.settings; $('sLook').value = S.look; $('sCam').value = S.cam; $('sVol').value = S.vol; $('sMusic').checked = S.music; $('sVoice').checked = S.voice; $('sBig').checked = S.big; $('sAuto').checked = S.auto; $('sFog').checked = S.fog; $('sMapBot').checked = S.mapBot;
   $('settings').classList.remove('hide');
 };
 onBtn('bSettings', openSettings); onBtn('bSettings2', openSettings);
 onBtn('bSetBack', () => { $('settings').classList.add('hide'); });
-for (const [id, key, num] of [['sLook', 'look', 1], ['sCam', 'cam', 1], ['sVol', 'vol', 1], ['sMusic', 'music'], ['sVoice', 'voice'], ['sBig', 'big'], ['sAuto', 'auto'], ['sFog', 'fog']])
+for (const [id, key, num] of [['sLook', 'look', 1], ['sCam', 'cam', 1], ['sVol', 'vol', 1], ['sMusic', 'music'], ['sVoice', 'voice'], ['sBig', 'big'], ['sAuto', 'auto'], ['sFog', 'fog'], ['sMapBot', 'mapBot']])
   $(id).addEventListener('input', e => { app.settings[key] = num ? +e.target.value : e.target.checked; applySettings(); });
 applySettings();
 // auto-pause when the app goes to the background (phone call, switching apps)
@@ -410,6 +416,11 @@ onBtn('bHelpBack', () => { $('help').classList.add('hide'); });
 onBtn('bStart', () => {
   try { localStorage.setItem('bf.cfg', JSON.stringify(app.cfg)); } catch { /* ignore */ }
   if (isTouch) goFullscreen();
+  const want = MAP_LIST[app.cfg.map] ? app.cfg.map : 'riverlands';
+  if (want === 'random' || want !== MAP.id) { // maps are built when the page loads: reload into the chosen one
+    try { localStorage.setItem('bf.map', want); if (want === 'random') localStorage.setItem('bf.mapSeed', String(1 + Math.random() * 99998 | 0)); } catch { /* ignore */ }
+    reloadTo(`play=${app.cfg.mode},${app.cfg.diff},${app.cfg.civ}`); return;
+  }
   setupGame(app.cfg.mode, app.cfg.diff, app.cfg.civ);
 });
 refreshMenu();
@@ -518,9 +529,10 @@ $('ver').textContent = 'v' + VERSION;
 $('loading').remove();
 setInterval(() => { if (app.game && !app.paused) saveGame(app); }, 30000); // autosave
 { const info = saveInfo(); if (info) { $('continueRow').classList.remove('hide'); const s = info.time | 0; $('contInfo').textContent = `${MODES[info.mode]?.name || ''} · ${CIVS[info.civs?.[0]]?.name || ''} · ${s / 60 | 0}:${String(s % 60).padStart(2, '0')}`; } }
-onBtn('bContinue', () => reloadTo('resume'));
+onBtn('bContinue', () => { const i = saveInfo(); try { if (i?.map) { localStorage.setItem('bf.map', i.map); localStorage.setItem('bf.mapSeed', String(i.seed || 1)); } } catch { /* ignore */ } reloadTo('resume'); });
+if (location.hash.startsWith('#play=')) app.cfg.map = MAP.id;
 const m = /play=(\w+),(\d)(?:,(\w+))?(?:,(\w+))?/.exec(location.hash);
-if (location.hash === '#resume' && loadSave()) { const d = loadSave(); app.cfg = { mode: d.mode, diff: d.diff, civ: d.civs[0] }; setupGame(d.mode, d.diff, d.civs[0], d.civs[1]); applySave(app, d); app.toast('Welcome back! Your game has been restored.', 3); history.replaceState(null, '', location.pathname + location.search); }
+if (location.hash === '#resume' && loadSave()) { const d = loadSave(); app.cfg = { mode: d.mode, diff: d.diff, civ: d.civs[0], map: MAP.id }; setupGame(d.mode, d.diff, d.civs[0], d.civs[1]); applySave(app, d); app.toast('Welcome back! Your game has been restored.', 3); history.replaceState(null, '', location.pathname + location.search); }
 else if (m && MODES[m[1]]) { app.cfg = { mode: m[1], diff: +m[2], civ: m[3] || 'franks' }; setupGame(m[1], +m[2], m[3], m[4]); }
 else $('title').classList.remove('hide');
 window.bannerfall = app; // handy for debugging in the browser console

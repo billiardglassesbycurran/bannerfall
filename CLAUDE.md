@@ -50,7 +50,8 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
 - `src/data.js` — unit/building stats, civilizations (`CIVS`: per-class stat mods, unique unit, look), difficulty, modes.
   Civ bonuses are applied in `Game.stat(team, type)`; always read unit stats through it, never straight from `UD`.
   Civilizations are historically inspired, but bonuses/unique units are original — don't copy another game's.
-- `src/world.js` — heightmap, walkability grid, roads, terrain splat shader, resources (trees/berries/gold), grass/rocks,
+- `src/world.js` — maps (`MAP_LIST`/`MAP`: Riverlands, Highland Pass, Forest Valley, Random with seed; chosen via
+  localStorage `bf.map`/`bf.mapSeed` or `#play=...&map=highland`, built at page load so switching maps reloads), heightmap, walkability grid, roads, terrain splat shader, resources (trees/berries/gold), grass/rocks,
   water, sky, minimap colours. Tree/grass detail scales with the quality level — keep Medium near ~1M triangles.
 - `src/models.js` — unit figures (GPU-instanced per team+type: keeps big armies fast), knight + horse, building models, arrows.
 - `src/geo.js` — helpers to bake colours into geometry and merge parts (cloth vs metal buckets); shared materials `M`
@@ -116,5 +117,5 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
    camera glide, Box select, control groups, edge scroll, 3rd-person target ring / lunge / hold-to-strike.
 3. Ages & upgrades (Feudal/Kingdom, blacksmith, from the prototype), walls, catapults.
 4. ✅ v0.13 Fog of war; ✅ v0.12 formations, morale, flanking, banners. Still: sound and music.
-5. Campaign missions and more maps (the prototype has Riverlands / Highland Pass / Forest Valley and 4 missions).
+5. ✅ v0.14 Highland Pass, Forest Valley, Random maps. Still: campaign missions (the prototype has 4).
 6. 3rd-person polish: blocking, charge ability, mounted hero, camera avoiding trees.
