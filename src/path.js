@@ -13,17 +13,17 @@ function pop() {
 const DIRS = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.4142], [1, -1, 1.4142], [-1, 1, 1.4142], [-1, -1, 1.4142]];
 
 /** Straight-line walkable check (used to smooth paths). */
-export function lineWalk(ax, az, bx, bz) {
+export function lineWalk(ax, az, bx, bz, walk = cellWalk) {
   const d = Math.hypot(bx - ax, bz - az), n = Math.ceil(d / .3);
-  for (let i = 1; i <= n; i++) { const t = i / n; if (!cellWalk((ax + (bx - ax) * t) | 0, (az + (bz - az) * t) | 0)) return false; }
+  for (let i = 1; i <= n; i++) { const t = i / n; if (!walk((ax + (bx - ax) * t) | 0, (az + (bz - az) * t) | 0)) return false; }
   return true;
 }
 
 /**
  * Path from (sx,sz) to within `reach` metres of (tx,tz). Returns [{x,z},...] (may be partial if unreachable).
  */
-export function findPath(sx, sz, tx, tz, reach = 0, maxNodes = 7000) {
-  if (lineWalk(sx, sz, tx, tz) && reach === 0) return [{ x: tx, z: tz }];
+export function findPath(sx, sz, tx, tz, reach = 0, maxNodes = 14000, walk = cellWalk) {
+  if (lineWalk(sx, sz, tx, tz, walk) && reach === 0) return [{ x: tx, z: tz }];
   stamp++; hn = 0;
   const s = (sz | 0) * N + (sx | 0), tcx = tx | 0, tcz = tz | 0, r2 = Math.max(reach, .75) ** 2;
   const goalOK = (cx, cz) => reach > 0 ? (cx + .5 - tx) ** 2 + (cz + .5 - tz) ** 2 <= r2 : (cx === tcx && cz === tcz);
@@ -35,8 +35,8 @@ export function findPath(sx, sz, tx, tz, reach = 0, maxNodes = 7000) {
     if (goalOK(cx, cz)) { found = i; break; }
     const h = Math.hypot(cx - tcx, cz - tcz); if (h < bestH) { bestH = h; best = i; }
     for (const [dx, dz, c] of DIRS) {
-      const nx = cx + dx, nz = cz + dz; if (!cellWalk(nx, nz)) continue;
-      if (dx && dz && (!cellWalk(cx + dx, cz) || !cellWalk(cx, cz + dz))) continue;
+      const nx = cx + dx, nz = cz + dz; if (!walk(nx, nz)) continue;
+      if (dx && dz && (!walk(cx + dx, cz) || !walk(cx, cz + dz))) continue;
       const j = nz * N + nx, ng = g[i] + c;
       if (seen[j] === stamp && ng >= g[j]) continue;
       seen[j] = stamp; g[j] = ng; came[j] = i; push(j, ng + Math.hypot(nx - tcx, nz - tcz) * 1.05);
@@ -46,22 +46,22 @@ export function findPath(sx, sz, tx, tz, reach = 0, maxNodes = 7000) {
   const cells = []; for (let k = end; k !== -1 && k !== s; k = came[k]) cells.push(k);
   cells.reverse();
   const pts = cells.map(k => ({ x: k % N + .5, z: ((k / N) | 0) + .5 }));
-  if (found >= 0 && reach === 0 && cellWalk(tcx, tcz)) { if (pts.length) pts[pts.length - 1] = { x: tx, z: tz }; else pts.push({ x: tx, z: tz }); }
+  if (found >= 0 && reach === 0 && walk(tcx, tcz)) { if (pts.length) pts[pts.length - 1] = { x: tx, z: tz }; else pts.push({ x: tx, z: tz }); }
   // smooth: skip waypoints we can see past
   const out = []; let ax = sx, az = sz, k = 0;
   while (k < pts.length) {
-    let far = k; for (let m = Math.min(pts.length - 1, k + 12); m > k; m--) if (lineWalk(ax, az, pts[m].x, pts[m].z)) { far = m; break; }
+    let far = k; for (let m = Math.min(pts.length - 1, k + 12); m > k; m--) if (lineWalk(ax, az, pts[m].x, pts[m].z, walk)) { far = m; break; }
     out.push(pts[far]); ax = pts[far].x; az = pts[far].z; k = far + 1;
   }
   return out;
 }
 
 /** Nearest walkable cell centre to (x,z), searching outward. */
-export function nearestWalkable(x, z, maxR = 8) {
-  if (cellWalk(x | 0, z | 0)) return { x, z };
+export function nearestWalkable(x, z, maxR = 8, walk = cellWalk) {
+  if (walk(x | 0, z | 0)) return { x, z };
   for (let r = 1; r <= maxR; r++) for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
     if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
-    const cx = (x | 0) + dx, cz = (z | 0) + dz; if (cellWalk(cx, cz)) return { x: cx + .5, z: cz + .5 };
+    const cx = (x | 0) + dx, cz = (z | 0) + dz; if (walk(cx, cz)) return { x: cx + .5, z: cz + .5 };
   }
   return null;
 }

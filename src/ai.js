@@ -29,6 +29,15 @@ export class AI {
     }
     return null;
   }
+  /** Nearest spot on the river bank (to our Town Hall) where a Dock fits. */
+  findDockSpot(hall) {
+    let best = null, bd = 1e9;
+    for (let cz = 4; cz < 124; cz++) for (let cx = 4; cx < 124; cx++) {
+      const d = Math.hypot(cx - hall.x, cz - hall.z); if (d >= bd || d > 70) continue;
+      if (this.g.canPlace('dock', cx, cz)) { bd = d; best = [cx, cz]; }
+    }
+    return best;
+  }
   tryBuild(type, hall) {
     const g = this.g; if (!g.afford(this.team, BD[type].cost)) return false;
     const spot = this.findSpot(type, hall); if (!spot) return false;
@@ -46,7 +55,7 @@ export class AI {
   skirmish() {
     const g = this.g, T = g.T[this.team], hall = g.blds.find(b => b.alive && b.team === this.team && b.type === 'hall');
     if (!hall) { for (const u of this.my(u => u.task.type === 'idle' && u.d.acq)) { const t = this.attackTarget(u); if (t) g.amove(u, t.x, t.z); } return; }
-    const peas = this.my(u => u.type === 'peasant'), mil = this.my(u => u.type !== 'peasant' && u.type !== 'hero');
+    const peas = this.my(u => u.type === 'peasant'), mil = this.my(u => u.type !== 'peasant' && u.type !== 'hero' && u.d.dmg > 0);
     const time = g.time, wantPeas = Math.min(this.D.peas + Math.floor(time / 90), 30);
     if (peas.length < wantPeas && hall.queue.length < 2 && T.pop < T.cap) g.train(hall, 'peasant');
     // gatherer balance
@@ -75,6 +84,17 @@ export class AI {
     if (hasBarracks && time > 200 && nOf('range') === 0) this.tryBuild('range', hall);
     if (hasBarracks && this.g.diff >= 1 && time > 300 && nOf('stable') === 0) this.tryBuild('stable', hall);
     if (nOf('range') && this.g.diff >= 1 && time > 520 && nOf('workshop') === 0) this.tryBuild('workshop', hall);
+    // navy: a dock on the river, fishing boats for food, a few warships
+    if (this.g.diff >= 1 && time > 330 && nOf('dock') === 0 && !this.noDock && g.afford(this.team, BD.dock.cost)) {
+      const sp = this.findDockSpot(hall);
+      if (!sp) this.noDock = true;
+      else { const ps = this.my(u => u.type === 'peasant').sort((a, b) => dist(a, hall) - dist(b, hall)).slice(0, 2); g.startBuilding(this.team, 'dock', sp[0], sp[1], ps); }
+    }
+    const dock = g.blds.find(b => b.alive && b.built && b.team === this.team && b.type === 'dock');
+    if (dock && dock.queue.length < 1 && T.pop < T.cap) {
+      const nf = this.my(u => u.type === 'fishboat').length, nw = this.my(u => u.type === 'warship').length;
+      if (nf < 2 + this.g.diff) g.train(dock, 'fishboat'); else if (nw < this.g.diff && T.g > 100) g.train(dock, 'warship');
+    }
     if (hasBarracks && time > 260 && nOf('tower') < this.g.diff + 1 && T.g > 120) this.tryBuild('tower', hall);
     if (time > 480 && nOf('barracks') < 1 + this.g.diff) this.tryBuild('barracks', hall);
     // training military

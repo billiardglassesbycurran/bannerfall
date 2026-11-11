@@ -1,6 +1,6 @@
 // Bannerfall — entry point: renderer, lighting, menus, game modes, input routing and the main loop.
 import * as THREE from 'three';
-import { SIZE, BASES, buildTerrain, buildWater, buildSky, buildResources, heightAt } from './world.js';
+import { SIZE, BASES, WL, buildTerrain, buildWater, buildSky, buildResources, buildBridge, buildFish, updateFish, heightAt } from './world.js';
 import { BD, DIFF, MODES, CIVS, CIV_LIST, UD } from './data.js';
 import { Figures, buildingGeo } from './models.js';
 import { Game } from './game.js';
@@ -58,6 +58,8 @@ const terrain = buildTerrain(Q, A.ok ? { grass: A.grass, dirt: A.dirt, rock: A.r
 const water = buildWater(Q);
 scene.add(buildSky(), terrain, water);
 buildResources(scene, Q);
+buildBridge(scene, Q.shadow > 0);
+buildFish(scene);
 const figures = new Figures(scene, Q.shadow > 0);
 
 // ---------------- app state ----------------
@@ -91,7 +93,7 @@ app.order = (ent, x, z) => {
 };
 app.setPending = p => {
   app.pending = p; hud.sig = ''; hud.updateCard(); $('place').classList.remove('hide'); $('pok').classList.toggle('hide', !(p.type === 'place' && isTouch));
-  $('ptxt').textContent = p.type === 'place' ? (isTouch ? 'Tap the map to position, then ✓' : 'Click to place (Shift: place several)') : p.type === 'amove' ? 'Tap where to attack' : 'Tap the rally point';
+  $('ptxt').textContent = p.type === 'place' ? (isTouch ? 'Tap the map to position, then ✓' : 'Click to place (Shift: place several)') : p.type === 'amove' ? 'Tap where to attack' : p.type === 'unload' ? 'Tap the shore to land your troops' : 'Tap the rally point';
 };
 app.cancelPending = () => { app.pending = null; if (ghost) { ghost.removeFromParent(); ghost = null; } $('place').classList.add('hide'); hud.sig = ''; hud.updateCard(); };
 
@@ -105,7 +107,7 @@ app.startPlace = type => {
 function moveGhost(x, z) {
   const p = app.pending; if (!p || p.type !== 'place' || !ghost) return;
   const s = BD[p.btype].size; p.cx = Math.round(x - s / 2); p.cz = Math.round(z - s / 2);
-  ghost.position.set(p.cx + s / 2, heightAt(p.cx + s / 2, p.cz + s / 2) + .05, p.cz + s / 2);
+  ghost.position.set(p.cx + s / 2, BD[p.btype].dock ? WL + .02 : heightAt(p.cx + s / 2, p.cz + s / 2) + .05, p.cz + s / 2);
   p.ok = app.game.canPlace(p.btype, p.cx, p.cz); ghost.material = ghostMats[p.ok ? 0 : 1];
 }
 function confirmPlace(keep) {
@@ -124,6 +126,7 @@ app.pendingAt = (x, z, ent, shift) => {
     const units = app.sel.filter(e => e.kind === 'unit' && e.team === 0 && e.alive && e.type !== 'peasant');
     g.formation(units, x, z); for (const u of units) u.task.type = 'amove';
     showMarker(x, z, 0xff6a4a);
+  } else if (p.type === 'unload') { g.setTask(p.ship, { type: 'unload', x, z }); showMarker(x, z, 0x8ab4ff);
   } else if (p.type === 'rally') { p.b.rally = ent && ent.kind === 'res' ? { x, z, res: ent } : { x, z }; app.toast('Rally point set.', 2); showMarker(x, z, 0x8ab4ff); }
   app.cancelPending();
 };
@@ -362,7 +365,7 @@ renderer.setAnimationLoop(() => {
   else if (app.mode === 'rts') rts.update(real);
   else { menuYaw += real * .05; rts.yaw = menuYaw; rts.dist = rts.distT = 75; rts.lookAt(64, 64); rts.update(real); }
   if (g) g.syncVisuals(dt, pov.first && pov.unit ? pov.unit.id : -1);
-  water.userData.update(t); U.time.value = t;
+  water.userData.update(t); U.time.value = t; updateFish(t);
   const f = app.mode === 'pov' && pov.unit ? pov.unit : rts.focus; // keep the sharp-shadow area centred on the action
   sun.target.position.set(f.x, 0, f.z); sun.position.copy(sun.target.position).addScaledVector(SUN_DIR, 110);
   if (marker.visible) { markerT += real; marker.scale.setScalar(1 + markerT * 1.5); marker.material.opacity = 1 - markerT / .7; if (markerT > .7) marker.visible = false; }

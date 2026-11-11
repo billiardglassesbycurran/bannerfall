@@ -35,7 +35,7 @@ export const BD = {
   tower:    { name: 'Watchtower', hp: 600, size: 2, cost: { w: 100, g: 50 }, time: 20, atk: { dmg: 11, rng: 11, cd: 1.4 }, arm: 4, desc: 'Shoots arrows at enemies' },
   dock:     { name: 'Dock', hp: 900, size: 3, cost: { w: 150 }, time: 22, trains: ['fishboat', 'transport', 'warship'], drop: 1, dock: 1, arm: 2, desc: 'Build on the shore. Builds ships, stores fish' },
 };
-export const BUILD_LIST = ['house', 'farm', 'store', 'barracks', 'range', 'stable', 'workshop', 'tower'];
+export const BUILD_LIST = ['house', 'farm', 'store', 'barracks', 'range', 'stable', 'workshop', 'tower', 'dock'];
 export const RES = { f: 'Food', w: 'Wood', g: 'Gold' };
 
 // ---------------- civilizations ----------------

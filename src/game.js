@@ -1,7 +1,7 @@
 // Core simulation: units, buildings, economy, combat, projectiles, win/lose.
 import * as THREE from 'three';
 import { UD, BD, DIFF, CIVS } from './data.js';
-import { N, SIZE, heightAt, blocked, resCell, cellWalk, resources, takeRes, BASES } from './world.js';
+import { N, SIZE, WL, heightAt, groundY, blocked, resCell, cellWalk, navCell, navBlock, water, resources, takeRes, BASES } from './world.js';
 import { findPath, nearestWalkable } from './path.js';
 import { buildingMesh, arrowGeo, boltGeo, stoneGeo, ringGeo } from './models.js';
 import { M } from './geo.js';
@@ -39,18 +39,28 @@ export class Game {
   trainsFor(b) { const list = [...(b.d.trains || [])], u = this.civ[b.team].unique; if (u && u.at === b.type) list.push(u.type); return list; }
 
   // ---------------- spawning ----------------
+  walkFor(u) { return u.d.ship ? navCell : cellWalk; }
   spawnUnit(team, type, x, z) {
-    const p = nearestWalkable(x, z, 10) || { x, z };
+    const p = nearestWalkable(x, z, UD[type].ship ? 14 : 10, UD[type].ship ? navCell : cellWalk) || { x, z };
     const d = this.stat(team, type), batch = this.figures.get(team, type);
     const u = {
       id: nextId++, kind: 'unit', type, team, d, x: p.x, z: p.z, y: heightAt(p.x, p.z), yaw: team === 0 ? Math.PI * .75 : -Math.PI * .25,
       hp: d.hp, maxHp: d.hp, task: { type: 'idle' }, path: null, carry: null, cd: 0, swingT: 1, phase: Math.random() * 6, speedNow: 0,
-      batch, slot: batch.alloc(), alive: true, dead: false, deathT: 0, selected: false, possessed: false, scale: d.scale || 1, think: Math.random() * .5,
+      batch, slot: batch.alloc(), alive: true, cargo: d.carry ? [] : null, boarded: null, dead: false, deathT: 0, selected: false, possessed: false, scale: d.scale || 1, think: Math.random() * .5,
     };
     this.units.push(u); return u;
   }
   canPlace(type, cx, cz) {
     const s = BD[type].size; let lo = 1e9, hi = -1e9;
+    if (BD[type].dock) { // docks straddle the shoreline: some water cells, some land cells
+      let w = 0, l = 0;
+      for (let z = cz; z < cz + s; z++) for (let x = cx; x < cx + s; x++) {
+        if (x < 4 || z < 4 || x >= N - 4 || z >= N - 4) return false;
+        const i = z * N + x, v = blocked[i];
+        if (water[i] && v === 1 && !navBlock[i]) w++; else if (v === 0) l++; else return false;
+      }
+      return w >= 3 && l >= 2;
+    }
     for (let z = cz; z < cz + s; z++) for (let x = cx; x < cx + s; x++) {
       if (x < 4 || z < 4 || x >= N - 4 || z >= N - 4 || blocked[z * N + x] !== 0) return false;
       const h = heightAt(x + .5, z + .5); lo = Math.min(lo, h); hi = Math.max(hi, h);
@@ -62,10 +72,12 @@ export class Game {
   placeBuilding(team, type, cx, cz, built = false) {
     const d = BD[type], s = d.size, x = cx + s / 2, z = cz + s / 2;
     let y = 1e9; for (let k = 0; k <= s; k++) y = Math.min(y, heightAt(cx + k, cz), heightAt(cx + k, cz + s), heightAt(cx, cz + k), heightAt(cx + s, cz + k));
+    if (d.dock) y = WL + .02;
     const mesh = buildingMesh(type, team, this.Q.shadow > 0); mesh.position.set(x, y + .05, z);
     mesh.rotation.y = team === 0 ? 0 : Math.PI; this.scene.add(mesh);
     const b = { id: nextId++, kind: 'bld', type, team, d, x, z, y, cx, cz, size: s, hp: built ? d.hp * (this.civ[team].bld || 1) : 1, maxHp: d.hp * (this.civ[team].bld || 1), built, progress: built ? 1 : 0, queue: [], rally: null, mesh, alive: true, atkCd: 1, food: (d.food || 0) * (this.civ[team].farm || 1), farmer: null, selected: false };
-    for (let zz = cz; zz < cz + s; zz++) for (let xx = cx; xx < cx + s; xx++) { blocked[zz * N + xx] = d.walk ? 7 : 4; bldAt[zz * N + xx] = b; }
+    b.prev = [];
+    for (let zz = cz; zz < cz + s; zz++) for (let xx = cx; xx < cx + s; xx++) { const i = zz * N + xx; b.prev.push([i, blocked[i]]); blocked[i] = d.walk ? 7 : 4; bldAt[i] = b; if (d.dock) navBlock[i] = 1; }
     // push units out of the footprint
     if (!d.walk) for (const u of this.units) if (u.alive && bldAt[(u.z | 0) * N + (u.x | 0)] === b) { const p = nearestWalkable(u.x, u.z, 6); if (p) { u.x = p.x; u.z = p.z; u.path = null; } }
     this.setBuildVisual(b);
@@ -77,7 +89,7 @@ export class Game {
   enemiesOf(t) { return t === 0 ? 1 : 0; }
   rebuildHash() {
     this.hash.clear();
-    for (const u of this.units) if (u.alive) { const k = ((u.x / 8) | 0) + ((u.z / 8) | 0) * 32; let l = this.hash.get(k); if (!l) this.hash.set(k, l = []); l.push(u); }
+    for (const u of this.units) if (u.alive && !u.boarded) { const k = ((u.x / 8) | 0) + ((u.z / 8) | 0) * 32; let l = this.hash.get(k); if (!l) this.hash.set(k, l = []); l.push(u); }
   }
   unitsNear(x, z, r, fn) {
     const x0 = Math.max(0, ((x - r) / 8) | 0), x1 = Math.min(15, ((x + r) / 8) | 0), z0 = Math.max(0, ((z - r) / 8) | 0), z1 = Math.min(15, ((z + r) / 8) | 0);
@@ -85,14 +97,15 @@ export class Game {
   }
   nearestEnemy(src, r, inclBld = true) {
     let best = null, bd = r;
-    this.unitsNear(src.x, src.z, r, u => { if (u.team !== src.team && u.alive) { const d = dist(u, src); if (d < bd) { bd = d; best = u; } } });
+    const landMelee = src.d?.melee && !src.d?.ship;
+    this.unitsNear(src.x, src.z, r, u => { if (u.team !== src.team && u.alive && !(landMelee && u.d.ship)) { const d = dist(u, src); if (d < bd) { bd = d; best = u; } } });
     if (!best && inclBld) for (const b of this.blds) if (b.alive && b.team !== src.team) { const d = this.edgeDist(src, b); if (d < bd) { bd = d; best = b; } }
     return best;
   }
   edgeDist(p, b) { const h = b.size / 2, dx = Math.max(Math.abs(p.x - b.x) - h, 0), dz = Math.max(Math.abs(p.z - b.z) - h, 0); return Math.hypot(dx, dz); }
   reachDist(u, t) { return t.kind === 'bld' ? this.edgeDist(u, t) : dist(u, t) - t.d.rad - u.d.rad * .5; }
-  nearestDrop(u) { let best = null, bd = 1e9; for (const b of this.blds) if (b.alive && b.built && b.team === u.team && b.d.drop) { const d = this.edgeDist(u, b); if (d < bd) { bd = d; best = b; } } return best; }
-  nearestRes(x, z, rt, r = 18) { let best = null, bd = r; for (const s of resources) if (s.alive && s.rt === rt) { const d = Math.hypot(s.x - x, s.z - z); if (d < bd) { bd = d; best = s; } } return best; }
+  nearestDrop(u) { let best = null, bd = 1e9; for (const b of this.blds) if (b.alive && b.built && b.team === u.team && b.d.drop && (!u.d.ship || b.d.dock)) { const d = this.edgeDist(u, b); if (d < bd) { bd = d; best = b; } } return best; }
+  nearestRes(x, z, rt, r = 18, fish = false) { let best = null, bd = r; for (const s of resources) if (s.alive && s.rt === rt && !!s.fish === fish) { const d = Math.hypot(s.x - x, s.z - z); if (d < bd) { bd = d; best = s; } } return best; }
   recount() {
     for (const t of this.T) { t.pop = 0; t.cap = 0; }
     for (const u of this.units) if (u.alive) this.T[u.team].pop++;
@@ -108,14 +121,37 @@ export class Game {
   moveTo(u, x, z) { this.setTask(u, { type: 'move', x, z }); }
   attack(u, t, resume) { this.setTask(u, { type: 'attack', t, resume }); }
   amove(u, x, z) { this.setTask(u, { type: 'amove', x, z }); }
-  gather(u, res) { if (u.type !== 'peasant') return this.moveTo(u, res.x, res.z); this.setTask(u, { type: 'gather', res }); }
+  gather(u, res) { if (res.fish ? !u.d.fisher : u.type !== 'peasant') return this.moveTo(u, res.x, res.z); this.setTask(u, { type: 'gather', res }); }
+  /** Send a transport to the water's edge nearest the units waiting to board. */
+  fetch(ship, units) {
+    const cx = units.reduce((a, u) => a + u.x, 0) / units.length, cz = units.reduce((a, u) => a + u.z, 0) / units.length;
+    const p = nearestWalkable(cx, cz, 30, navCell); if (p) this.moveTo(ship, p.x, p.z);
+  }
+  /** Land everyone on board at the shore nearest (x,z). */
+  unloadAt(ship, x, z) {
+    let spot = nearestWalkable(x, z, 6);
+    if (!spot || Math.hypot(spot.x - ship.x, spot.z - ship.z) > 7) spot = nearestWalkable(ship.x, ship.z, 6);
+    if (!spot || Math.hypot(spot.x - ship.x, spot.z - ship.z) > 7) { if (ship.team === 0) this.toast('Sail closer to the shore to land troops.', 2); return false; }
+    ship.cargo.forEach((u, i) => {
+      const p = nearestWalkable(spot.x + (i % 4 - 1.5) * .9, spot.z + Math.floor(i / 4) * .9, 6) || spot;
+      u.x = p.x; u.z = p.z; u.boarded = null; this.setTask(u, { type: 'idle' });
+    });
+    ship.cargo = []; return true;
+  }
   build(u, b) { if (u.type !== 'peasant') return; this.setTask(u, { type: 'build', b }); }
   farm(u, b) { if (b.farmer && b.farmer !== u && b.farmer.alive && b.farmer.task.b === b) return false; b.farmer = u; this.setTask(u, { type: 'farm', b }); return true; }
   /** Right-click / tap command for a group. tgt is a unit, building, resource or null (ground). */
   command(sel, tgt, x, z) {
     sel = sel.filter(u => u.alive && !u.possessed); if (!sel.length) return;
     if (tgt && tgt.team !== undefined && tgt.team !== sel[0].team) { for (const u of sel) this.attack(u, tgt); return 'attack'; }
-    if (tgt && tgt.kind === 'res') { const peas = sel.filter(u => u.type === 'peasant'); for (const u of peas) this.gather(u, tgt); this.formation(sel.filter(u => u.type !== 'peasant'), x, z); return 'gather'; }
+    if (tgt && tgt.kind === 'unit' && tgt.d.carry && tgt.team === sel[0].team) { // board a transport ship
+      const land = sel.filter(u => !u.d.ship);
+      if (land.length) { for (const u of land) this.setTask(u, { type: 'board', ship: tgt }); this.fetch(tgt, land); return 'build'; }
+    }
+    if (tgt && tgt.kind === 'res') {
+      const pick = u => tgt.fish ? u.d.fisher : u.type === 'peasant', gat = sel.filter(pick);
+      for (const u of gat) this.gather(u, tgt); this.formation(sel.filter(u => !pick(u)), x, z); return gat.length ? 'gather' : 'move';
+    }
     if (tgt && tgt.kind === 'bld' && tgt.team === sel[0].team) {
       const peas = sel.filter(u => u.type === 'peasant'), rest = sel.filter(u => u.type !== 'peasant');
       for (const u of peas) {
@@ -133,13 +169,15 @@ export class Game {
     const cx = sel.reduce((s, u) => s + u.x, 0) / sel.length, cz = sel.reduce((s, u) => s + u.z, 0) / sel.length;
     const a = Math.atan2(x - cx, z - cz), fx = Math.sin(a), fz = Math.cos(a), rx = -fz, rz = fx;
     const cols = Math.ceil(Math.sqrt(sel.length * 1.6)), sp = 1.15;
+    const walk0 = this.walkFor(sel[0]);
     sel.sort((p, q) => ((p.x - cx) * rx + (p.z - cz) * rz) - ((q.x - cx) * rx + (q.z - cz) * rz));
     // melee in front, ranged behind
     const ordered = [...sel.filter(u => !u.d.ranged), ...sel.filter(u => u.d.ranged)];
     ordered.forEach((u, i) => {
       const c = i % cols - (cols - 1) / 2, r = Math.floor(i / cols);
       let tx = x + rx * c * sp - fx * r * sp, tz = z + rz * c * sp - fz * r * sp;
-      if (!cellWalk(tx | 0, tz | 0)) { const p = nearestWalkable(tx, tz, 4) || { x, z }; tx = p.x; tz = p.z; }
+      const wk = this.walkFor(u); void walk0;
+      if (!wk(tx | 0, tz | 0)) { const p = nearestWalkable(tx, tz, u.d.ship ? 12 : 4, wk) || { x, z }; tx = p.x; tz = p.z; }
       this.moveTo(u, tx, tz);
     });
   }
@@ -178,12 +216,13 @@ export class Game {
   kill(t) {
     t.alive = false; t.hp = 0;
     if (t.kind === 'unit') {
+      if (t.cargo?.length) { for (const c of t.cargo) { c.boarded = null; c.x = t.x; c.z = t.z; this.kill(c); } t.cargo = []; }
       t.dead = true; t.deathT = 0; t.selected = false; if (t.ring) { t.ring.removeFromParent(); t.ring = null; }
       if (t === this.hero) { this.heroRespawn = this.mode === 'battle' ? 0 : 30; this.toast(this.heroRespawn ? 'Your Commander has fallen! He returns in 30s.' : 'Your Commander has fallen!'); }
       this.onUnitDeath?.(t);
     } else {
       t.mesh.removeFromParent(); t.selected = false; if (t.ring) { t.ring.removeFromParent(); t.ring = null; }
-      for (let z = t.cz; z < t.cz + t.size; z++) for (let x = t.cx; x < t.cx + t.size; x++) { blocked[z * N + x] = 0; bldAt[z * N + x] = null; }
+      for (const [i, v] of t.prev) { blocked[i] = v; bldAt[i] = null; navBlock[i] = 0; }
       this.rubble(t);
       if (t.type === 'hall') { this.T[t.team].hallLost = true; this.toast(t.team === 0 ? 'Your Town Hall has fallen!' : 'The enemy Town Hall burns!'); }
     }
@@ -242,7 +281,7 @@ export class Game {
   goTo(u, x, z, reach, dt) {
     // returns true when arrived
     if (!u.path || u.repath <= 0 || (u.goal && Math.hypot(u.goal.x - x, u.goal.z - z) > 1.5)) {
-      u.path = findPath(u.x, u.z, x, z, reach); u.pi = 0; u.repath = 3 + Math.random(); u.goal = { x, z };
+      u.path = findPath(u.x, u.z, x, z, reach, 14000, this.walkFor(u)); u.pi = 0; u.repath = 3 + Math.random(); u.goal = { x, z };
       if (!u.path.length) { u.path = null; return true; }
     }
     u.repath -= dt;
@@ -254,7 +293,7 @@ export class Game {
     return false;
   }
   step(u, dx, dz) {
-    const nx = u.x + dx, nz = u.z + dz, ok = (x, z) => cellWalk(x | 0, z | 0);
+    const nx = u.x + dx, nz = u.z + dz, wk = this.walkFor(u), ok = (x, z) => wk(x | 0, z | 0);
     if (ok(nx, nz)) { u.x = nx; u.z = nz; return true; }
     if (ok(nx, u.z)) { u.x = nx; return true; }
     if (ok(u.x, nz)) { u.z = nz; return true; }
@@ -295,20 +334,32 @@ export class Game {
           if (e.kind === 'unit' && !t.resume && dist(u, e) > (u.d.acq || 8) * 2.2 && t.auto) { this.setTask(u, { type: 'idle' }); break; }
           const reach = e.kind === 'bld' ? e.size / 2 + rng * .8 : Math.max(rng * .8, .9);
           u.repath = Math.min(u.repath || 0, e.kind === 'unit' ? .8 : 99);
-          this.goTo(u, e.x, e.z, reach, dt);
+          if (this.goTo(u, e.x, e.z, reach, dt) && e.d?.ship && !u.d.ranged) this.setTask(u, { type: 'idle' }); // can't reach a boat on foot
         }
+        break;
+      }
+      case 'board': {
+        const sh = t.ship;
+        if (!sh.alive || sh.cargo.length >= sh.d.carry) { this.setTask(u, { type: 'idle' }); break; }
+        if (dist(u, sh) <= sh.d.rad + 2.8) { u.boarded = sh; sh.cargo.push(u); u.selected = false; this.setTask(u, { type: 'idle' }); this.onBoard?.(u); break; }
+        u.repath = Math.min(u.repath || 0, 1); if (this.goTo(u, sh.x, sh.z, sh.d.rad + 2.4, dt)) u.path = null;
+        break;
+      }
+      case 'unload': {
+        if (!u.cargo?.length) { this.setTask(u, { type: 'idle' }); break; }
+        if (this.goTo(u, t.x, t.z, 3.5, dt) || Math.hypot(u.x - t.x, u.z - t.z) < 4.5) { this.unloadAt(u, t.x, t.z); this.setTask(u, { type: 'idle' }); }
         break;
       }
       case 'gather': {
         let r = t.res;
-        if (!r.alive) { r = this.nearestRes(r.x, r.z, r.rt, 15); if (!r) { if (u.carry) this.setTask(u, { type: 'return' }); else this.setTask(u, { type: 'idle' }); break; } t.res = r; u.path = null; }
+        if (!r.alive) { r = this.nearestRes(r.x, r.z, r.rt, r.fish ? 40 : 15, !!r.fish); if (!r) { if (u.carry) this.setTask(u, { type: 'return' }); else this.setTask(u, { type: 'idle' }); break; } t.res = r; u.path = null; }
         if (u.carry && (u.carry.rt !== r.rt || u.carry.amt >= CARRY)) { this.setTask(u, { type: 'return', back: t }); break; }
-        if (Math.hypot(u.x - r.x, u.z - r.z) <= r.r + .95) {
+        if (Math.hypot(u.x - r.x, u.z - r.z) <= r.r + (u.d.ship ? 1.9 : .95)) {
           u.path = null; this.face(u, Math.atan2(r.x - u.x, r.z - u.z), dt);
           const got = takeRes(r, RATE[r.rt] * dt * this.gatherMul(u.team) * (this.civ[u.team].gather?.[r.rt] || 1));
           u.carry = u.carry || { rt: r.rt, amt: 0 }; u.carry.amt += got; u.work = true;
           if (u.swingT > .7) u.swingT = 0;
-        } else this.goTo(u, r.x, r.z, r.r + .8, dt);
+        } else this.goTo(u, r.x, r.z, r.r + (u.d.ship ? 1.6 : .8), dt);
         break;
       }
       case 'farm': {
@@ -325,10 +376,10 @@ export class Game {
         const drop = (t.drop && t.drop.alive) ? t.drop : this.nearestDrop(u);
         if (!drop || !u.carry) { this.setTask(u, t.back || { type: 'idle' }); break; }
         t.drop = drop;
-        if (this.edgeDist(u, drop) <= 1.0) {
+        if (this.edgeDist(u, drop) <= (u.d.ship || drop.d.dock ? 2.4 : 1.0) || (u.near === drop && this.edgeDist(u, drop) < 3.2)) {
           this.T[u.team][u.carry.rt] += Math.floor(u.carry.amt + .001); u.carry = null;
           this.setTask(u, t.back || { type: 'idle' });
-        } else this.goTo(u, drop.x, drop.z, drop.size / 2 + .7, dt);
+        } else if (this.goTo(u, drop.x, drop.z, drop.size / 2 + (u.d.ship ? 1.6 : .7), dt)) u.near = drop;
         break;
       }
       case 'build': {
@@ -341,12 +392,12 @@ export class Game {
           else this.setTask(u, { type: 'idle' });
           break;
         }
-        if (this.edgeDist(u, b) <= 1.0) {
+        if (this.edgeDist(u, b) <= (b.d.dock ? 2.4 : 1.0) || (u.near === b && this.edgeDist(u, b) < 3.2)) {
           u.path = null; this.face(u, Math.atan2(b.x - u.x, b.z - u.z), dt); if (u.swingT > .6) u.swingT = 0;
           const add = dt / b.d.time * (this.civ[u.team].build || 1); b.progress = Math.min(1, b.progress + add); b.hp = Math.min(b.maxHp, b.hp + add * b.maxHp);
           if (b.progress >= 1) { b.built = true; this.recount(); if (b.team === 0) this.toast(`${b.d.name} complete.`); }
           this.setBuildVisual(b);
-        } else this.goTo(u, b.x, b.z, b.size / 2 + .6, dt);
+        } else if (this.goTo(u, b.x, b.z, b.size / 2 + (b.d.dock ? 1.8 : .6), dt)) u.near = b; // as close as we can get
         break;
       }
     }
@@ -369,6 +420,7 @@ export class Game {
           b.queue.shift();
           const side = b.team === 0 ? 1 : -1;
           const u = this.spawnUnit(b.team, q.type, b.x + side * (b.size / 2 + .8), b.z + side * (b.size / 2 + .8));
+          if (u.d.fisher && !b.rally) { const r = this.nearestRes(u.x, u.z, 'f', 60, true); if (r) this.gather(u, r); }
           this.recount();
           if (b.rally) {
             if (b.rally.res && u.type === 'peasant' && b.rally.res.alive) this.gather(u, b.rally.res);
@@ -384,12 +436,12 @@ export class Game {
     if (this.over && this.over !== 'continue') { /* keep animating */ }
     this.time += dt;
     this.rebuildHash();
-    for (const u of this.units) if (u.alive) this.updateUnit(u, dt);
+    for (const u of this.units) if (u.alive) { if (u.boarded) { u.x = u.boarded.x; u.z = u.boarded.z; continue; } this.updateUnit(u, dt); }
     // separation
     for (const u of this.units) {
-      if (!u.alive) continue;
+      if (!u.alive || u.boarded) continue;
       this.unitsNear(u.x, u.z, 1.5, o => {
-        if (o.id <= u.id || !o.alive) return;
+        if (o.id <= u.id || !o.alive || !!o.d.ship !== !!u.d.ship) return;
         const dx = o.x - u.x, dz = o.z - u.z, d2 = dx * dx + dz * dz, r = (u.d.rad + o.d.rad) * .95;
         if (d2 < r * r && d2 > 1e-6) {
           const d = Math.sqrt(d2), push = (r - d) * .5, ux = dx / d * push, uz = dz / d * push;
@@ -411,11 +463,13 @@ export class Game {
   /** Write every unit's pose into the instanced meshes. */
   syncVisuals(dt, hideId) {
     for (const u of this.units) {
-      u.y = heightAt(u.x, u.z);
+      u.y = u.d.ship ? WL : groundY(u.x, u.z);
       const k = Math.min(1, u.speedNow / 3); u.phase += dt * (4 + u.speedNow * 2.2);
       const sw = u.swingT < .35 ? u.swingT / .35 : 0;
-      let tilt = 0, y = u.y; if (u.dead) { tilt = -Math.min(1, u.deathT * 2.5) * Math.PI / 2 * .95; y -= Math.max(0, u.deathT - 1.5) * .6; }
-      u.batch.set(u.slot, { x: u.x, y, z: u.z, yaw: u.yaw, scale: u.scale, s: Math.sin(u.phase) * .7 * k, swing: sw, tilt, hidden: u.id === hideId });
+      let tilt = 0, y = u.y;
+      if (u.d.ship) { tilt = Math.sin(this.time * 1.1 + u.id) * .035; y += Math.sin(this.time * 1.6 + u.id) * .04 - (u.type === 'fishboat' ? .12 : .28); if (u.dead) { tilt += u.deathT * .2; y -= u.deathT * .7; } } // rocking / sinking
+      else if (u.dead) { tilt = -Math.min(1, u.deathT * 2.5) * Math.PI / 2 * .95; y -= Math.max(0, u.deathT - 1.5) * .6; }
+      u.batch.set(u.slot, { x: u.x, y, z: u.z, yaw: u.yaw, scale: u.scale, s: Math.sin(u.phase) * .7 * k, swing: sw, tilt, hidden: u.id === hideId || !!u.boarded });
       if (u.selected && u.alive && !u.possessed) {
         if (!u.ring) { u.ring = new THREE.Mesh(ringGeo, ringMats[u.team]); this.scene.add(u.ring); }
         u.ring.position.set(u.x, u.y + .06, u.z); u.ring.scale.setScalar(u.d.rad / .45 * 1.1);

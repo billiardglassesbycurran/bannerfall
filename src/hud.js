@@ -7,7 +7,7 @@ const $ = id => document.getElementById(id);
 const HK = ['KeyZ', 'KeyX', 'KeyC', 'KeyV', 'KeyB', 'KeyN', 'KeyM', 'Comma'];
 const HKL = ['Z', 'X', 'C', 'V', 'B', 'N', 'M', ','];
 export const costHtml = c => !c ? '' : ['f', 'w', 'g'].filter(k => c[k]).map(k => `<span class="${k}">${c[k]}${k}</span>`).join(' ');
-const TASK = { idle: 'Idle', move: 'Moving', amove: 'Attacking', attack: 'Fighting', follow: 'Following', build: 'Building', farm: 'Farming', return: 'Carrying to storage' };
+const TASK = { board: 'Boarding ship', unload: 'Sailing to land troops', idle: 'Idle', move: 'Moving', amove: 'Attacking', attack: 'Fighting', follow: 'Following', build: 'Building', farm: 'Farming', return: 'Carrying to storage' };
 const RN = { f: 'food', w: 'wood', g: 'gold' };
 
 export class HUD {
@@ -52,7 +52,7 @@ export class HUD {
     q.innerHTML = '';
     if (!sel.length) { name.textContent = this.a.game.mode === 'battle' ? 'Select your soldiers' : 'Nothing selected'; desc.innerHTML = this.a.hint(); return; }
     const e = sel[0];
-    if (e.kind === 'res') { name.textContent = { f: 'Berry bush', w: 'Tree', g: 'Gold mine' }[e.rt]; desc.textContent = `${Math.ceil(e.amt)} ${RN[e.rt]} left. Send peasants to gather it.`; return; }
+    if (e.kind === 'res') { name.textContent = e.fish ? 'Fish' : { f: 'Berry bush', w: 'Tree', g: 'Gold mine' }[e.rt]; desc.textContent = `${Math.ceil(e.amt)} ${RN[e.rt]} left. ` + (e.fish ? 'Fishing boats (from a Dock) can catch it.' : 'Send peasants to gather it.'); return; }
     if (e.kind === 'bld') {
       name.textContent = (e.team ? 'Enemy ' : '') + e.d.name;
       let t = `HP ${Math.ceil(e.hp)}/${e.maxHp}`;
@@ -69,7 +69,7 @@ export class HUD {
     if (sel.length === 1) {
       name.textContent = (e.team ? 'Enemy ' : '') + e.d.name;
       let t = `HP ${Math.ceil(e.hp)}/${e.maxHp}`;
-      if (e.team === 0) { let task = TASK[e.task.type] || ''; if (e.task.type === 'gather') task = `Gathering ${RN[e.task.res.rt]}`; t += ` · ${task}`; if (e.carry) t += ` (carrying ${e.carry.amt | 0} ${RN[e.carry.rt]})`; }
+      if (e.team === 0) { let task = TASK[e.task.type] || ''; if (e.task.type === 'gather') task = e.task.res.fish ? 'Fishing' : `Gathering ${RN[e.task.res.rt]}`; if (e.cargo) task += ` · carrying ${e.cargo.length}/${e.d.carry} troops`; t += ` · ${task}`; if (e.carry) t += ` (carrying ${e.carry.amt | 0} ${RN[e.carry.rt]})`; }
       desc.textContent = t; return;
     }
     const counts = {}; for (const u of sel) counts[u.type] = (counts[u.type] || 0) + 1;
@@ -86,15 +86,17 @@ export class HUD {
     else if (mine.length && mine[0].kind === 'unit') {
       if (mine.some(u => u.type === 'peasant') && g.mode !== 'battle') for (const t of BUILD_LIST) {
         const d = BD[t], req = d.req && !g.has(0, d.req);
-        btns.push({ label: d.name.replace('Storehouse', 'Store').replace('Watchtower', 'Tower'), sub: req ? 'needs ' + BD[d.req].name : costHtml(d.cost), dis: req || !g.afford(0, d.cost), on: () => a.startPlace(t), tip: d.desc });
+        btns.push({ label: d.name.replace('Storehouse', 'Store').replace('Watchtower', 'Tower').replace('Archery Range', 'Range').replace('Siege Workshop', 'Siege'), sub: req ? 'needs ' + BD[d.req].name : costHtml(d.cost), dis: req || !g.afford(0, d.cost), on: () => a.startPlace(t), tip: d.desc });
       }
-      if (mine.some(u => u.type !== 'peasant')) btns.push({ label: 'Attack', sub: 'move', on: () => a.setPending({ type: 'amove' }) });
+      if (mine.some(u => u.type !== 'peasant' && u.d.dmg > 0)) btns.push({ label: 'Attack', sub: 'move', on: () => a.setPending({ type: 'amove' }) });
+      const tr = mine.find(u => u.d.carry);
+      if (tr) { btns.push({ label: 'Unload', sub: 'pick shore', on: () => a.setPending({ type: 'unload', ship: tr }) }); btns.push({ label: 'Land', sub: 'here', on: () => g.unloadAt(tr, tr.x, tr.z) }); }
       btns.push({ label: 'Stop', sub: '', on: () => { for (const u of mine) g.setTask(u, { type: 'idle' }); } });
     } else if (mine.length && mine[0].kind === 'bld' && mine[0].built) {
       const b = mine[0];
       for (const t of g.trainsFor(b)) {
         const d = g.stat(0, t), n = b.queue.filter(q => q.type === t).length;
-        btns.push({ label: d.name.replace('Light Cavalry', 'Light Cav').replace('Horse Archer', 'Horse Archer').replace('Crossbowman', 'Crossbow').replace("Khan's Guard", "Khan's Guard"), sub: costHtml(d.cost), dis: !g.afford(0, d.cost) || b.queue.length >= 5, badge: n || '', on: () => { const r = g.train(b, t); if (r === 'cost') a.toast('Not enough resources.', 2); else if (r === 'full') a.toast('Queue is full.', 2); this.updateSel(); this.updateCard(); }, tip: d.desc });
+        btns.push({ label: d.name.replace('Light Cavalry', 'Light Cav').replace('Horse Archer', 'Horse Archer').replace('Crossbowman', 'Crossbow').replace('Fishing Boat', 'Fisher').replace('Transport Ship', 'Transport').replace("Khan's Guard", "Khan's Guard"), sub: costHtml(d.cost), dis: !g.afford(0, d.cost) || b.queue.length >= 5, badge: n || '', on: () => { const r = g.train(b, t); if (r === 'cost') a.toast('Not enough resources.', 2); else if (r === 'full') a.toast('Queue is full.', 2); this.updateSel(); this.updateCard(); }, tip: d.desc });
       }
       if (b.d.trains) btns.push({ label: 'Rally', sub: 'point', on: () => a.setPending({ type: 'rally', b }) });
     }

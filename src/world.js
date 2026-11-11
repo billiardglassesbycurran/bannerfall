@@ -7,8 +7,16 @@ import { tileFbm } from './textures.js';
 export const SIZE = 128, N = SIZE, HN = SIZE + 1;
 export const WL = -0.45;
 export const BASES = [{ x: 24, z: 104 }, { x: 104, z: 24 }];
-const LAKES = [[40, 40, 8.5], [88, 88, 8.5]];
-const ROADS = [[[24, 104], [44, 76], [64, 64], [84, 52], [104, 24]], [[24, 104], [16, 64], [40, 22], [104, 24]], [[24, 104], [88, 112], [112, 64], [104, 24]]];
+// A river winds between the two bases (bridge in the middle, shallow fords near each end) — layout from the prototype.
+export const BRIDGE = { x: 64, z: 64 };
+export const FORDS = [[37.2, 32.8], [90.8, 95.2]];
+const ROADS = [[[24, 104], [44, 76], [64, 64], [84, 52], [104, 24]], [[24, 104], [18, 62], [37, 33], [66, 20], [104, 24]], [[24, 104], [62, 110], [91, 95], [110, 62], [104, 24]]];
+export function riverDist(x, z) { return Math.abs((x - z) / Math.SQRT2 + Math.sin((x + z - 128) * .045) * 6); }
+/** Height of the bridge deck at (x,z), or -99 if not on the bridge. */
+export function bridgeAt(x, z) {
+  const u = ((x - BRIDGE.x) - (z - BRIDGE.z)) / Math.SQRT2, v = ((x - BRIDGE.x) + (z - BRIDGE.z)) / Math.SQRT2;
+  return Math.abs(u) < 7 && Math.abs(v) < 1.6 ? WL + .75 + .45 * (1 - (u / 7) ** 2) : -99;
+}
 
 // ---------------- heights ----------------
 function distToRoad(x, z) {
@@ -23,10 +31,11 @@ function rawH(x, z) {
   for (const b of BASES) { const d = Math.hypot(x - b.x, z - b.z); if (d < 20) h = lerp(h, 1.0, smooth(clamp((20 - d) / 8, 0, 1))); }
   h = Math.max(h, WL + .4);
   const rd = distToRoad(x, z); if (rd < 4) h = lerp(h, h * .7 + .35, smooth((4 - rd) / 4) * .7);
-  for (const [lx, lz, lr] of LAKES) {
-    const d = Math.hypot(x - lx, z - lz) + (vnoise(x * .2, z * .2) - .5) * 4;
-    if (d < lr + 4) h = lerp(h, WL - 2.2, smooth(clamp((lr + 4 - d) / 6, 0, 1)));
-  }
+  // river: deep channel, shallow at the two fords
+  const d = riverDist(x, z) + (vnoise(x * .3, z * .3) - .5) * 1.2;
+  let depth = 2.4 * smooth(clamp((6 - d) / 3.5, 0, 1));
+  for (const f of FORDS) { const fd = Math.hypot(x - f[0], z - f[1]); depth = lerp(depth, Math.min(depth, .6), smooth(clamp((6.5 - fd) / 3, 0, 1))); }
+  if (depth > 0) h = Math.min(h, lerp(h, WL + .45 - depth, smooth(clamp((6.5 - d) / 2.5, 0, 1))));
   return h;
 }
 export const hgt = new Float32Array(HN * HN);
@@ -47,12 +56,21 @@ export const resCell = new Array(N * N).fill(null);
 export const cidx = (x, z) => (z | 0) * N + (x | 0);
 export const cellWalk = (cx, cz) => cx >= 0 && cz >= 0 && cx < N && cz < N && (blocked[cz * N + cx] === 0 || blocked[cz * N + cx] === 7);
 export const walkable = (x, z) => cellWalk(x | 0, z | 0);
+/** Where units stand: the ground, or the bridge deck above the river. */
+export const groundY = (x, z) => Math.max(heightAt(x, z), bridgeAt(x, z));
+/** Water deep enough for boats (fords are shallow but boats can still pass). */
+export const water = new Uint8Array(N * N);
+export const navCell = (cx, cz) => cx >= 0 && cz >= 0 && cx < N && cz < N && water[cz * N + cx] === 1 && !navBlock[cz * N + cx];
+export const navBlock = new Uint8Array(N * N); // docks
+export const navWalk = (x, z) => navCell(x | 0, z | 0);
 export const isLand = (cx, cz) => cx >= 0 && cz >= 0 && cx < N && cz < N && blocked[cz * N + cx] !== 1;
 for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) {
   const e = Math.min(x + .5, z + .5, SIZE - .5 - x, SIZE - .5 - z);
   const h = [hgt[z * HN + x], hgt[z * HN + x + 1], hgt[(z + 1) * HN + x], hgt[(z + 1) * HN + x + 1]];
   const sl = Math.max(...h) - Math.min(...h), avg = (h[0] + h[1] + h[2] + h[3]) / 4;
   if (e < 4.5 || sl > 1.15 || avg < WL - .25) blocked[z * N + x] = 1;
+  if (bridgeAt(x + .5, z + .5) > -50 && e >= 4.5) blocked[z * N + x] = 0; // the bridge is walkable
+  if (e >= 4 && Math.max(...h) < WL - .1) water[z * N + x] = 1;
 }
 
 // ---------------- resources ----------------
@@ -86,7 +104,7 @@ function berryPatch(x, z, n) { let k = 0; for (let t = 0; t < 60 && k < n; t++) 
 // per-base starting resources (mirrored so it's fair)
 mirror(addMine, 36, 112, 2500); mirror(addMine, 14, 90, 2000);
 for (const [x, z] of [[33, 96], [SIZE - 33, SIZE - 96]]) berryPatch(x, z, 7);
-mirror(addMine, 52, 52, 3000);
+mirror(addMine, 66, 44, 3000);
 for (const [x, z] of [[58, 92], [SIZE - 58, SIZE - 92]]) berryPatch(x, z, 6);
 const groves = [[12, 72, 7], [46, 120, 6], [30, 84, 3.5], [44, 62, 6], [68, 98, 6], [18, 44, 7], [86, 118, 6], [64, 22, 5]];
 for (const [gx, gz, gr] of groves) for (let k = 0; k < gr * gr * 1.7; k++) {
@@ -94,7 +112,12 @@ for (const [gx, gz, gr] of groves) for (let k = 0; k < gr * gr * 1.7; k++) {
   if (!nearBase(x, z, 13) && !nearBase(SIZE - x, SIZE - z, 13)) mirror(addTree, x, z);
 }
 for (let k = 0; k < 170; k++) { const x = rr(6, 122), z = rr(6, 122); if (z > SIZE - x) continue; if (!nearBase(x, z, 14) && !nearBase(SIZE - x, SIZE - z, 14)) mirror(addTree, x, z); }
-for (const r of resources) r.y = heightAt(r.x, r.z);
+// fish shoals along the river (only fishing boats can catch them; they don't block boats)
+for (const sv of [52, 92, 108, 148, 164, 204]) {
+  const dxz = -Math.SQRT2 * Math.sin((sv - 128) * .045) * 6, x = (sv + dxz) / 2, z = (sv - dxz) / 2;
+  resources.push({ id: nextResId++, kind: 'res', rt: 'f', fish: true, x, z, amt: 250, max: 250, r: 1.2, cells: [], alive: true });
+}
+for (const r of resources) r.y = r.fish ? WL : heightAt(r.x, r.z);
 
 // ---------------- terrain mesh ----------------
 // Each vertex gets blend weights for 4 ground textures (grass, dirt, rock, sand) plus a colour tint.
@@ -288,6 +311,34 @@ export function buildSky() {
   return m;
 }
 
+// ---------------- bridge & fish ----------------
+export function buildBridge(scene, shadows) {
+  const b = new Builder(), ry = Math.PI / 4, ux = Math.SQRT1_2, uz = -Math.SQRT1_2;
+  for (let i = 0; i < 14; i++) {
+    const u0 = -7 + i, u1 = u0 + 1, h0 = bridgeAt(BRIDGE.x + ux * u0 + .001, BRIDGE.z + uz * u0) , h1 = bridgeAt(BRIDGE.x + ux * Math.min(u1, 6.99), BRIDGE.z + uz * Math.min(u1, 6.99));
+    const um = (u0 + u1) / 2, x = BRIDGE.x + ux * um, z = BRIDGE.z + uz * um, y = (h0 + h1) / 2, slope = Math.atan2(h1 - h0, 1);
+    b.add(P.box, 0x9a958b, x, y - .14, z, 0, ry, slope, 1.04, .28, 3.3);
+    for (const sd of [-1, 1]) b.add(P.box, 0x8a857b, x + Math.SQRT1_2 * sd * 1.55, y + .25, z + Math.SQRT1_2 * sd * 1.55, 0, ry, slope, 1.04, .5, .22);
+  }
+  for (const u of [-4.5, 0, 4.5]) { const x = BRIDGE.x + ux * u, z = BRIDGE.z + uz * u, top = bridgeAt(x, z) - .3; b.add(P.box, 0x8a857b, x, (top + WL - 2.6) / 2, z, 0, ry, 0, 1.1, top - WL + 2.6, 3.0); }
+  const m = new THREE.Mesh(b.build(), M.stone); m.castShadow = shadows; m.receiveShadow = true; scene.add(m);
+}
+const fishGeo = new THREE.SphereGeometry(.12, 8, 6).scale(.7, .5, 2.2);
+export function buildFish(scene) {
+  const mat = new THREE.MeshStandardMaterial({ color: 0x3a4a4a, roughness: .4, metalness: .3 });
+  for (const r of resources.filter(r => r.fish)) {
+    const g = new THREE.Group(); g.position.set(r.x, WL - .18, r.z);
+    for (let i = 0; i < 5; i++) { const f = new THREE.Mesh(fishGeo, mat); f.userData.a = i * 1.26; f.userData.rad = .4 + i * .15; g.add(f); }
+    scene.add(g); r.mesh = g;
+  }
+}
+export function updateFish(t) {
+  for (const r of resources) if (r.fish && r.mesh) for (const f of r.mesh.children) {
+    const a = f.userData.a + t * (.6 + f.userData.rad * .3), rr = f.userData.rad * (r.amt / r.max * .5 + .5);
+    f.position.set(Math.cos(a) * rr, Math.sin(t * 2 + f.userData.a) * .04, Math.sin(a) * rr); f.rotation.y = -a;
+  }
+}
+
 // ---------------- trees, berries, gold, decor ----------------
 function pineGeo(seed, hi) {
   const b = new Builder(), r = mulberry32(seed);
@@ -432,7 +483,7 @@ function cardBush() {
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _v = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color(), UP = new THREE.Vector3(0, 1, 0);
 export function buildResources(scene, Q) {
   const shadows = Q.shadow > 0;
-  const trees = resources.filter(r => r.rt === 'w'), berries = resources.filter(r => r.rt === 'f');
+  const trees = resources.filter(r => r.rt === 'w'), berries = resources.filter(r => r.rt === 'f' && !r.fish);
   if (M.photo) {
     // photo-leaf trees: each species is a pair of instanced meshes (bark + leaves) that share placements
     const mk = (src, cap) => { const pair = [new THREE.InstancedMesh(src.bark, src.barkMat || M.bark, cap), new THREE.InstancedMesh(src.leaves, src.leafMat, cap)]; for (const m of pair) { m.count = 0; m.castShadow = shadows; m.receiveShadow = shadows; scene.add(m); } return pair; };

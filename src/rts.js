@@ -62,7 +62,7 @@ export class RTSView {
   pickUnit(sx, sy, rad, team) {
     const v = new THREE.Vector3(); let best = null, bd = rad * rad;
     for (const u of this.a.game.units) {
-      if (!u.alive || u.possessed || (team !== undefined && u.team !== team)) continue;
+      if (!u.alive || u.possessed || u.boarded || (team !== undefined && u.team !== team)) continue;
       const p = this.toScreen(u.x, u.y + .9 * u.scale * (u.d.horse ? 1.6 : 1), u.z, v); if (!p) continue;
       const d = (p[0] - sx) ** 2 + (p[1] - sy) ** 2 - (u.team === 0 ? 60 : 0); if (d < bd) { bd = d; best = u; }
     }
@@ -96,7 +96,7 @@ export class RTSView {
   }
   boxSelect(x0, y0, x1, y1, add) {
     const [ax, bx] = [Math.min(x0, x1), Math.max(x0, x1)], [ay, by] = [Math.min(y0, y1), Math.max(y0, y1)], v = new THREE.Vector3();
-    const hits = this.a.game.units.filter(u => { if (!u.alive || u.team !== 0 || u.possessed) return false; const p = this.toScreen(u.x, u.y + .9, u.z, v); return p && p[0] >= ax && p[0] <= bx && p[1] >= ay && p[1] <= by; });
+    const hits = this.a.game.units.filter(u => { if (!u.alive || u.team !== 0 || u.possessed || u.boarded) return false; const p = this.toScreen(u.x, u.y + .9, u.z, v); return p && p[0] >= ax && p[0] <= bx && p[1] >= ay && p[1] <= by; });
     // prefer soldiers over peasants when both are boxed
     const mil = hits.filter(u => u.type !== 'peasant');
     this.a.select(mil.length && mil.length < hits.length && !add ? mil : hits, add);
@@ -139,6 +139,7 @@ export class RTSView {
     const mine = a.sel.filter(e => e.kind === 'unit' && e.team === 0 && e.alive);
     const { ent } = this.pick(sx, sy, true);
     if (!mine.length) { if (!this.selectClick(sx, sy, true)) a.select([]); return; }
+    if (ent && ent.kind === 'unit' && ent.team === 0 && ent.d.carry && mine.some(u => !u.d.ship)) { this.orderAt(sx, sy, true); return; } // board the transport
     if (ent && ent.kind === 'unit' && ent.team === 0) { this.selectClick(sx, sy, true); return; }
     if (ent && ent.kind === 'bld' && ent.team === 0) {
       const peas = mine.some(u => u.type === 'peasant');
