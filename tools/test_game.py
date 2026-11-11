@@ -100,6 +100,39 @@ def main():
         check(page.evaluate('window.bannerfall.mode') == 'rts', 'Command button returns to the view from above')
         page.context.browser.close()
 
+        print('Walk into a building, mount up, board a ship, archers aim')
+        page, errors = open_game(p, base, 'play=skirmish,1,franks,norse', **desk)
+        page.click('#bLead'); page.wait_for_timeout(300)
+        r = page.evaluate("""() => { const a = window.bannerfall, g = a.game, h = g.hero, hall = g.blds[0], pov = a.pov;
+          h.x = hall.x; h.z = hall.z + hall.size / 2 + .8; pov.update(.05); const act = pov.action();
+          return { act: act && act.label }; }""")
+        check(r['act'] == 'Enter', f'Act button offers to enter the Town Hall {r}')
+        page.click('#bAct'); page.wait_for_timeout(600)
+        check(page.evaluate('!!window.bannerfall.pov.room'), 'Commander is inside the Town Hall')
+        page.screenshot(path=str(OUT / 'inside-hall.png'))
+        page.click('#bAct'); page.wait_for_timeout(300)
+        check(page.evaluate('!window.bannerfall.pov.room'), 'Leave takes him back outside')
+        page.click('#bMount'); page.wait_for_timeout(600)
+        check(page.evaluate("window.bannerfall.pov.unit.type") == 'herohorse', 'Commander mounts his horse')
+        page.screenshot(path=str(OUT / 'mounted.png'))
+        r = page.evaluate("""() => { const a = window.bannerfall, g = a.game, pov = a.pov, h = pov.unit;
+          let best = null; for (let z = 20; z < 108; z++) for (let x = 20; x < 108; x++) { const w = g.walkFor({ d: { ship: 1 } }); if (w(x, z) && !w(x + 3, z) && g.walkFor(h)(x + 3, z)) { best = [x, z]; break; } if (best) break; }
+          const sh = g.spawnUnit(0, 'warship', best[0] + .5, best[1] + .5); h.x = best[0] + 3.5; h.z = best[1] + .5; pov.update(.05); const act = pov.action();
+          return { act: act && act.label, ship: sh.id }; }""")
+        check(r['act'] == 'Board', f'Act button offers to board a nearby ship {r}')
+        page.click('#bAct'); page.wait_for_timeout(300)
+        page.keyboard.down('KeyW'); page.wait_for_timeout(1500); page.keyboard.up('KeyW')
+        r = page.evaluate("() => { const u = window.bannerfall.pov.unit; return { on: !!u.onShip, speed: u.onShip && u.onShip.speedNow }; }")
+        check(r['on'], f'Commander is aboard and can sail {r}')
+        page.screenshot(path=str(OUT / 'sailing.png'))
+        page.click('#bExit'); page.wait_for_timeout(300)
+        check(page.evaluate('!window.bannerfall.pov.unit && !window.bannerfall.game.hero.onShip'), 'leaving the view steps him off the ship')
+        r = page.evaluate("""() => { const a = window.bannerfall, g = a.game; const ar = g.spawnUnit(0, 'archer', 60, 80), e = g.spawnUnit(1, 'sword', 60, 86);
+          g.attack(ar, e); for (let i = 0; i < 30; i++) { g.update(.05); g.syncVisuals(.05, -1); } return { aim: ar.aimK }; }""")
+        check(r['aim'] > .8, f'archers raise their bows to aim when engaging {r}')
+        check(not err_box(page) and not errors, 'features: no errors ' + (err_box(page) + ' '.join(errors))[:300])
+        page.context.browser.close()
+
         print('Phone (touch, 740x360 landscape)')
         page, errors = open_game(p, base, 'play=skirmish,1,chinese,franks', viewport={'width': 740, 'height': 360}, has_touch=True, is_mobile=True, device_scale_factor=2)
         page.evaluate("() => { const a = window.bannerfall; a.select(a.game.units.filter(u => u.team === 0 && u.type === 'peasant')); a.hud.sig = ''; a.hud.updateCard(); }")

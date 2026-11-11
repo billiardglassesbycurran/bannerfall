@@ -61,7 +61,8 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
   small (~3.5 MB now); only use CC0/permissively licensed assets and record them in CREDITS.md. Never use images from Google.
 - `src/game.js` — simulation: spawning, orders, gathering, building, training, combat, projectiles, win/lose.
 - `src/path.js` — A* pathfinding on the grid (pass a walk function: `cellWalk` for land, `navCell` for ships). `src/ai.js` — enemy AI for Skirmish, Battle, Survival.
-- `src/rts.js` — aerial camera, picking, selection, touch/mouse orders. `src/pov.js` — 1st/3rd person, strike, Follow me.
+- `src/rts.js` — aerial camera, picking, selection, touch/mouse orders. `src/pov.js` — 1st/3rd person: strike, Follow me,
+  Act button (G: board/steer/leave ships, enter/leave buildings — rooms from `interiorGeo` in models.js), Mount (M).
 - `src/hud.js` — resource bar, selection panel, command card, minimap, health bars, toasts.
 - `window.bannerfall` exposes app state for debugging; `#play=skirmish,1` in the URL skips the menu (mode, difficulty 0-2).
 
@@ -91,6 +92,8 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
 ## Roadmap
 1. ✅ v0.1 Terrain, units, select & move from above, 3rd-person view.
 2. ✅ v0.2 Graphics pass; economy, buildings, training, combat, pathfinding, enemy AI; Skirmish / Battle / Survival modes.
+2h. ✅ v0.10 Walk onto ships and steer them, walk into furnished building interiors, Commander mounts a horse,
+   archers/crossbows aim and draw in time with their shots.
 2f. ✅ v0.7 AAA polish pass: planked ship hulls, cloth sails, rigging, crew, wakes; post-processing (bloom, grade,
    vignette; GTAO on desktop High); sky clouds + cloud shadows; distant mountains; gear detail; minimap redesign
    (hill shading, white view box, attack pings); construction scaffolding + progress/builders/ETA label.

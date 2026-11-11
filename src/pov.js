@@ -1,6 +1,9 @@
 // 1st/3rd-person control of one unit (the hero or any possessed unit): move, look, strike, rally troops.
 import * as THREE from 'three';
-import { heightAt, blocked, N } from './world.js';
+import { heightAt, groundY, blocked, N, WL, cellWalk } from './world.js';
+import { nearestWalkable } from './path.js';
+import { ENTERABLE, interiorGeo, SHIP_LEN } from './models.js';
+import { M } from './geo.js';
 import { clamp, angDiff, dist } from './util.js';
 
 const JOY_R = 55;
@@ -24,6 +27,9 @@ export class POVView {
   }
   leave() {
     const u = this.unit; if (!u) return;
+    if (this.room) this.exitRoom();
+    if (u.onShip) { if (!this.disembark(true)) { const sh = u.onShip; if (sh.cargo && sh.cargo.length < sh.d.carry) { this.getOff(sh); u.boarded = sh; sh.cargo.push(u); } else { const p = nearestWalkable(sh.x, sh.z, 30); if (p) { u.x = p.x; u.z = p.z; } this.getOff(sh); } } }
+    u.aimHold = false;
     this.mark.visible = false; this.holding = false;
     u.possessed = false; u.speedNow = 0;
     for (const f of this.followers) if (f.alive && f.task.type === 'follow') this.g.setTask(f, { type: 'idle' });
@@ -34,6 +40,52 @@ export class POVView {
     this.first = v;
     document.getElementById('xhair').classList.toggle('hide', !v);
     document.getElementById('bView').innerHTML = v ? '3rd<small>person</small>' : '1st<small>person</small>';
+  }
+
+  // ---------- walk onto ships / into buildings / mount ----------
+  /** What the Act button (G) would do right now: { label, run } or null. */
+  action() {
+    const u = this.unit, g = this.g; if (!u || !u.alive) return null;
+    if (this.room) return { label: 'Leave', sub: ENTERABLE[this.room.b.type], run: () => this.exitRoom(true) };
+    if (u.onShip) return { label: 'Go ashore', sub: this.landNear(u.onShip) ? 'step off' : 'sail closer', run: () => this.disembark() };
+    if (u.d.ship) return null;
+    let best = null, bd = 1e9;
+    for (const s of g.units) if (s.alive && s.team === u.team && s.d.ship && !s.possessed) { const d = Math.hypot(s.x - u.x, s.z - u.z) - s.d.rad; if (d < 3.2 && d < bd) { bd = d; best = s; } }
+    if (best) return { label: 'Board', sub: best.d.name.replace(' Ship', ''), run: () => this.board(best) };
+    for (const b of g.blds) if (b.alive && b.built && b.team === u.team && ENTERABLE[b.type] && g.edgeDist(u, b) < 1.8) return { label: 'Enter', sub: ENTERABLE[b.type], run: () => this.enterRoom(b) };
+    return null;
+  }
+  landNear(sh) { const p = nearestWalkable(sh.x, sh.z, 6); return p && Math.hypot(p.x - sh.x, p.z - sh.z) < 6.5 ? p : null; }
+  board(sh) {
+    const u = this.unit; u.onShip = sh; sh.possessed = true; this.g.setTask(sh, { type: 'idle' }); sh.path = null;
+    this.camDist0 = this.camDist; this.camDist = Math.max(this.camDist, 6.5); this.a.toast(`Aboard the ${sh.d.name}: W/S sail, A/D steer. Act button to go ashore.`, 4); this.a.sfx?.('knock');
+  }
+  getOff(sh) { const u = this.unit; u.onShip = null; u.yOver = null; sh.possessed = false; sh.speedNow = 0; if (this.camDist0) this.camDist = this.camDist0; }
+  disembark(quiet) {
+    const u = this.unit, sh = u.onShip; if (!sh) return false;
+    const p = this.landNear(sh); if (!p) { if (!quiet) this.a.toast('Sail closer to the shore to step off.', 2); return false; }
+    this.getOff(sh); u.x = p.x; u.z = p.z; this.snap = true; return true;
+  }
+  /** Step through the door into a lit, furnished room. */
+  enterRoom(b) {
+    const u = this.unit, it = interiorGeo(b.type, b.team), grp = new THREE.Group();
+    const m = new THREE.Mesh(it.geo, M.stone); m.receiveShadow = true; grp.add(m);
+    for (const [x, y, z] of it.lights) { const l = new THREE.PointLight(0xffc890, 3.2, 8, 1.6); l.position.set(x, y, z); grp.add(l); }
+    grp.position.copy(b.mesh.position); grp.rotation.y = b.mesh.rotation.y; this.a.scene.add(grp);
+    b.mesh.visible = false; this.room = { b, grp, it, ry: b.mesh.rotation.y };
+    this.setLocal(0, it.D / 2 - .7); u.yaw = this.room.ry + Math.PI; this.yaw = u.yaw; this.pitch = -.1; this.snap = true;
+    this.a.sfx?.('knock'); this.a.toast(`Inside the ${ENTERABLE[b.type]}.`, 2);
+  }
+  exitRoom(walkOut) {
+    const r = this.room; if (!r) return; const u = this.unit;
+    r.grp.removeFromParent(); r.b.mesh.visible = true; this.room = null; u.yOver = null;
+    if (u && walkOut !== false) { const s = r.b.size / 2 + .9, wx = r.b.x + Math.sin(r.ry) * s, wz = r.b.z + Math.cos(r.ry) * s, p = nearestWalkable(wx, wz, 6) || { x: wx, z: wz }; u.x = p.x; u.z = p.z; u.yaw = r.ry; this.yaw = r.ry; this.snap = true; }
+  }
+  local() { const r = this.room, u = this.unit, dx = u.x - r.b.x, dz = u.z - r.b.z, c = Math.cos(r.ry), s = Math.sin(r.ry); return [dx * c - dz * s, dx * s + dz * c]; }
+  setLocal(lx, lz) { const r = this.room, u = this.unit, c = Math.cos(r.ry), s = Math.sin(r.ry); u.x = r.b.x + lx * c + lz * s; u.z = r.b.z - lx * s + lz * c; }
+  toggleMount() {
+    const u = this.unit; if (!u || !u.d.hero || u.onShip || this.room) return;
+    if (this.g.setMount(u, !u.d.horse)) { this.a.fx?.dust(u.x, u.y, u.z, 10, 1.2); this.a.sfx?.('thud'); this.a.toast(u.d.horse ? 'Mounted! Faster, and you strike from the saddle.' : 'Dismounted.', 2); }
   }
 
   // ---------- actions ----------
@@ -102,25 +154,46 @@ export class POVView {
     const sprint = keys.ShiftLeft || keys.ShiftRight || Math.hypot(this.stick.x, this.stick.y) > .95;
     const sp = u.d.spd * (sprint ? 1.45 : 1) * Math.min(1, Math.hypot(mx, my));
     let moved = false, mdx = 0, mdz = 0;
-    if (sp > 0 && u.alive) {
+    if (u.onShip && u.onShip.alive) { // steering a ship from its deck
+      const sh = u.onShip, L = SHIP_LEN[sh.type] || 4, turn = -mx * dt * .9 * (my < 0 ? -1 : 1), v = sh.d.spd * (my > 0 ? my : my * .4);
+      sh.yaw += turn; this.yaw += turn;
+      const ok = v && this.g.step(sh, Math.sin(sh.yaw) * v * dt, Math.cos(sh.yaw) * v * dt); sh.speedNow = ok ? Math.abs(v) : 0;
+      u.x = sh.x - Math.sin(sh.yaw) * L * .14; u.z = sh.z - Math.cos(sh.yaw) * L * .14;
+      u.yOver = WL + (sh.type === 'transport' ? .14 : sh.type === 'warship' ? .03 : .02) + Math.sin(this.g.time * 1.6 + sh.id) * .04;
+    } else if (this.room) { // walking around inside a building
+      const r = this.room, [lx, lz] = this.local();
+      if (sp > 0) { mdx = fx * my + rx * mx; mdz = fz * my + rz * mx; const dl = Math.hypot(mdx, mdz) || 1, c = Math.cos(r.ry), sn = Math.sin(r.ry);
+        const wx = mdx / dl * sp * .7 * dt, wz = mdz / dl * sp * .7 * dt, nlx = lx + wx * c - wz * sn, nlz = lz + wx * sn + wz * c;
+        if (nlz > r.it.D / 2 - .3 && Math.abs(nlx) < .55) { this.exitRoom(true); moved = true; }
+        else { this.setLocal(clamp(nlx, -r.it.W / 2 + .3, r.it.W / 2 - .3), clamp(nlz, -r.it.D / 2 + .3, r.it.D / 2 - .35)); moved = true; } }
+      if (this.room) u.yOver = r.b.mesh.position.y;
+    } else if (sp > 0 && u.alive) {
       mdx = fx * my + rx * mx; mdz = fz * my + rz * mx; const dl = Math.hypot(mdx, mdz) || 1;
       moved = this.g.step(u, mdx / dl * sp * dt, mdz / dl * sp * dt);
     }
-    u.speedNow = moved ? sp : 0;
+    if (u.onShip && !u.onShip.alive) this.getOff(u.onShip);
+    u.speedNow = moved ? sp * (this.room ? .7 : 1) : 0;
+    u.aimHold = !!(u.d.ranged && this.target);
     // in 3rd person the Commander turns to face where he walks (so you can turn around and run toward the camera);
     // while fighting, in 1st person, or standing still he faces where you look
     this.faceT = Math.max(0, (this.faceT || 0) - dt);
-    if (u.alive) { const want = this.first || this.faceT > 0 ? this.yaw : moved ? Math.atan2(mdx, mdz) : u.yaw; u.yaw += angDiff(u.yaw, want) * Math.min(1, dt * 10); }
+    if (u.alive) { const want = this.first || this.faceT > 0 || u.onShip ? this.yaw : moved ? Math.atan2(mdx, mdz) : u.yaw; u.yaw += angDiff(u.yaw, want) * Math.min(1, dt * 10); }
+    if (u.onShip) u.speedNow = 0;
     const cam = this.a.camera, sc = u.scale * (u.d.horse ? 1.55 : 1), cp = Math.cos(this.pitch);
     const dir = new THREE.Vector3(Math.sin(this.yaw) * cp, Math.sin(this.pitch), Math.cos(this.yaw) * cp);
-    const head = new THREE.Vector3(u.x, heightAt(u.x, u.z) + 1.62 * sc, u.z);
+    const head = new THREE.Vector3(u.x, (u.yOver ?? groundY(u.x, u.z)) + 1.62 * sc, u.z);
     let want;
     if (this.first) want = head.clone().addScaledVector(dir, .25);
     else {
       // pull the camera in if a tree is between it and you
-      let dist = this.camDist * (u.d.horse ? 1.3 : 1);
-      for (let t = 1.2; t < dist; t += .3) { const px = head.x - dir.x * t, pz = head.z - dir.z * t; if (blocked[(pz | 0) * N + (px | 0)] === 2) { dist = Math.max(1.4, t - .6); break; } }
+      let dist = this.camDist * (u.d.horse ? 1.3 : 1) * (this.room ? .45 : 1);
+      for (let t = .8; t < dist; t += .3) { const px = head.x - dir.x * t, pz = head.z - dir.z * t; const bv = blocked[(pz | 0) * N + (px | 0)]; if (bv === 2 || (bv === 4 && !this.room)) { dist = Math.max(1.4, t - .6); break; } } // trees and buildings
       want = head.clone().addScaledVector(dir, -dist); want.y += .9 * dist / this.camDist; want.y = Math.max(want.y, heightAt(want.x, want.z) + .4);
+    }
+    if (this.room) { // keep the camera inside the room
+      const r = this.room, c = Math.cos(r.ry), sn = Math.sin(r.ry), dx = want.x - r.b.x, dz = want.z - r.b.z;
+      const lx = clamp(dx * c - dz * sn, -r.it.W / 2 + .2, r.it.W / 2 - .2), lz = clamp(dx * sn + dz * c, -r.it.D / 2 + .2, r.it.D / 2 - .25);
+      want.x = r.b.x + lx * c + lz * sn; want.z = r.b.z - lx * sn + lz * c; want.y = clamp(want.y, r.b.mesh.position.y + .5, r.b.mesh.position.y + r.it.H - .2);
     }
     if (this.snap || this.first) { this.camPos.copy(want); this.snap = false; } else this.camPos.lerp(want, Math.min(1, dt * 14));
     cam.position.copy(this.camPos);
@@ -130,7 +203,14 @@ export class POVView {
     if (this.target) { const t = this.target, r = t.kind === 'bld' ? t.size * .75 : t.d.rad * 1.6 + .2; this.mark.position.set(t.x, heightAt(t.x, t.z) + .07, t.z); this.mark.scale.setScalar(r / .6); this.mark.visible = true; }
     else this.mark.visible = false;
     if (this.holding && u.cd <= 0) this.strike();
+    if (this.room && !this.room.b.alive) this.exitRoom(true);
+    // context buttons
+    const act = this.action(), key = act ? act.label + act.sub : '';
+    if (key !== this.actKey) { this.actKey = key; const el = document.getElementById('bAct'); el.classList.toggle('hide', !act); if (act) el.innerHTML = `${act.label}<small>${act.sub}</small>`; }
+    const mk = u.d.hero && !u.onShip && !this.room ? (u.d.horse ? 'Dismount' : 'Mount') : '';
+    if (mk !== this.mountKey) { this.mountKey = mk; const el = document.getElementById('bMount'); el.classList.toggle('hide', !mk); if (mk) el.innerHTML = `${mk}<small>horse</small>`; }
   }
+  act() { const a = this.action(); if (a) a.run(); }
   turn(dxPx, dyPx, k) {
     if (this.a.isTouch) k *= Math.min(1.3, Math.max(.7, 900 / innerWidth)); this.yaw -= dxPx * k; this.pitch = clamp(this.pitch - dyPx * k * .8, -1.2, .9); }
 

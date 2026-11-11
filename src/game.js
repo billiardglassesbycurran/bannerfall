@@ -83,6 +83,13 @@ export class Game {
   look(team) { const T = this.T[team]; return { age: T.age, fort: T.techs.has('fortify'), guard: T.techs.has('guardtower') }; }
   /** Buildings change style with each age / upgrade. */
   refreshLooks(team) { for (const b of this.blds) if (b.alive && b.team === team && b.built && b.mesh.isMesh) { b.mesh.geometry = buildingGeo(b.type, team, this.look(team)); } }
+  /** The Commander calls his horse (or gets down). Swaps the model, keeps his health share. */
+  setMount(u, on) {
+    const nt = on ? 'herohorse' : 'hero'; if (!u.alive || !u.d.hero || u.type === nt) return false;
+    const f = u.hp / u.maxHp; u.batch.release(u.slot);
+    u.type = nt; u.d = this.stat(u.team, nt); u.batch = this.figures.get(u.team, nt); u.slot = u.batch.alloc();
+    u.maxHp = u.d.hp; u.hp = f * u.maxHp; u.scale = u.d.scale || 1; this.onMount?.(u, on); return true;
+  }
   /** Send the nearest available peasants (idle first) to gather a resource. Returns how many went. */
   sendPeasants(team, res, n = 1) {
     const peas = this.units.filter(u => u.alive && u.team === team && u.type === 'peasant' && !u.boarded && !u.possessed && !(u.task.type === 'gather' && u.task.res === res) && u.task.type !== 'build' && u.task.type !== 'repair');
@@ -296,6 +303,7 @@ export class Game {
     t.alive = false; t.hp = 0;
     if (t.kind === 'unit') {
       if (t.cargo?.length) { for (const c of t.cargo) { c.boarded = null; c.x = t.x; c.z = t.z; this.kill(c); } t.cargo = []; }
+      for (const o of this.units) if (o.onShip === t) { const p = nearestWalkable(t.x, t.z, 30); if (p) { o.x = p.x; o.z = p.z; } o.onShip = null; o.yOver = null; this.onShipLost?.(o); }
       t.dead = true; t.deathT = 0; t.selected = false; if (t.ring) { t.ring.removeFromParent(); t.ring = null; }
       if (t === this.hero) { this.heroRespawn = this.mode === 'battle' ? 0 : 30; this.toast(this.heroRespawn ? 'Your Commander has fallen! He returns in 30s.' : 'Your Commander has fallen!'); }
       this.onUnitDeath?.(t);
@@ -587,7 +595,13 @@ export class Game {
       let tilt = 0, y = u.y;
       if (u.d.ship) { tilt = Math.sin(this.time * 1.1 + u.id) * .035; y += Math.sin(this.time * 1.6 + u.id) * .04 - (u.type === 'fishboat' ? .12 : .28); if (u.dead) { tilt += u.deathT * .2; y -= u.deathT * .7; } } // rocking / sinking
       else if (u.dead) { tilt = -Math.min(1, u.deathT * 2.5) * Math.PI / 2 * .95; y -= Math.max(0, u.deathT - 1.5) * .6; }
-      u.batch.set(u.slot, { x: u.x, y, z: u.z, yaw: u.yaw, scale: u.scale, s: Math.sin(u.phase) * .7 * k, swing: sw, tilt, hidden: u.id === hideId || !!u.boarded });
+      if (u.yOver != null) y = u.yOver; // standing on a ship's deck or a building floor
+      if (u.d.ranged && !u.d.ship) { // archers raise the bow while engaging and draw in time with their shots
+        const t = u.task, engaged = u.aimHold || (t.type === 'attack' && t.t.alive && this.reachDist(u, t.t) <= u.d.rng + .5);
+        u.aimK = (u.aimK || 0) + ((engaged ? 1 : 0) - (u.aimK || 0)) * Math.min(1, dt * 6);
+        u.drawK = clamp(1 - u.cd / u.d.cd, 0, 1);
+      }
+      u.batch.set(u.slot, { x: u.x, y, z: u.z, yaw: u.yaw, scale: u.scale, s: Math.sin(u.phase) * .7 * k, swing: sw, tilt, hidden: u.id === hideId || !!u.boarded, aim: u.aimK || 0, draw: u.drawK || 0 });
       if (u.d.ship) {
         if (!u.wake && u.alive) { u.wake = new THREE.Mesh(wakeGeo, wakeMaterial().clone()); this.scene.add(u.wake); }
         if (u.wake) {

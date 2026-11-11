@@ -122,6 +122,7 @@ export class HUD {
           btns.push({ label: 'Patrol', sub: 'pick point', on: () => a.setPending({ type: 'patrol' }) });
           const st = (mil[0] || ships[0]).stance || 'aggressive', next = { aggressive: 'defensive', defensive: 'hold', hold: 'aggressive' }[st];
           btns.push({ label: { aggressive: 'Aggressive', defensive: 'Defensive', hold: 'Hold' }[st], sub: 'stance &#8635;', on: () => { for (const u of [...mil, ...ships]) u.stance = next; a.toast(`Stance: ${next === 'hold' ? 'hold ground (no chasing)' : next === 'defensive' ? 'defensive (chase a little, then return)' : 'aggressive (chase enemies)'}.`, 2); } });
+          const hero = mil.find(u => u.d.hero); if (hero) btns.push({ label: hero.d.horse ? 'Dismount' : 'Mount', sub: 'horse', on: () => g.setMount(hero, !hero.d.horse) });
           if (g.hero?.alive && mil.length && !mil.includes(g.hero)) btns.push({ label: 'Follow', sub: 'commander', on: () => { mil.forEach((u, i) => { const row = Math.floor(i / 6) + 1, col = (i % 6) - 2.5; g.setTask(u, { type: 'follow', leader: g.hero, off: { a: Math.atan2(col * 1.2, row * 1.4), d: Math.hypot(col * 1.2, row * 1.4) } }); }); } });
         }
         const tr = ships.find(u => u.d.carry);

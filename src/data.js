@@ -21,6 +21,7 @@ export const UD = {
   transport: { name: 'Transport Ship', plural: 'Transport Ships', cls: 'ship', hp: 160, spd: 3.5, dmg: 0, rng: 0, cd: 1, arm: 1, cost: { w: 100 }, time: 16, rad: 1.3, acq: 0, ship: 1, carry: 10, desc: 'Carries up to 10 units across water' },
   warship:   { age: 1, name: 'Warship', plural: 'Warships', cls: 'ship', hp: 230, spd: 3.3, dmg: 9, rng: 9.5, cd: 1.5, arm: 2, cost: { w: 120, g: 50 }, time: 22, rad: 1.3, acq: 11, ship: 1, ranged: 1, desc: 'Archers on a fast galley; attacks ships and the shore' },
   hero:      { name: 'Commander', plural: 'Commanders', cls: 'hero', hp: 620, spd: 3.6, dmg: 28, rng: 1.6, cd: .85, arm: 4, cost: null, time: 0, rad: .5, acq: 10, hero: 1, melee: 1, scale: 1.15, desc: 'Your hero. Ride him into battle' },
+  herohorse: { name: 'Commander', plural: 'Commanders', cls: 'hero', hp: 620, spd: 5.6, dmg: 28, rng: 1.9, cd: .85, arm: 4, cost: null, time: 0, rad: .7, acq: 10, hero: 1, melee: 1, horse: 1, scale: 1.1, desc: 'Your Commander on horseback' },
 };
 
 export const BD = {

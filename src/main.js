@@ -325,6 +325,8 @@ onBtn('bView', () => pov.setFirst(!pov.first));
 $('bStrike').addEventListener('pointerdown', e => { e.stopPropagation(); pov.holding = true; pov.strike(); });
 for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) $('bStrike').addEventListener(ev, () => { pov.holding = false; });
 onBtn('bFollow', () => pov.toggleFollow());
+onBtn('bAct', () => pov.act());
+onBtn('bMount', () => pov.toggleMount());
 onBtn('bPause', () => setPause(true));
 onBtn('bResume', () => setPause(false));
 onBtn('bRestart', () => reloadTo(playHash()));
@@ -410,6 +412,8 @@ addEventListener('keydown', e => {
   } else {
     if (e.code === 'KeyV') pov.setFirst(!pov.first);
     if (e.code === 'KeyF') pov.toggleFollow();
+    if (e.code === 'KeyG') pov.act();
+    if (e.code === 'KeyM') pov.toggleMount();
     if (e.code === 'Space') { e.preventDefault(); pov.holding = true; pov.strike(); }
   }
 });
@@ -466,6 +470,7 @@ function emitEffects(dt) {
     if ((b.type === 'house' || b.type === 'hall') && Math.random() < .12) fx.chimney(b.x + (b.type === 'house' ? .5 : -1), b.y + (b.type === 'house' ? 3.0 : 4.5), b.z - .3);
     if (b.type === 'smith') { if (Math.random() < .35) fx.chimney(b.x + .8, b.y + 3.9, b.z - .8); if (Math.random() < .25) fx.ember(b.x - .3, b.y + .8, b.z - .15); }
   }
+  if (pov.room) { const r = pov.room, c = Math.cos(r.ry), sn = Math.sin(r.ry); for (const [x, y, z] of r.it.fires) fx.fire(r.b.x + x * c + z * sn, r.b.mesh.position.y + y, r.b.z - x * sn + z * c, .45); }
   for (const u of g.units) if (u.alive && u.d.ship && u.speedNow > 0 && Math.random() < .5) { const fxx = Math.sin(u.yaw), fz = Math.cos(u.yaw), L = u.type === 'warship' ? 3.6 : u.type === 'transport' ? 2.7 : 1.6; fx.splash(u.x + fxx * L, WL, u.z + fz * L, 2); }
 }
 

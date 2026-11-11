@@ -125,3 +125,5 @@ html, body { margin:0; height:100%; overflow:hidden; overscroll-behavior:none; b
 .btn .cost { max-width:100%; overflow:hidden; text-overflow:ellipsis; display:block; }
 
 .btn.tech { background:linear-gradient(#3a4a5a,#1e2a36); border-color:#8ab4d8; }
+
+#bAct { width:70px; height:70px; font-size:14px; background:linear-gradient(#2e5a3a,#163020); border-color:#9ad8a0; }

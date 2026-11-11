@@ -180,6 +180,7 @@ const DOME = P.lathe([[.128, 0], [.132, .05], [.12, .11], [.085, .17], [.03, .20
 const CONE_HELM = P.lathe([[.13, 0], [.13, .06], [.1, .14], [.04, .24], [.012, .32], [0, .33]], 16);
 
 function humanParts(team, kind, mounted, style = 'franks') {
+  if (kind === 'herohorse') kind = 'hero'; // the Commander on his horse wears the same kit
   const k = { ...KIND[kind], ...(STYLE[style]?.[kind] || {}) }, tc = TEAM[team], y0 = mounted ? .95 : 0;
   const MAT = {
     mail: [C.chain, 1], plate: [C.steel, 1], segmentata: [C.steel, 1], gamb: [C.gamb, 0], green: [C.green, 0], linen: [C.linen, 0], pants: [C.pants, 0], hose: [C.hose, 0],
@@ -304,8 +305,13 @@ function humanParts(team, kind, mounted, style = 'franks') {
     kite: (g) => g.put(kiteShield(team), -.07, -.4, .16, 0, -.25, 0), round: (g) => g.put(roundShield(team), -.07, -.42, .14, 0, -.2, 0), scutum: (g) => g.put(scutum(team), -.04, -.36, .2, 0, -.15, 0),
     bow: (g, H) => g.put(bow(), H[0], H[1], H[2]), axe: (g, H) => g.put(axe(), H[0], H[1], H[2], .5),
   }[k.L];
-  parts.push({ ...arm(R), pivot: [.235, 1.42 + y0, 0], anim: 'armR' });
-  parts.push({ ...arm(L), pivot: [-.235, 1.42 + y0, 0], anim: 'armL' });
+  // bows and crossbows are separate parts that stay level while the arm raises them to aim
+  const fa = -.3, HAND = [0, -.33 - .3 * Math.cos(fa), .3 * Math.sin(-fa)];
+  const xb = k.R === 'crossbow' || k.R === 'repeater', bw = k.L === 'bow';
+  parts.push({ ...arm(xb ? null : R), pivot: [.235, 1.42 + y0, 0], anim: 'armR' });
+  parts.push({ ...arm(bw ? null : L), pivot: [-.235, 1.42 + y0, 0], anim: 'armL' });
+  if (bw) { const g = new Builder(); g.put(bow(), HAND[0], HAND[1], HAND[2]); parts.push({ ...g.split(), pivot: [-.235, 1.42 + y0, 0], anim: 'armL', counter: HAND }); }
+  if (xb) { const g = new Builder(); g.put(crossbowW(k.R === 'repeater'), HAND[0] - .1, HAND[1] + .15, HAND[2], -.3, .3, 0); parts.push({ ...g.split(), pivot: [.235, 1.42 + y0, 0], anim: 'armR', counter: HAND }); }
   parts.unshift({ ...b.split(), pivot: [0, 0, 0], anim: null });
   return parts;
 }
@@ -486,7 +492,7 @@ function figureParts(team, kind, style) {
   if (d.ship) return shipParts(team, kind);
   if (kind === 'catapult') return catapultParts(team);
   if (d.horse) {
-    const heavy = kind === 'knight' || kind === 'crusader' || kind === 'khanguard';
+    const heavy = kind === 'knight' || kind === 'crusader' || kind === 'khanguard' || kind === 'herohorse';
     const coat = kind === 'crusader' ? 0xd8d0c0 : kind === 'lightcav' || kind === 'horsearcher' ? 0x7a5634 : C.horse;
     return [...horseParts(team, heavy, coat), ...humanParts(team, kind, true, style)];
   }
@@ -498,7 +504,7 @@ const _root = new THREE.Matrix4(), _pm = new THREE.Matrix4(), _rx = new THREE.Ma
 /** One batch of instanced meshes per (team, kind). */
 class FigureBatch {
   constructor(scene, team, kind, cap, shadows, style) {
-    this.mounted = !!UD[kind].horse;
+    this.mounted = !!UD[kind].horse; this.archer = !!UD[kind].ranged && !UD[kind].ship && !UD[kind].stone; this.xbow = !!UD[kind].bolt;
     this.meshes = [];
     this.parts = figureParts(team, kind, style).map(p => {
       const ms = [];
@@ -519,18 +525,23 @@ class FigureBatch {
     const s = o.s, sw = o.swing, bob = Math.abs(s) * (this.mounted ? .09 : .05);
     _q.setFromEuler(_e.set(o.tilt || 0, o.yaw, 0, 'YXZ'));
     _root.compose(_v.set(o.x, o.y + bob, o.z), _q, _s.setScalar(o.scale));
-    const strike = Math.sin(sw * Math.PI);
+    const strike = Math.sin(sw * Math.PI), aim = o.aim || 0, draw = o.draw || 0, A = this.archer;
     for (const p of this.parts) {
       let a = 0;
       switch (p.anim) {
         case 'legL': a = s; break; case 'legR': a = -s; break;
-        case 'armL': a = -s * .5 - strike * .45; break;
-        case 'armR': a = -.3 + s * .35 - strike * 1.7 + (sw > .5 ? .3 * strike : 0); break;
+        case 'armL': a = A ? -s * .5 + (( this.xbow ? -1.2 : -1.5) + s * .5) * aim : -s * .5 - strike * .45; break; // bow arm raised to aim
+        case 'armR': a = A ? (-.3 + s * .35) * (1 - aim) + (this.xbow ? -1.3 + (1 - draw) * .12 : -1.45 + draw * .6) * aim // draw the string back, loose
+          : -.3 + s * .35 - strike * 1.7 + (sw > .5 ? .3 * strike : 0); break;
         case 'hA': a = s * 1.2; break; case 'hB': a = -s * 1.2; break;
         case 'cat': a = .25 + strike * 1.65; break;
       }
       let mtx = _root;
-      if (p.anim) { _pm.makeTranslation(p.pivot[0], p.pivot[1], p.pivot[2]).multiply(_rx.makeRotationX(a)); _pm.premultiply(_root); mtx = _pm; }
+      if (p.anim) {
+        _pm.makeTranslation(p.pivot[0], p.pivot[1], p.pivot[2]).multiply(_rx.makeRotationX(a));
+        if (p.counter) { const h = p.counter; _pm.multiply(_rx.makeTranslation(h[0], h[1], h[2])).multiply(_rx.makeRotationX(-a * .95)).multiply(_rx.makeTranslation(-h[0], -h[1], -h[2])); } // keep the weapon level
+        _pm.premultiply(_root); mtx = _pm;
+      }
       for (const m of p.ms) m.setMatrixAt(i, mtx);
     }
   }
@@ -540,7 +551,7 @@ export class Figures {
   constructor(scene, shadows) { this.scene = scene; this.shadows = shadows; this.batches = new Map(); this.styles = ['franks', 'franks']; }
   get(team, kind) {
     const k = team + kind; let b = this.batches.get(k);
-    if (!b) { b = new FigureBatch(this.scene, team, kind, kind === 'hero' ? 4 : UD[kind].ship || kind === 'catapult' ? 40 : 200, this.shadows, this.styles[team]); this.batches.set(k, b); }
+    if (!b) { b = new FigureBatch(this.scene, team, kind, kind === 'hero' || kind === 'herohorse' ? 4 : UD[kind].ship || kind === 'catapult' ? 40 : 200, this.shadows, this.styles[team]); this.batches.set(k, b); }
     return b;
   }
   flush() { for (const b of this.batches.values()) b.flush(); }
@@ -707,3 +718,63 @@ export const boltGeo = new Builder().add(P.box, 0x5a4026, 0, 0, 0, 0, 0, 0, .035
 export const stoneGeo = new Builder().add(P.dode(.22), 0x7a766e).build();
 export const arrowGeo = new Builder().add(P.box, 0x8a6a3a, 0, 0, 0, 0, 0, 0, .025, .025, .7).add(P.cone(.04, .12, 4), C.steel, 0, 0, .4, Math.PI / 2, 0, 0).add(P.box, 0xeeeeee, 0, 0, -.3, 0, 0, 0, .1, .01, .12).build();
 export const ringGeo = new THREE.RingGeometry(.45, .56, 28).rotateX(-Math.PI / 2);
+
+// ---------------- building interiors (you can walk inside in 1st/3rd person) ----------------
+export const ENTERABLE = { hall: 'Town Hall', house: 'House', barracks: 'Barracks', range: 'Archery Range', stable: 'Stable', smith: 'Blacksmith', store: 'Storehouse', workshop: 'Siege Workshop', tower: 'Watchtower' };
+/**
+ * Room for a building, in its local space: floor at y=0, door in the +z wall.
+ * Returns { geo, W, D, H, lights: [[x,y,z]], fires: [[x,y,z]] }.
+ */
+export function interiorGeo(kind, team) {
+  const S = BD_SIZE[kind] || 3, W = S - .3, D = S - .3, H = kind === 'hall' ? 3.4 : kind === 'tower' ? 3.6 : 2.6, tc = TEAM[team], b = new Builder(), lights = [], fires = [];
+  const stoneRoom = kind === 'hall' || kind === 'barracks' || kind === 'smith' || kind === 'tower', wallC = stoneRoom ? C.stone : C.plaster;
+  b.add(P.box, kind === 'stable' || kind === 'workshop' || kind === 'smith' ? C.dirt : C.wood, 0, -.05, 0, 0, 0, 0, W + .3, .1, D + .3); // floor
+  box(b, wallC, 0, H / 2, -D / 2, W, H, .15); for (const sx of [-1, 1]) box(b, wallC, sx * W / 2, H / 2, 0, .15, H, D);
+  for (const sx of [-1, 1]) box(b, wallC, sx * (W / 4 + .3), H / 2, D / 2, W / 2 - .6, H, .15); box(b, wallC, 0, H - (H - 2.1) / 2, D / 2, 1.2, H - 2.1, .15); // front wall + doorway
+  box(b, C.dwood, 0, H + .05, 0, W + .2, .1, D + .2); for (let i = 0; i < 4; i++) box(b, C.timber, 0, H - .1, -D / 2 + (i + .5) * D / 4, W, .14, .14); // ceiling + beams
+  for (const sx of [-1, 1]) box(b, C.timber, sx * .62, 1.05, D / 2 - .02, .12, 2.1, .18); box(b, C.timber, 0, 2.12, D / 2 - .02, 1.36, .12, .18); // door frame
+  const fireplace = (x, z, ry = 0) => { box(b, C.dstone, x, .6, z, 1.1, 1.2, .5, 0, ry, 0); box(b, 0x1a1410, x + Math.sin(ry) * .2, .4, z + Math.cos(ry) * .2, .6, .5, .2, 0, ry, 0); box(b, C.dstone, x, H / 2 + .4, z, .6, H - .8, .4, 0, ry, 0); fires.push([x + Math.sin(ry) * .25, .25, z + Math.cos(ry) * .25]); lights.push([x + Math.sin(ry) * .7, .9, z + Math.cos(ry) * .7]); };
+  const banner = (x, z, ry = 0) => { box(b, tc, x, H * .6, z, .55, 1.0, .02, 0, ry, 0); emblem(b, team, x + Math.sin(ry) * .015, H * .62, z + Math.cos(ry) * .015, 1.2); };
+  const barrel = (x, z) => b.add(P.cyl(.22, .25, .55, 10), C.wood, x, .28, z);
+  const crate = (x, z, s = .45) => box(b, C.wood, x, s / 2, z, s, s, s);
+  const table = (x, z, w, d) => { box(b, C.wood, x, .72, z, w, .06, d); for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(b, C.dwood, x + sx * (w / 2 - .08), .36, z + sz * (d / 2 - .08), .07, .72, .07); };
+  if (kind === 'hall') {
+    table(0, 0, .9, D * .55); for (const sx of [-1, 1]) box(b, C.dwood, sx * .7, .42, 0, .25, .06, D * .5);
+    box(b, C.dwood, 0, .5, -D / 2 + .5, .7, .1, .6); box(b, C.dwood, 0, 1.15, -D / 2 + .25, .7, 1.3, .1); b.add(P.box, tc, 0, .58, -D / 2 + .5, 0, 0, 0, .55, .06, .5); b.m(P.box, C.gold, 0, 1.85, -D / 2 + .25, 0, 0, 0, .75, .08, .12); // throne
+    banner(-1.1, -D / 2 + .09); banner(1.1, -D / 2 + .09); fireplace(-W / 2 + .3, -.2, Math.PI / 2);
+    box(b, tc, 0, .01, .4, 1.2, .01, D * .6); b.m(new THREE.TorusGeometry(.5, .03, 6, 20), C.dsteel, 0, H - .7, 0, Math.PI / 2, 0, 0); lights.push([0, H - .9, 0]);
+    for (const [x, z] of [[W / 2 - .4, -D / 2 + .4], [W / 2 - .4, D / 2 - .5]]) barrel(x, z);
+  } else if (kind === 'house') {
+    box(b, C.dwood, W / 2 - .5, .25, -D / 2 + .5, .8, .3, 1.0); box(b, C.linen, W / 2 - .5, .43, -D / 2 + .5, .75, .08, .95); box(b, tc, W / 2 - .5, .48, -D / 2 + .65, .76, .05, .6); // bed
+    table(-.2, .1, .6, .5); crate(-.5, .4, .3); fireplace(-W / 2 + .3, -D / 2 + .4, Math.PI / 4); barrel(W / 2 - .35, D / 2 - .45);
+  } else if (kind === 'barracks') {
+    for (let i = 0; i < 3; i++) { const z = -D / 2 + .6 + i * .9; box(b, C.dwood, -W / 2 + .5, .3, z, .8, .25, .7); box(b, C.linen, -W / 2 + .5, .45, z, .75, .06, .65); box(b, tc, -W / 2 + .5, .49, z + .1, .76, .04, .4); }
+    box(b, C.wood, W / 2 - .2, 1.0, -.4, .1, .08, 1.4); for (let i = 0; i < 5; i++) b.m(P.box, C.steel, W / 2 - .25, .9, -1.0 + i * .3, 0, 0, .15, .03, 1.0, .03); // weapon rack
+    b.add(P.cyl(.05, .05, 1.4, 6), C.wood, .3, .7, -D / 2 + .5); b.m(P.box, C.chain, .3, 1.1, -D / 2 + .5, 0, 0, 0, .4, .5, .25); b.m(DOME, C.steel, .3, 1.45, -D / 2 + .5); // armour stand
+    banner(0, -D / 2 + .09); lights.push([0, 2.0, 0]);
+  } else if (kind === 'range') {
+    b.add(P.cyl(.45, .45, .1, 18), C.straw, 0, 1.0, -D / 2 + .2, Math.PI / 2, 0, 0); b.add(P.cyl(.28, .28, .105, 18), C.white, 0, 1.0, -D / 2 + .21, Math.PI / 2, 0, 0); b.add(P.cyl(.1, .1, .11, 14), 0xb01c1c, 0, 1.0, -D / 2 + .22, Math.PI / 2, 0, 0);
+    for (let i = 0; i < 4; i++) b.add(new THREE.TorusGeometry(.5, .02, 4, 12, Math.PI), C.dwood, -W / 2 + .12, 1.0, -1 + i * .5, 0, Math.PI / 2, -Math.PI / 2);
+    barrel(W / 2 - .4, .6); lights.push([0, 2.0, .3]);
+  } else if (kind === 'stable') {
+    for (const sx of [-1, 1]) { box(b, C.wood, sx * .4, .6, -D / 2 + .9, .08, 1.2, 1.6); b.add(P.cyl(.35, .35, .6, 10), C.hay, sx * 1.1, .35, -D / 2 + .4, 0, 0, Math.PI / 2); }
+    const hp = horseParts(team, false); for (const p of hp) b.put(p, -(p.pivot?.[0] || 0) - .9, p.pivot?.[1] || 0, -(p.pivot?.[2] || 0) - D / 2 + 1.1, 0, Math.PI, 0, 1);
+    box(b, C.leather, W / 2 - .3, 1.0, .5, .3, .2, .4); lights.push([0, 2.0, .4]);
+  } else if (kind === 'smith') {
+    box(b, C.dstone, -W / 2 + .5, .45, -D / 2 + .5, .9, .9, .9); box(b, 0xff6a20, -W / 2 + .5, .92, -D / 2 + .5, .6, .05, .6); box(b, C.dstone, -W / 2 + .5, 1.9, -D / 2 + .4, .9, .5, .7);
+    fires.push([-W / 2 + .5, .95, -D / 2 + .5]); lights.push([-W / 2 + .9, 1.4, -D / 2 + .9]);
+    b.m(P.box, C.dsteel, .3, .55, -.1, 0, 0, 0, .5, .14, .2); b.add(P.cyl(.13, .17, .48, 8), C.dwood, .3, .24, -.1);
+    for (let i = 0; i < 4; i++) b.m(P.box, C.steel, W / 2 - .1, 1.2, -.8 + i * .3, 0, 0, .1, .03, .6, .03); box(b, C.wood, .6, .3, D / 2 - .6, .9, .4, .35);
+  } else if (kind === 'store') {
+    for (let i = 0; i < 6; i++) crate(-W / 2 + .45 + (i % 3) * .5, -D / 2 + .4 + Math.floor(i / 3) * .5); crate(-W / 2 + .7, -D / 2 + .4, .4);
+    for (let i = 0; i < 3; i++) barrel(W / 2 - .35, -D / 2 + .4 + i * .55); b.add(P.ball(.25, 8, 6), C.linen, .2, .2, -.3, 0, 0, 0, 1.2, .7, 1); lights.push([0, 2.0, 0]);
+  } else if (kind === 'workshop') {
+    b.put(catapultParts(team)[0], 0, 0, -.3, 0, .4, 0, .85); for (let i = 0; i < 4; i++) box(b, C.wood, W / 2 - .35, .1 + i * .14, .2, .3, .12, 2.0);
+    b.add(P.cyl(.32, .32, .08, 14), C.dwood, -W / 2 + .3, .35, .8, 0, 0, Math.PI / 2 + .3); lights.push([0, 2.1, .5]);
+  } else if (kind === 'tower') {
+    for (let i = 0; i < 9; i++) box(b, C.dwood, -W / 2 + .3, .2 + i * .38, -.2 + i * .08, .5, .05, .2); // ladder
+    for (let i = 0; i < 3; i++) b.m(P.box, C.steel, W / 2 - .1, 1.1, -.3 + i * .25, 0, 0, .1, .03, .9, .03);
+    box(b, 0x1a1410, 0, 1.8, -D / 2 + .07, .15, .5, .02); fires.push([.2, .55, .2]); b.add(P.cyl(.2, .14, .5, 8), C.dsteel, .2, .25, .2); lights.push([.2, 1.2, .2]);
+  }
+  return { geo: b.build(), W, D, H, lights, fires };
+}
