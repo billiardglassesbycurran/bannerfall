@@ -78,7 +78,8 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
 - Check the owner's Tripo plan licence before publishing a Tripo model; record custom models in `assets/CREDITS.md`.
 
 ## Testing before you push
-- Run `~/.local/bannerfall-tools/bin/python tools/test_game.py` (Playwright: title, all modes fast-forwarded, Commander,
+- Run `~/.local/bannerfall-tools/bin/python tools/sweep.py` (presses every button for every unit/building, plays as
+  every unit type, all 5 civs — must report SWEEP CLEAN) and `~/.local/bannerfall-tools/bin/python tools/test_game.py` (Playwright: title, all modes fast-forwarded, Commander,
   phone touch layout with 44px button check). Screenshots go to `tools/test-output/`. Add `--live` to test GitHub Pages.
 - Run the local preview (`.claude/launch.json`) and check: no errors in the console or the red error box,
   select + move from above, Ride/Lead into 3rd person, toggle 1st person, return to command view.

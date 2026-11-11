@@ -290,6 +290,7 @@ function enterPOV(unit) {
   app.mode = 'pov'; pov.enter(unit);
   $('hud').classList.add('hide'); $('pov').classList.remove('hide'); $('joyIdle').classList.toggle('hide', !isTouch);
   $('pvn').textContent = (unit.d.hero ? '⚑ ' : '') + unit.d.name;
+  app.toast(`You are now playing as ${unit.d.hero ? 'your Commander' : 'a ' + unit.d.name}.`, 2.5);
   $('povhelp').textContent = isTouch ? 'Left thumb: move · Right thumb: look' : 'Drag mouse to look around · W/S/↑/↓ move · A/D sidestep · ←/→ or Q/E turn · Click or Space strike · Shift sprint · F follow · V 1st/3rd · Tab back · Double-click: mouse-look';
   $('povhelp').classList.remove('hide'); clearTimeout(enterPOV.t); enterPOV.t = setTimeout(() => $('povhelp').classList.add('hide'), 6000);
 }
@@ -318,7 +319,7 @@ for (const id of ['bRotL', 'bRotR', 'bNorth']) $(id).addEventListener('pointerdo
 canvas.addEventListener('dblclick', () => { if (app.mode === 'pov') pov.lockMouse(); });
 onBtn('bBox', () => { rts.boxMode = !rts.boxMode; $('bBox').classList.toggle('on', rts.boxMode); app.toast(rts.boxMode ? 'Box select: drag a box around units. Tap Box again to pan.' : 'Drag to move the camera.', 2.5); });
 if (!isTouch) $('bBox').classList.add('hide');
-onBtn('bRide', () => { const u = rideTarget(); if (u) enterPOV(u); else app.toast('Select a unit to ride.', 2); });
+onBtn('bRide', () => { const u = rideTarget(); if (u) enterPOV(u); else app.toast('Select one of your units first.', 2); });
 onBtn('bLead', () => { if (app.game.hero?.alive) enterPOV(app.game.hero); else app.toast('Your Commander will return soon.', 2); });
 onBtn('bExit', exitPOV);
 onBtn('bView', () => pov.setFirst(!pov.first));

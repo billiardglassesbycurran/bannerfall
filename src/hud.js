@@ -90,6 +90,7 @@ export class HUD {
 
   // ---------------- command card ----------------
   updateCard() {
+    { const f = this.a.sel.find(e => e.kind === 'unit' && e.team === 0 && e.alive), el = document.getElementById('bRide'); if (el) { const n = f ? (f.d.hero ? 'Commander' : f.d.name) : 'selected'; if (el.dataset.n !== n) { el.dataset.n = n; el.innerHTML = `&#128065; Play as<small>${n}</small>`; el.classList.toggle('dis', !f); } } }
     const a = this.a, g = a.game, sel = a.sel, card = $('card'), btns = [];
     const T = g.T[0], touch = a.isTouch;
     const mine = sel.filter(e => e.alive !== false && e.team === 0);
@@ -127,6 +128,11 @@ export class HUD {
         }
         const tr = ships.find(u => u.d.carry);
         if (tr) { btns.push({ label: 'Unload', sub: 'pick shore', on: () => a.setPending({ type: 'unload', ship: tr }) }); btns.push({ label: 'Land', sub: 'here', on: () => g.unloadAt(tr, tr.x, tr.z) }); }
+        const fishers = ships.filter(u => u.d.fisher);
+        if (fishers.length) btns.push({ label: 'Fish', sub: 'nearest shoal', on: () => { let k = 0; for (const u of fishers) { const r = g.nearestRes(u.x, u.z, 'f', 90, true); if (r) { g.gather(u, r); k++; } } if (!k) a.toast('No fish left nearby.', 2); } });
+        // too many for one panel (mixed selections): drop the least-used buttons, always keep Stop
+        for (const drop of ['Repair', 'Return', 'Patrol']) if (btns.length > 9) { const i = btns.findIndex(b => b.label === drop); if (i >= 0) btns.splice(i, 1); }
+        if (btns.length > 9) btns.length = 9;
         btns.push({ label: 'Stop', sub: '', on: () => { for (const u of mine) g.setTask(u, { type: 'idle' }); } });
       }
     } else if (mine.length && mine[0].kind === 'bld') {

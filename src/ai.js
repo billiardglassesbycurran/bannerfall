@@ -57,12 +57,17 @@ export class AI {
     if (!hall) { for (const u of this.my(u => u.task.type === 'idle' && u.d.acq)) { const t = this.attackTarget(u); if (t) g.amove(u, t.x, t.z); } return; }
     const peas = this.my(u => u.type === 'peasant'), mil = this.my(u => u.type !== 'peasant' && u.type !== 'hero' && u.d.dmg > 0);
     const time = g.time, wantPeas = Math.min(this.D.peas + Math.floor(time / 90), 30);
-    if (peas.length < wantPeas && hall.queue.length < 2 && T.pop < T.cap) g.train(hall, 'peasant');
+    // when it's time to advance an age, save up for it: fewer new peasants/soldiers, more food gathering
+    const ageKey = T.age === 0 ? 'feudal' : T.age === 1 ? 'kingdom' : null, ageCost = ageKey && TECH[ageKey].cost;
+    const saving = !!ageKey && time > (T.age === 0 ? this.D.a1 : this.D.a2) && !g.queuedTech(this.team, ageKey);
+    const short = saving && (T.f < (ageCost.f || 0) || T.g < (ageCost.g || 0));
+    if (peas.length < (short ? Math.min(wantPeas, T.age === 0 ? 10 : 16) : wantPeas) && hall.queue.length < 2 && T.pop < T.cap) g.train(hall, 'peasant');
     // gatherer balance
     const count = { f: 0, w: 0, g: 0 };
     for (const p of peas) { const tt = p.task; if (tt.type === 'gather') count[tt.res.rt]++; else if (tt.type === 'farm') count.f++; else if (tt.type === 'return' && tt.back?.res) count[tt.back.res.rt]++; }
     const hasBarracks = g.blds.some(b => b.alive && b.team === this.team && b.type === 'barracks');
-    const want = hasBarracks ? { f: .45, w: .3, g: .25 } : { f: .5, w: .45, g: .05 };
+    const want = short ? (ageCost.g && T.g < ageCost.g ? { f: .5, w: .15, g: .35 } : { f: .65, w: .3, g: .05 }) : hasBarracks ? { f: .45, w: .3, g: .25 } : { f: .5, w: .45, g: .05 };
+    if (short && (this.rebalT = (this.rebalT || 0) + 1) % 15 === 0) { const wood = peas.filter(u => u.task.type === 'gather' && u.task.res.rt === 'w'); for (const u of wood.slice(0, Math.ceil(wood.length / 3))) g.setTask(u, { type: 'idle' }); } // move some woodcutters to food
     for (const p of peas) {
       if (p.task.type !== 'idle') continue;
       const n = peas.length || 1; let rt = 'f', worst = 1e9;
@@ -98,7 +103,8 @@ export class AI {
     if (hasBarracks && time > 260 && nOf('tower') < this.g.diff + 1 && T.g > 120) this.tryBuild('tower', hall);
     if (time > 480 && nOf('barracks') < 1 + this.g.diff) this.tryBuild('barracks', hall);
     // training military
-    if (T.pop < T.cap) for (const b of g.blds) {
+    const threatNear = g.nearestEnemy({ x: hall.x, z: hall.z, team: this.team }, 26, false);
+    if (T.pop < T.cap && (!short || threatNear)) for (const b of g.blds) {
       if (!b.alive || !b.built || b.team !== this.team || !b.d.trains || b.type === 'hall' || b.queue.length >= 2) continue;
       // weight each option by the difficulty's army mix; the civilization's unique unit is favoured
       const opts = g.trainsFor(b).filter(t => g.ageOK(this.team, UD[t])), uniq = g.civ[this.team].unique?.type, w = t => (this.D.mix[UD[t].cls] || 0) * (t === uniq ? 2.5 : 1);
@@ -107,9 +113,8 @@ export class AI {
       if (pick) g.train(b, pick);
     }
     // advance through the ages, then research upgrades while keeping a reserve
-    if (T.age === 0 && time > this.D.a1 && peas.length >= 8) g.research(hall, 'feudal');
-    if (T.age === 1 && time > this.D.a2 && peas.length >= 14) g.research(hall, 'kingdom');
-    if (!g.queuedTech(this.team, 'feudal') && !g.queuedTech(this.team, 'kingdom') && (this.techT = (this.techT || 0) + 1) % 6 === 0) {
+    if (saving && peas.length >= (T.age === 0 ? 7 : 12)) g.research(hall, ageKey);
+    if (!short && !g.queuedTech(this.team, 'feudal') && !g.queuedTech(this.team, 'kingdom') && (this.techT = (this.techT || 0) + 1) % 6 === 0) {
       const pri = ['watch', 'wheelbarrow', 'axe', 'forging', 'fletching', 'chainmail', 'goldmining', 'plough', 'veterans', 'masonry', 'handcart', 'ironcast', 'bodkin', 'plate', 'pikemen', 'marksmen', 'chivalry', 'elite', 'guardtower', 'fortify', 'gillnets', 'careening'];
       outer: for (const k of pri) for (const b of g.blds) if (b.alive && b.built && b.team === this.team && b.queue.length === 0 && g.techsFor(b).includes(k)) {
         const c = TECH[k].cost; if (T.f >= (c.f || 0) + 150 && T.w >= (c.w || 0) + 80 && T.g >= (c.g || 0) + 60 && g.research(b, k) === 'ok') break outer;
