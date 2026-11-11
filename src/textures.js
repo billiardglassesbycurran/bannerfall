@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { mulberry32 } from './util.js';
 
 /** Tileable fractal value noise: returns Float32Array size*size in 0..1. */
-function tileFbm(size, basePeriod, octaves, seed) {
+export function tileFbm(size, basePeriod, octaves, seed) {
   const out = new Float32Array(size * size); let norm = 0;
   const R = mulberry32(seed);
   for (let o = 0, amp = 1, per = basePeriod; o < octaves; o++, amp *= .5, per *= 2) {

@@ -2,7 +2,7 @@
 // (cloth and metal separately, so steel can shine), which keeps big armies fast on phones.
 // Buildings are merged into a single mesh each.
 import * as THREE from 'three';
-import { Builder, P, M } from './geo.js';
+import { Builder, P, M, TEXMAT } from './geo.js';
 
 export const TEAM = [0x2c50a8, 0xa62419];
 const C = {
@@ -14,20 +14,24 @@ const C = {
   horse: 0x5e3d24, dhorse: 0x2a1a0e, hoof: 0x26201a,
   stone: 0x9a958b, dstone: 0x726e66, plaster: 0xe2d8bf, timber: 0x55391f, thatch: 0xa88a4a, tile: 0x8a4632, dirt: 0x6b5236, crop: 0x8fae3c, hay: 0xd2b464,
 };
+// building colours that get a photo texture (see geo.js): 1 stone, 2 plaster, 3 roof tiles, 4 thatch, 5 wood
+for (const [k, id] of [['stone', 1], ['dstone', 1], ['plaster', 2], ['tile', 3], ['thatch', 4], ['timber', 5], ['wood', 5], ['dwood', 5]]) TEXMAT.set(C[k], id);
 const mixHex = (a, b, t) => new THREE.Color(a).lerp(new THREE.Color(b), t).getHex();
 
 // ---------------- prism (gable roof) ----------------
 function prism(w, h, d) {
-  const W = w / 2, D = d / 2, v = [];
-  const tri = (a, b, c) => v.push(...a, ...b, ...c);
+  const W = w / 2, D = d / 2, L = Math.hypot(h, D), v = [], uv = [];
+  const tri = (a, b, c, ta = [0, 0], tb = [0, 0], tc = [0, 0]) => { v.push(...a, ...b, ...c); uv.push(...ta, ...tb, ...tc); };
   tri([-W, 0, -D], [-W, 0, D], [-W, h, 0]); tri([W, 0, -D], [W, h, 0], [W, 0, D]);
-  const q = (a, b, c, d2) => { tri(a, b, c); tri(a, c, d2); };
+  // slopes: u runs along the ridge, v up the slope (so roof-tile photos line up)
+  const q = (a, b, c, d2) => { tri(a, b, c, [a[0], 0], [b[0], 0], [c[0], L]); tri(a, c, d2, [a[0], 0], [c[0], L], [d2[0], L]); };
   q([-W, 0, D], [W, 0, D], [W, h, 0], [-W, h, 0]); q([W, 0, -D], [-W, 0, -D], [-W, h, 0], [W, h, 0]);
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(v, 3)); g.computeVertexNormals(); return g;
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(v, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.computeVertexNormals(); return g;
 }
 /** Gable roof with rows of tiles/thatch on both slopes. */
 function roof(b, w, h, d, col, x, y, z) {
   b.add(prism(w, h, d), col, x, y, z);
+  if (M.photo) { box(b, mixHex(col, 0x000000, .3), x, y + h + .02, z, w + .1, .1, .14, Math.PI / 4); return; } // photo tiles already show rows; just a ridge cap
   const D = d / 2, L = Math.hypot(h, D), a = Math.atan2(h, D), rows = Math.max(4, Math.round(L / .28));
   for (const s of [1, -1]) for (let i = 0; i < rows; i++) {
     const t = (i + .5) / rows, shade = mixHex(col, i % 2 ? 0x000000 : 0xffffff, .08 + (i % 2) * .06);

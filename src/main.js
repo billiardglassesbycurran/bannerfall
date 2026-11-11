@@ -10,6 +10,7 @@ import { POVView } from './pov.js';
 import { HUD } from './hud.js';
 import { initMaterials, U } from './geo.js';
 import { groundTextures } from './textures.js';
+import { loadAssets } from './assets.js';
 
 // The version lives in index.html (window.BF_VERSION) — bump it there on every change you publish.
 export const VERSION = window.BF_VERSION || 'dev';
@@ -21,7 +22,7 @@ const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in win
 const QUALITY = {
   low:  { dpr: 1,   shadow: 0,    grass: 0,    aa: false },
   med:  { dpr: 1.5, shadow: 1024, grass: 2500, aa: false },
-  high: { dpr: 2,   shadow: 2048, grass: 6500, aa: true },
+  high: { dpr: 2,   shadow: 2048, grass: 6500, aa: true, reflect: true },
 };
 let qLevel = 'med'; try { qLevel = localStorage.getItem('bf.quality') || (isTouch ? 'med' : 'high'); } catch { /* storage blocked */ }
 if (!QUALITY[qLevel]) qLevel = 'med';
@@ -32,12 +33,13 @@ const canvas = $('gl');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: Q.aa, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio || 1, Q.dpr));
 renderer.toneMapping = THREE.NeutralToneMapping; renderer.toneMappingExposure = .95;
-initMaterials(qLevel !== 'low');
-renderer.shadowMap.enabled = Q.shadow > 0; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const A = await loadAssets(renderer.capabilities.getMaxAnisotropy()); // photo textures (falls back to painted ones)
+initMaterials(qLevel !== 'low', A);
+renderer.shadowMap.enabled = Q.shadow > 0; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.shadowMap.autoUpdate = false;
 
 const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0xd5e0e2, 90, 240);
-const camera = new THREE.PerspectiveCamera(48, 1, .2, 700);
+const camera = new THREE.PerspectiveCamera(48, 1, .2, 700); camera.layers.enable(1); // layer 1 = grass (skipped in reflections)
 // sky reflections: render the sky once into an environment map that lights and reflects off every surface
 if (qLevel !== 'low') {
   const pmrem = new THREE.PMREMGenerator(renderer), envScene = new THREE.Scene(); envScene.add(buildSky());
@@ -50,10 +52,10 @@ sun.castShadow = Q.shadow > 0;
 if (Q.shadow) { sun.shadow.mapSize.set(Q.shadow, Q.shadow); Object.assign(sun.shadow.camera, { left: -45, right: 45, top: 45, bottom: -45, near: 5, far: 220 }); sun.shadow.bias = -.0006; sun.shadow.normalBias = .05; }
 scene.add(sun, sun.target);
 
-const groundTex = groundTextures(qLevel === 'low' ? 256 : 512, renderer.capabilities.getMaxAnisotropy());
-U.detail.value = groundTex.rock;
-const terrain = buildTerrain(Q, groundTex);
-const water = buildWater();
+const painted = groundTextures(qLevel === 'low' ? 256 : 512, renderer.capabilities.getMaxAnisotropy());
+U.detail.value = painted.rock;
+const terrain = buildTerrain(Q, A.ok ? { grass: A.grass, dirt: A.dirt, rock: A.rock, sand: A.sand, photo: true } : painted);
+const water = buildWater(Q);
 scene.add(buildSky(), terrain, water);
 buildResources(scene, Q);
 const figures = new Figures(scene, Q.shadow > 0);
@@ -349,6 +351,8 @@ renderer.setAnimationLoop(() => {
   sun.target.position.set(f.x, 0, f.z); sun.position.copy(sun.target.position).addScaledVector(SUN_DIR, 110);
   if (marker.visible) { markerT += real; marker.scale.setScalar(1 + markerT * 1.5); marker.material.opacity = 1 - markerT / .7; if (markerT > .7) marker.visible = false; }
   hud.update(real);
+  water.userData.reflect?.(renderer, scene, camera); // mirror image for the water (High quality)
+  renderer.shadowMap.needsUpdate = true;
   renderer.render(scene, camera);
 });
 

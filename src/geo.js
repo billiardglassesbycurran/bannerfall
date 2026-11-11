@@ -1,6 +1,7 @@
 // Geometry + material helpers.
 // - bake(): copy a primitive with a per-vertex colour and a transform, so many pieces can be merged into one mesh
-//   (fewer draw calls = faster on phones).
+//   (fewer draw calls = faster on phones). Colours registered in TEXMAT also tag the vertices with a photo texture
+//   (stone, plaster, roof tiles, thatch, wood) that the building shader uses.
 // - Builder: collects pieces in two buckets — cloth/wood/skin and shiny metal — and merges them.
 // - M: shared materials (physically based on Medium/High quality, cheaper on Low). Call initMaterials() first.
 import * as THREE from 'three';
@@ -8,17 +9,24 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const _c = new THREE.Color(), _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _v = new THREE.Vector3(), _s = new THREE.Vector3();
 
+/** hex colour -> photo texture id (1 stone, 2 plaster, 3 roof tiles, 4 thatch, 5 wood). 0 = plain colour. */
+export const TEXMAT = new Map();
+
 /** Return a non-indexed copy of geo with a per-vertex colour, transformed by position/rotation/scale. */
 export function bake(geo, hex, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) {
   const g = geo.index ? geo.toNonIndexed() : geo.clone();
-  for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal') g.deleteAttribute(k);
+  for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal' && k !== 'uv') g.deleteAttribute(k);
+  g.clearGroups();
   if (!g.attributes.normal) g.computeVertexNormals();
+  const n = g.attributes.position.count;
+  if (!g.attributes.uv) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(n * 2), 2));
   _m.compose(_v.set(x, y, z), _q.setFromEuler(_e.set(rx, ry, rz)), _s.set(sx, sy, sz));
   g.applyMatrix4(_m);
   _c.set(hex);
-  const n = g.attributes.position.count, col = new Float32Array(n * 3);
+  const col = new Float32Array(n * 3), tm = new Float32Array(n).fill(TEXMAT.get(hex) || 0);
   for (let i = 0; i < n; i++) { col[i * 3] = _c.r; col[i * 3 + 1] = _c.g; col[i * 3 + 2] = _c.b; }
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  g.setAttribute('tm', new THREE.BufferAttribute(tm, 1));
   return g;
 }
 const merge = list => { if (!list.length) return null; const g = mergeGeometries(list); for (const p of list) p.dispose(); return g; };
@@ -66,54 +74,75 @@ export function jitter(g, amt, seed = 1) {
 }
 
 // ---------------- materials ----------------
-export const U = { time: { value: 0 }, detail: { value: null } };
+export const U = {
+  time: { value: 0 }, detail: { value: null },
+  tWall: { value: null }, tPlaster: { value: null }, tTiles: { value: null }, tThatch: { value: null }, tWood: { value: null },
+};
 export const M = {};
+const WIND = (start, amp) => `#include <begin_vertex>
+  #ifdef USE_INSTANCING
+    vec3 wp = vec3(instanceMatrix[3][0], instanceMatrix[3][1], instanceMatrix[3][2]);
+  #else
+    vec3 wp = vec3(0.0);
+  #endif
+  float sw = max(position.y - ${start.toFixed(2)}, 0.0) * ${amp.toFixed(3)};
+  float gust = 0.6 + 0.4 * sin(uTime * 0.37 + wp.x * 0.05);
+  transformed.x += sin(uTime * 1.7 + wp.x * 0.35 + wp.z * 0.21 + position.y * 0.4) * sw * gust;
+  transformed.z += cos(uTime * 1.3 + wp.x * 0.19 + wp.z * 0.33 + position.x * 0.5) * sw * 0.7 * gust;`;
 /** Adds gentle wind sway to an (instanced) material. start = height where bending begins, amp = strength. */
-function windify(mat, start, amp, key) {
+function windify(mat, start, amp, key, twoSidedLight = false) {
   mat.onBeforeCompile = sh => {
     sh.uniforms.uTime = U.time;
-    sh.vertexShader = 'uniform float uTime;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
-      #ifdef USE_INSTANCING
-        vec3 wp = vec3(instanceMatrix[3][0], instanceMatrix[3][1], instanceMatrix[3][2]);
-      #else
-        vec3 wp = vec3(0.0);
-      #endif
-      float sw = max(position.y - ${start.toFixed(2)}, 0.0) * ${amp.toFixed(3)};
-      float gust = 0.6 + 0.4 * sin(uTime * 0.37 + wp.x * 0.05);
-      transformed.x += sin(uTime * 1.7 + wp.x * 0.35 + wp.z * 0.21) * sw * gust;
-      transformed.z += cos(uTime * 1.3 + wp.x * 0.19 + wp.z * 0.33) * sw * 0.7 * gust;`);
+    sh.vertexShader = 'uniform float uTime;\n' + sh.vertexShader.replace('#include <begin_vertex>', WIND(start, amp));
+    // leaf cards: light both sides the same (don't flip the normal on the back face)
+    if (twoSidedLight) sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', THREE.ShaderChunk.normal_fragment_begin.replace(/\*= faceDirection;/g, '*= 1.0;'));
   };
   mat.customProgramCacheKey = () => 'wind' + key;
   return mat;
 }
-/** Grime/stone detail projected from 3 sides (no UVs needed) — makes plain walls and rocks look weathered. */
-function weathered(mat) {
+/** Buildings, rocks and mines: photo textures projected from 3 sides (no UVs needed), chosen per vertex. */
+function building(mat) {
   mat.onBeforeCompile = sh => {
-    sh.uniforms.tDetail = U.detail;
-    sh.vertexShader = 'varying vec3 vWP; varying vec3 vWN;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+    Object.assign(sh.uniforms, { tDetail: U.detail, tWall: U.tWall, tPlaster: U.tPlaster, tTiles: U.tTiles, tThatch: U.tThatch, tWood: U.tWood });
+    sh.vertexShader = 'attribute float tm; varying float vTm; varying vec3 vWP; varying vec3 vWN; varying vec2 vUV;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
       #ifdef USE_INSTANCING
         mat4 wm = modelMatrix * instanceMatrix;
       #else
         mat4 wm = modelMatrix;
       #endif
-      vWP = (wm * vec4(transformed, 1.0)).xyz; vWN = normalize(mat3(wm) * objectNormal);`);
-    sh.fragmentShader = 'uniform sampler2D tDetail; varying vec3 vWP; varying vec3 vWN;\n' + sh.fragmentShader.replace('#include <map_fragment>', `
-      vec3 bw = pow(abs(vWN), vec3(4.0)); bw /= (bw.x + bw.y + bw.z);
-      vec3 dt = texture2D(tDetail, vWP.zy * 0.45).rgb * bw.x + texture2D(tDetail, vWP.xz * 0.45).rgb * bw.y + texture2D(tDetail, vWP.xy * 0.45).rgb * bw.z;
-      diffuseColor.rgb *= mix(1.0, dot(dt, vec3(0.333)) / 0.19, 0.5);`);
+      vWP = (wm * vec4(transformed, 1.0)).xyz; vWN = normalize(mat3(wm) * objectNormal); vTm = tm; vUV = uv;`);
+    const photo = !!U.tWall.value;
+    sh.fragmentShader = 'uniform sampler2D tDetail, tWall, tPlaster, tTiles, tThatch, tWood; varying float vTm; varying vec3 vWP; varying vec3 vWN; varying vec2 vUV;\n' +
+      `vec3 tri(sampler2D t, float s) { vec3 bw = pow(abs(vWN), vec3(4.0)); bw /= (bw.x + bw.y + bw.z);
+        return texture2D(t, vWP.zy * s).rgb * bw.x + texture2D(t, vWP.xz * s).rgb * bw.y + texture2D(t, vWP.xy * s).rgb * bw.z; }\n` +
+      sh.fragmentShader.replace('#include <map_fragment>', photo ? `
+      if (vTm < 0.5) { vec3 dt = tri(tDetail, 0.45); diffuseColor.rgb *= mix(1.0, dot(dt, vec3(0.333)) / 0.19, 0.5); }
+      else if (vTm < 1.5) diffuseColor.rgb = tri(tWall, 0.55) * 1.6 * (diffuseColor.r / 0.32);
+      else if (vTm < 2.5) diffuseColor.rgb = mix(vec3(0.62, 0.58, 0.5), tri(tPlaster, 0.4) * 2.0, 0.55);
+      else if (vTm < 3.5) diffuseColor.rgb = texture2D(tTiles, vUV * 0.7).rgb * 1.1;
+      else if (vTm < 4.5) diffuseColor.rgb = texture2D(tThatch, vUV * 0.6).rgb * 1.15;
+      else diffuseColor.rgb = tri(tWood, 0.9) * 0.9;` : `
+      { vec3 dt = tri(tDetail, 0.45); diffuseColor.rgb *= mix(1.0, dot(dt, vec3(0.333)) / 0.19, 0.5); }`);
   };
-  mat.customProgramCacheKey = () => 'weathered';
+  mat.customProgramCacheKey = () => 'building' + !!U.tWall.value;
   return mat;
 }
-export function initMaterials(pbr) {
-  const S = o => pbr ? new THREE.MeshStandardMaterial({ metalness: 0, ...o }) : new THREE.MeshLambertMaterial({ vertexColors: o.vertexColors, flatShading: o.flatShading, side: o.side });
+export function initMaterials(pbr, A) {
+  const S = o => pbr ? new THREE.MeshStandardMaterial({ metalness: 0, ...o }) : new THREE.MeshLambertMaterial({ vertexColors: o.vertexColors, flatShading: o.flatShading, side: o.side, map: o.map, alphaTest: o.alphaTest });
+  M.photo = !!(A && A.ok);
+  if (M.photo) { U.tWall.value = A.wall; U.tPlaster.value = A.plaster; U.tTiles.value = A.tiles; U.tThatch.value = A.thatch; U.tWood.value = A.bark; }
   M.vc = S({ vertexColors: true, roughness: .85 });
   M.vcFlat = S({ vertexColors: true, roughness: .9, flatShading: true });
   M.cloth = S({ vertexColors: true, roughness: .78 });
   M.metal = pbr ? new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .42, metalness: .8, envMapIntensity: .7 }) : new THREE.MeshPhongMaterial({ vertexColors: true, shininess: 70, specular: 0x777777 });
-  M.stone = weathered(S({ vertexColors: true, roughness: .95, flatShading: true }));
+  M.stone = building(S({ vertexColors: true, roughness: .95, flatShading: true }));
   M.foliage = windify(S({ vertexColors: true, roughness: .9 }), 1.2, .022, 'f');
-  M.grass = windify(S({ vertexColors: true, roughness: 1 }), 0, .35, 'g');
+  M.grass = windify(S({ vertexColors: true, roughness: 1, envMapIntensity: .25 }), 0, .35, 'g');
+  if (M.photo) {
+    M.bark = S({ vertexColors: true, roughness: .95, map: A.bark });
+    M.leaves = windify(S({ vertexColors: true, roughness: .8, envMapIntensity: .5, map: A.oakCard, alphaTest: .45, side: THREE.DoubleSide }), 1.0, .028, 'lo', true);
+    M.needles = windify(S({ vertexColors: true, roughness: .85, envMapIntensity: .5, map: A.firCard, alphaTest: .4, side: THREE.DoubleSide }), 1.0, .022, 'ln', true);
+  }
   M.pbr = pbr;
 }
 

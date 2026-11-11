@@ -49,7 +49,10 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
 - `src/models.js` — unit figures (GPU-instanced per team+type: keeps big armies fast), knight + horse, building models, arrows.
 - `src/geo.js` — helpers to bake colours into geometry and merge parts (cloth vs metal buckets); shared materials `M`
   (PBR on Medium/High, Lambert on Low), wind sway, weathered-stone triplanar shader; `U` holds shared shader uniforms.
-- `src/textures.js` — procedurally painted tiling ground textures (grass, dirt, rock, sand); no image files.
+- `src/textures.js` — procedurally painted tiling ground textures; used as the fallback if photo textures fail to load.
+- `src/assets.js` + `assets/tex/` — CC0 photo textures (Poly Haven, ambientCG; see `assets/CREDITS.md`), loaded before the
+  world is built; leaf photos are composed into branch "cards" for trees at startup. Keep each texture ≤1K and the folder
+  small (~3.5 MB now); only use CC0/permissively licensed assets and record them in CREDITS.md. Never use images from Google.
 - `src/game.js` — simulation: spawning, orders, gathering, building, training, combat, projectiles, win/lose.
 - `src/path.js` — A* pathfinding on the grid. `src/ai.js` — enemy AI for Skirmish, Battle, Survival.
 - `src/rts.js` — aerial camera, picking, selection, touch/mouse orders. `src/pov.js` — 1st/3rd person, strike, Follow me.
@@ -69,6 +72,8 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
 ## Roadmap
 1. ✅ v0.1 Terrain, units, select & move from above, 3rd-person view.
 2. ✅ v0.2 Graphics pass; economy, buildings, training, combat, pathfinding, enemy AI; Skirmish / Battle / Survival modes.
+2c. ✅ v0.4 Photo textures (ground, buildings, bark), photo-leaf trees, realistic water (waves, shoreline foam, depth
+   colour; mirror reflections on High).
 2b. ✅ v0.3 Realistic look (PBR + sky reflections, textured terrain, new trees, wind), remodelled soldiers/horses,
    camera glide, Box select, control groups, edge scroll, 3rd-person target ring / lunge / hold-to-strike.
 3. Ages & upgrades (Feudal/Kingdom, blacksmith, from the prototype), walls, catapults.
