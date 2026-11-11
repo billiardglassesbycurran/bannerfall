@@ -18,13 +18,13 @@
 </script>
 <script>
   // ===== Game version: bump on every change you publish (see CLAUDE.md). =====
-  window.BF_VERSION = '0.2.0';
+  window.BF_VERSION = '0.3.0';
   // Every game file is loaded as file.js?v=VERSION so phones never mix old and new files from the browser cache.
   // (On localhost a timestamp is used instead, so edits show up immediately while developing.)
   (function () {
     var local = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
     var v = local ? Date.now() : window.BF_VERSION;
-    var mods = ['main', 'world', 'util', 'geo', 'data', 'models', 'game', 'path', 'ai', 'rts', 'pov', 'hud'];
+    var mods = ['main', 'world', 'util', 'geo', 'data', 'models', 'game', 'path', 'ai', 'rts', 'pov', 'hud', 'textures'];
     var imports = {
       'three': 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js',
       'three/addons/': 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/'
@@ -53,15 +53,16 @@
     <span id="ver"></span>
     <button class="btn sm" id="bPause">&#10074;&#10074;</button>
   </div>
-  <div id="quick">
-    <button class="btn" id="bAll">Army<small>select</small></button>
-    <button class="btn" id="bIdle">Idle<small>peasant</small></button>
-    <button class="btn" id="bRide">&#9876; Ride<small>unit</small></button>
-    <button class="btn" id="bLead">&#9873; Lead<small>hero</small></button>
-  </div>
   <div id="bottom">
     <canvas id="mini" width="128" height="128"></canvas>
     <div id="selp"><div id="selname">Nothing selected</div><div id="seldesc"></div><div id="selq"></div></div>
+    <div id="quick">
+        <button class="btn" id="bAll">Army<small>select</small></button>
+        <button class="btn" id="bIdle">Idle<small>peasant</small></button>
+        <button class="btn" id="bBox">&#9634; Box<small>select</small></button>
+        <button class="btn" id="bRide">&#9876; Ride<small>unit</small></button>
+        <button class="btn" id="bLead">&#9873; Lead<small>hero</small></button>
+      </div>
     <div id="card"></div>
   </div>
   <div id="place" class="hide"><span id="ptxt">Tap the map to place</span><button class="btn" id="pok">&#10003;</button><button class="btn" id="pno">&#10005;</button></div>
@@ -69,6 +70,7 @@
 
 <!-- ============ 1st / 3rd person HUD ============ -->
 <div id="pov" class="hide">
+  <div id="joyIdle" class="hide"><div></div><span>move</span></div>
   <div id="joy" class="hide"><div id="knob"></div></div>
   <div id="xhair" class="hide"></div>
   <div id="pvname"><span id="pvn"></span><div class="hpbar"><div id="pvhp"></div></div></div>

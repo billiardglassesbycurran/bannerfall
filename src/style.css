@@ -48,8 +48,8 @@ html, body { margin:0; height:100%; overflow:hidden; overscroll-behavior:none; b
 #selq .qi i { position:absolute; left:0; bottom:0; height:3px; background:#ffd56a; }
 #card { flex:none; display:grid; grid-template-columns:repeat(4,58px); grid-auto-rows:50px; gap:5px; align-content:end; }
 #card .btn { min-width:0; min-height:0; padding:2px; font-size:11.5px; }
-#quick { position:fixed; right:calc(8px + var(--sr)); bottom:calc(126px + var(--sb)); display:grid; grid-template-columns:repeat(2,62px); gap:5px; z-index:5; }
-#quick .btn { min-height:42px; }
+#quick { flex:none; display:grid; grid-template-columns:repeat(3,54px); grid-auto-rows:50px; gap:5px; align-content:end; }
+#quick .btn { min-height:0; min-width:0; padding:2px; font-size:11.5px; }
 #place { position:fixed; left:50%; transform:translateX(-50%); bottom:calc(128px + var(--sb)); display:flex; gap:8px; align-items:center;
   background:var(--panel); border:1px solid var(--gold); border-radius:10px; padding:5px 8px; z-index:6; font-size:13px; }
 #box { position:fixed; border:1px solid #9dff8a; background:rgba(140,255,120,.12); pointer-events:none; z-index:3; }
@@ -57,7 +57,7 @@ html, body { margin:0; height:100%; overflow:hidden; overscroll-behavior:none; b
 @media (min-width:1000px) and (min-height:600px) {
   #bottom { height:calc(150px + var(--sb)); } #mini { width:138px; height:138px; }
   #card { grid-template-columns:repeat(4,70px); grid-auto-rows:62px; } #card .btn { font-size:13px; }
-  #quick, #place { bottom:calc(160px + var(--sb)); } #selp { font-size:13px; }
+  #place { bottom:calc(160px + var(--sb)); } #selp { font-size:13px; } #quick { grid-template-columns:repeat(3,64px); grid-auto-rows:62px; }
 }
 
 /* toasts */
@@ -105,3 +105,8 @@ html, body { margin:0; height:100%; overflow:hidden; overscroll-behavior:none; b
   .panel .btn { min-height:38px; }
   #modeDesc { min-height:0; font-size:12px; }
 }
+
+#joyIdle { position:fixed; left:calc(36px + var(--sl)); bottom:calc(30px + var(--sb)); width:120px; height:120px; border-radius:50%; border:2px dashed rgba(243,215,138,.35);
+  background:rgba(26,18,10,.18); z-index:4; pointer-events:none; display:flex; align-items:center; justify-content:center; flex-direction:column; }
+#joyIdle div { width:44px; height:44px; border-radius:50%; background:rgba(243,215,138,.25); }
+#joyIdle span { font-size:10px; opacity:.6; margin-top:4px; }

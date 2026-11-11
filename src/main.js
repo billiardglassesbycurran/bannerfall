@@ -8,6 +8,8 @@ import { AI } from './ai.js';
 import { RTSView } from './rts.js';
 import { POVView } from './pov.js';
 import { HUD } from './hud.js';
+import { initMaterials, U } from './geo.js';
+import { groundTextures } from './textures.js';
 
 // The version lives in index.html (window.BF_VERSION) — bump it there on every change you publish.
 export const VERSION = window.BF_VERSION || 'dev';
@@ -29,20 +31,28 @@ const Q = QUALITY[qLevel];
 const canvas = $('gl');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: Q.aa, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio || 1, Q.dpr));
-renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+renderer.toneMapping = THREE.NeutralToneMapping; renderer.toneMappingExposure = .95;
+initMaterials(qLevel !== 'low');
 renderer.shadowMap.enabled = Q.shadow > 0; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0xd5e0e2, 90, 240);
 const camera = new THREE.PerspectiveCamera(48, 1, .2, 700);
-scene.add(new THREE.HemisphereLight(0xd6e6ff, 0x6a5a3a, 1.15));
-const sun = new THREE.DirectionalLight(0xfff0d8, 2.7);
+// sky reflections: render the sky once into an environment map that lights and reflects off every surface
+if (qLevel !== 'low') {
+  const pmrem = new THREE.PMREMGenerator(renderer), envScene = new THREE.Scene(); envScene.add(buildSky());
+  scene.environment = pmrem.fromScene(envScene, .04, .1, 1000).texture; scene.environmentIntensity = .75; pmrem.dispose();
+}
+scene.add(new THREE.HemisphereLight(0xd6e6ff, 0x5a4a30, qLevel === 'low' ? 1.2 : .45));
+const sun = new THREE.DirectionalLight(0xffecd0, qLevel === 'low' ? 2.8 : 3.3);
 const SUN_DIR = new THREE.Vector3(-.5, .62, .35).normalize();
 sun.castShadow = Q.shadow > 0;
 if (Q.shadow) { sun.shadow.mapSize.set(Q.shadow, Q.shadow); Object.assign(sun.shadow.camera, { left: -45, right: 45, top: 45, bottom: -45, near: 5, far: 220 }); sun.shadow.bias = -.0006; sun.shadow.normalBias = .05; }
 scene.add(sun, sun.target);
 
-const terrain = buildTerrain();
+const groundTex = groundTextures(qLevel === 'low' ? 256 : 512, renderer.capabilities.getMaxAnisotropy());
+U.detail.value = groundTex.rock;
+const terrain = buildTerrain(Q, groundTex);
 const water = buildWater();
 scene.add(buildSky(), terrain, water);
 buildResources(scene, Q);
@@ -53,6 +63,7 @@ const app = {
   isTouch, canvas, camera, terrain, keys: {}, sel: [], pending: null, mode: 'menu', game: null, ai: null, paused: false,
   cfg: { mode: 'skirmish', diff: 1 },
 };
+app.scene = scene; app.renderer = renderer;
 const rts = new RTSView(app), pov = new POVView(app), hud = new HUD(app);
 Object.assign(app, { rts, pov, hud });
 app.toast = (m, s) => hud.toast(m, s);
@@ -153,7 +164,7 @@ function setupGame(mode, diff) {
     army(0, 46, 82, 1); army(1, 82, 46, [.75, 1, 1.3][diff]);
     g.hero = g.spawnUnit(0, 'hero', 40, 88); g.spawnUnit(1, 'hero', 88, 40);
     for (const u of g.units) u.yaw = u.team === 0 ? Math.PI * .75 : -Math.PI * .25;
-    rts.lookAt(52, 78); rts.dist = 34;
+    rts.lookAt(52, 78); rts.dist = rts.distT = 34;
   } else {
     const hall = g.placeBuilding(0, 'hall', B0.x - 2, B0.z - 2, true);
     for (let i = 0; i < 4; i++) g.spawnUnit(0, 'peasant', hall.x + 4 + i * .8, hall.z - 3.5);
@@ -170,7 +181,7 @@ function setupGame(mode, diff) {
       for (let i = 0; i < 3; i++) g.spawnUnit(0, 'sword', hall.x + 6 + i, hall.z - 6);
       for (let i = 0; i < 2; i++) g.spawnUnit(0, 'archer', hall.x + 5 + i, hall.z - 7.5);
     }
-    rts.lookAt(hall.x + 6, hall.z - 6); rts.dist = 30;
+    rts.lookAt(hall.x + 6, hall.z - 6); rts.dist = rts.distT = 30;
   }
   g.recount();
   app.ai = new AI(g, 1);
@@ -194,7 +205,7 @@ function enterPOV(unit) {
   if (!unit || !unit.alive) return;
   rts.cancel(); if (app.pending) app.cancelPending();
   app.mode = 'pov'; pov.enter(unit);
-  $('hud').classList.add('hide'); $('pov').classList.remove('hide');
+  $('hud').classList.add('hide'); $('pov').classList.remove('hide'); $('joyIdle').classList.toggle('hide', !isTouch);
   $('pvn').textContent = (unit.d.hero ? '⚑ ' : '') + unit.d.name;
   $('povhelp').textContent = isTouch ? 'Left thumb: move · Right thumb: look' : 'Click to aim · WASD move · Shift sprint · Click strike · F follow · V view · Tab back';
   $('povhelp').classList.remove('hide'); clearTimeout(enterPOV.t); enterPOV.t = setTimeout(() => $('povhelp').classList.add('hide'), 6000);
@@ -217,11 +228,14 @@ function selectIdle() {
   const u = idle[idleIx++ % idle.length]; app.select([u]); rts.lookAt(u.x, u.z);
 }
 onBtn('bIdle', selectIdle);
+onBtn('bBox', () => { rts.boxMode = !rts.boxMode; $('bBox').classList.toggle('on', rts.boxMode); app.toast(rts.boxMode ? 'Box select: drag a box around units. Tap Box again to pan.' : 'Drag to move the camera.', 2.5); });
+if (!isTouch) $('bBox').classList.add('hide');
 onBtn('bRide', () => { const u = rideTarget(); if (u) enterPOV(u); else app.toast('Select a unit to ride.', 2); });
 onBtn('bLead', () => { if (app.game.hero?.alive) enterPOV(app.game.hero); else app.toast('Your Commander will return soon.', 2); });
 onBtn('bExit', exitPOV);
 onBtn('bView', () => pov.setFirst(!pov.first));
-onBtn('bStrike', () => pov.strike());
+$('bStrike').addEventListener('pointerdown', e => { e.stopPropagation(); pov.holding = true; pov.strike(); });
+for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) $('bStrike').addEventListener(ev, () => { pov.holding = false; });
 onBtn('bFollow', () => pov.toggleFollow());
 onBtn('bPause', () => setPause(true));
 onBtn('bResume', () => setPause(false));
@@ -283,14 +297,29 @@ addEventListener('keydown', e => {
     if ((e.code === 'KeyA' && (e.ctrlKey || e.metaKey)) || e.code === 'F2') { e.preventDefault(); $('bAll').click(); return; }
     if (e.code === 'KeyH') { $('bLead').click(); return; }
     if (e.code === 'KeyI' || e.code === 'Period') { selectIdle(); return; }
+    const dig = /^Digit([1-9])$/.exec(e.code);
+    if (dig) { // control groups: Ctrl+number saves the selection, number recalls it (twice = jump to it)
+      const n = +dig[1];
+      if (e.ctrlKey || e.metaKey) { e.preventDefault(); groups[n] = app.sel.filter(u => u.kind === 'unit' && u.team === 0); app.toast(`Group ${n} set (${groups[n].length} units).`, 1.5); }
+      else if (groups[n]) {
+        const list = groups[n].filter(u => u.alive); app.select(list);
+        const now = performance.now();
+        if (list.length && lastGroup.n === n && now - lastGroup.t < 400) rts.lookAt(list.reduce((s2, u) => s2 + u.x, 0) / list.length, list.reduce((s2, u) => s2 + u.z, 0) / list.length);
+        lastGroup.n = n; lastGroup.t = now;
+      }
+      return;
+    }
     if (hud.hotkey(e.code)) e.preventDefault();
   } else {
     if (e.code === 'KeyV') pov.setFirst(!pov.first);
     if (e.code === 'KeyF') pov.toggleFollow();
-    if (e.code === 'Space') { e.preventDefault(); pov.strike(); }
+    if (e.code === 'Space') { e.preventDefault(); pov.holding = true; pov.strike(); }
   }
 });
-addEventListener('keyup', e => { app.keys[e.code] = false; });
+addEventListener('keyup', e => { app.keys[e.code] = false; if (e.code === 'Space') pov.holding = false; });
+const groups = {}, lastGroup = { n: 0, t: 0 };
+document.addEventListener('mouseleave', () => { rts.mouse.in = false; });
+addEventListener('blur', () => { rts.mouse.in = false; });
 
 function resize() { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; viewOff = -1; updateViewOffset(); hud.resize(); }
 // In command view, centre the picture in the space between the top bar and the bottom panel.
@@ -313,9 +342,9 @@ renderer.setAnimationLoop(() => {
   updateViewOffset();
   if (app.mode === 'pov') pov.update(dt);
   else if (app.mode === 'rts') rts.update(real);
-  else { menuYaw += real * .05; rts.yaw = menuYaw; rts.dist = 75; rts.lookAt(64, 64); rts.update(real); }
+  else { menuYaw += real * .05; rts.yaw = menuYaw; rts.dist = rts.distT = 75; rts.lookAt(64, 64); rts.update(real); }
   if (g) g.syncVisuals(dt, pov.first && pov.unit ? pov.unit.id : -1);
-  water.userData.update(t);
+  water.userData.update(t); U.time.value = t;
   const f = app.mode === 'pov' && pov.unit ? pov.unit : rts.focus; // keep the sharp-shadow area centred on the action
   sun.target.position.set(f.x, 0, f.z); sun.position.copy(sun.target.position).addScaledVector(SUN_DIR, 110);
   if (marker.visible) { markerT += real; marker.scale.setScalar(1 + markerT * 1.5); marker.material.opacity = 1 - markerT / .7; if (markerT > .7) marker.visible = false; }

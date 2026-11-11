@@ -1,6 +1,6 @@
 // 1st/3rd-person control of one unit (the hero or any possessed unit): move, look, strike, rally troops.
 import * as THREE from 'three';
-import { heightAt } from './world.js';
+import { heightAt, blocked, N } from './world.js';
 import { clamp, angDiff, dist } from './util.js';
 
 const JOY_R = 55;
@@ -11,7 +11,10 @@ export class POVView {
     this.yaw = 0; this.pitch = -.2; this.camDist = 5;
     this.joy = null; this.look = null; this.stick = { x: 0, y: 0 };
     this.joyEl = document.getElementById('joy'); this.knob = document.getElementById('knob');
-    this.camPos = new THREE.Vector3(); this.followers = [];
+    this.camPos = new THREE.Vector3(); this.followers = []; this.target = null; this.holding = false;
+    this.mark = new THREE.Mesh(new THREE.RingGeometry(.5, .66, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xff3a2a, transparent: true, opacity: .85, depthWrite: false }));
+    this.mark.visible = false; app.scene.add(this.mark);
+    this.joyIdle = document.getElementById('joyIdle');
   }
   get g() { return this.a.game; }
   enter(unit) {
@@ -21,6 +24,7 @@ export class POVView {
   }
   leave() {
     const u = this.unit; if (!u) return;
+    this.mark.visible = false; this.holding = false;
     u.possessed = false; u.speedNow = 0;
     for (const f of this.followers) if (f.alive && f.task.type === 'follow') this.g.setTask(f, { type: 'idle' });
     this.followers = []; this.unit = null; this.cancel();
@@ -33,27 +37,35 @@ export class POVView {
   }
 
   // ---------- actions ----------
+  /** The enemy your next strike/shot will hit (shown with a red ring). */
+  findTarget() {
+    const u = this.unit, g = this.g; if (!u || !u.alive) return null;
+    const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw), ranged = u.d.ranged, maxD = ranged ? u.d.rng + 4 : u.d.rng + 1.6;
+    let best = null, bs = -1e9;
+    for (const e of g.units) if (e.alive && e.team !== u.team) {
+      const dx = e.x - u.x, dz = e.z - u.z, d = Math.hypot(dx, dz) - e.d.rad; if (d > maxD) continue;
+      const dot = (dx * fx + dz * fz) / (Math.hypot(dx, dz) || 1); if (dot < (ranged ? .9 : .55)) continue;
+      const sc = dot * 2 - d / maxD; if (sc > bs) { bs = sc; best = e; }
+    }
+    if (!best) for (const b of g.blds) if (b.alive && b.team !== u.team && g.edgeDist(u, b) < maxD) { const dx = b.x - u.x, dz = b.z - u.z; if ((dx * fx + dz * fz) / (Math.hypot(dx, dz) || 1) > .5) best = b; }
+    return best;
+  }
   strike() {
     const u = this.unit; if (!u || !u.alive || u.cd > 0) return;
-    const g = this.g, fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
+    const g = this.g, t = this.target;
     u.cd = u.d.cd * .75; u.swingT = 0;
-    if (u.d.ranged) {
-      let best = null, bs = -1;
-      for (const e of g.units) if (e.alive && e.team !== u.team) {
-        const dx = e.x - u.x, dz = e.z - u.z, d = Math.hypot(dx, dz); if (d > u.d.rng + 4 || d < .1) continue;
-        const dot = (dx * fx + dz * fz) / d; if (dot > .93 && dot - d * .002 > bs) { bs = dot - d * .002; best = e; }
-      }
-      if (!best) for (const b of g.blds) if (b.alive && b.team !== u.team && g.edgeDist(u, b) < u.d.rng + 2) { const dx = b.x - u.x, dz = b.z - u.z, d = Math.hypot(dx, dz) || 1; if ((dx * fx + dz * fz) / d > .8) best = b; }
-      if (best) g.shoot(u, best, u.d.dmg * 1.2); else this.a.toast('No target in sight — aim at an enemy.', 2);
-      return;
+    if (u.d.ranged) { if (t) g.shoot(u, t, u.d.dmg * 1.2); else this.a.toast('No target in sight — aim at an enemy.', 1.5); return; }
+    if (t && t.kind === 'unit') { // lunge toward the target
+      const dx = t.x - u.x, dz = t.z - u.z, d = Math.hypot(dx, dz), gap = d - t.d.rad - u.d.rng * .8;
+      if (gap > 0) { const st = Math.min(gap, .9); g.step(u, dx / d * st, dz / d * st); }
+      this.yaw += angDiff(this.yaw, Math.atan2(dx, dz)) * .5;
     }
-    const reach = u.d.rng + .7;
-    let hit = 0;
-    for (const e of g.units) if (e.alive && e.team !== u.team) {
-      const dx = e.x - u.x, dz = e.z - u.z, d = Math.hypot(dx, dz) - e.d.rad; if (d > reach) continue;
-      if (Math.abs(angDiff(this.yaw, Math.atan2(dx, dz))) < 1.1) { g.damage(e, u.d.dmg * 1.25, u); if (++hit >= (u.d.hero ? 3 : 1)) break; }
+    const reach = u.d.rng + .8; let hit = 0;
+    if (t && t.kind === 'unit' && Math.hypot(t.x - u.x, t.z - u.z) - t.d.rad <= reach) { g.damage(t, u.d.dmg * 1.25, u); hit++; }
+    if (u.d.hero) for (const e of g.units) if (e.alive && e !== t && e.team !== u.team && hit < 3) { // the Commander's sweep hits up to 3
+      const dx = e.x - u.x, dz = e.z - u.z; if (Math.hypot(dx, dz) - e.d.rad <= reach && Math.abs(angDiff(this.yaw, Math.atan2(dx, dz))) < 1.1) { g.damage(e, u.d.dmg, u); hit++; }
     }
-    if (!hit) for (const b of g.blds) if (b.alive && b.team !== u.team && g.edgeDist(u, b) < reach) { g.damage(b, u.d.dmg, u); break; }
+    if (!hit && t && t.kind === 'bld' && g.edgeDist(u, t) < reach) g.damage(t, u.d.dmg, u);
   }
   toggleFollow() {
     const u = this.unit; if (!u) return;
@@ -98,25 +110,35 @@ export class POVView {
     const head = new THREE.Vector3(u.x, heightAt(u.x, u.z) + 1.62 * sc, u.z);
     let want;
     if (this.first) want = head.clone().addScaledVector(dir, .25);
-    else { want = head.clone().addScaledVector(dir, -this.camDist * (u.d.horse ? 1.3 : 1)); want.y += .9; want.y = Math.max(want.y, heightAt(want.x, want.z) + .4); }
+    else {
+      // pull the camera in if a tree is between it and you
+      let dist = this.camDist * (u.d.horse ? 1.3 : 1);
+      for (let t = 1.2; t < dist; t += .3) { const px = head.x - dir.x * t, pz = head.z - dir.z * t; if (blocked[(pz | 0) * N + (px | 0)] === 2) { dist = Math.max(1.4, t - .6); break; } }
+      want = head.clone().addScaledVector(dir, -dist); want.y += .9 * dist / this.camDist; want.y = Math.max(want.y, heightAt(want.x, want.z) + .4);
+    }
     if (this.snap || this.first) { this.camPos.copy(want); this.snap = false; } else this.camPos.lerp(want, Math.min(1, dt * 14));
     cam.position.copy(this.camPos);
     cam.lookAt(head.addScaledVector(dir, this.first ? 5 : 3));
     document.getElementById('pvhp').style.width = Math.max(0, u.hp / u.maxHp * 100) + '%';
+    this.target = this.findTarget();
+    if (this.target) { const t = this.target, r = t.kind === 'bld' ? t.size * .75 : t.d.rad * 1.6 + .2; this.mark.position.set(t.x, heightAt(t.x, t.z) + .07, t.z); this.mark.scale.setScalar(r / .6); this.mark.visible = true; }
+    else this.mark.visible = false;
+    if (this.holding && u.cd <= 0) this.strike();
   }
-  turn(dxPx, dyPx, k) { this.yaw -= dxPx * k; this.pitch = clamp(this.pitch - dyPx * k * .8, -1.2, .9); }
+  turn(dxPx, dyPx, k) {
+    if (this.a.isTouch) k *= Math.min(1.3, Math.max(.7, 900 / innerWidth)); this.yaw -= dxPx * k; this.pitch = clamp(this.pitch - dyPx * k * .8, -1.2, .9); }
 
   // ---------- pointer events ----------
   down(e) {
     if (e.pointerType === 'mouse') {
       if (!document.pointerLockElement) this.a.canvas.requestPointerLock?.();
-      else if (e.button === 0) this.strike();
+      else if (e.button === 0) { this.holding = true; this.strike(); }
       return;
     }
     if (e.clientX < innerWidth * .45 && !this.joy) {
       this.joy = { id: e.pointerId, x0: e.clientX, y0: e.clientY };
       this.joyEl.style.left = e.clientX + 'px'; this.joyEl.style.top = e.clientY + 'px';
-      this.joyEl.classList.remove('hide'); this.knob.style.transform = '';
+      this.joyEl.classList.remove('hide'); this.knob.style.transform = ''; this.joyIdle.classList.add('hide');
     } else if (!this.look) this.look = { id: e.pointerId, x: e.clientX, y: e.clientY };
   }
   move(e) {
@@ -127,12 +149,13 @@ export class POVView {
       this.knob.style.transform = `translate(${dx}px,${dy}px)`;
       this.stick.x = dx / JOY_R; this.stick.y = -dy / JOY_R;
     } else if (this.look && e.pointerId === this.look.id) {
-      this.turn(e.clientX - this.look.x, e.clientY - this.look.y, .006);
+      this.turn(e.clientX - this.look.x, e.clientY - this.look.y, .0055);
       this.look.x = e.clientX; this.look.y = e.clientY;
     }
   }
   up(e) {
-    if (this.joy && e.pointerId === this.joy.id) { this.joy = null; this.stick.x = this.stick.y = 0; this.joyEl.classList.add('hide'); }
+    if (e.pointerType === 'mouse' && e.button === 0) this.holding = false;
+    if (this.joy && e.pointerId === this.joy.id) { this.joy = null; this.stick.x = this.stick.y = 0; this.joyEl.classList.add('hide'); this.joyIdle.classList.remove('hide'); }
     if (this.look && e.pointerId === this.look.id) this.look = null;
   }
   cancel() { this.joy = this.look = null; this.stick.x = this.stick.y = 0; this.joyEl.classList.add('hide'); }

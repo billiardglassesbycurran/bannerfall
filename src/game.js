@@ -4,7 +4,7 @@ import { UD, BD, DIFF } from './data.js';
 import { N, SIZE, heightAt, blocked, resCell, cellWalk, resources, takeRes, BASES } from './world.js';
 import { findPath, nearestWalkable } from './path.js';
 import { buildingMesh, arrowGeo, ringGeo } from './models.js';
-import { vcMat } from './geo.js';
+import { M } from './geo.js';
 import { angDiff, clamp, dist } from './util.js';
 
 const CARRY = 10, RATE = { f: .9, w: .75, g: .65 };
@@ -190,7 +190,7 @@ export class Game {
 
   // ---------------- projectiles ----------------
   shoot(src, t, dmg, from) {
-    const mesh = new THREE.Mesh(arrowGeo, vcMat); this.scene.add(mesh);
+    const mesh = new THREE.Mesh(arrowGeo, M.vc); this.scene.add(mesh);
     const f = from || new THREE.Vector3(src.x, src.y + 1.5 * (src.scale || 1), src.z);
     const d = Math.hypot(t.x - f.x, t.z - f.z);
     this.shots.push({ mesh, f, t, tx: t.x, tz: t.z, ty: (t.kind === 'bld' ? t.y + 1.5 : t.y + 1.0), k: 0, dur: Math.max(.25, d / 22), dmg, src, arc: d * .12 });
