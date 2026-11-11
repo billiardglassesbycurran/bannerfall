@@ -60,6 +60,9 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
   world is built; leaf photos are composed into branch "cards" for trees at startup. Keep each texture ≤1K and the folder
   small (~3.5 MB now); only use CC0/permissively licensed assets and record them in CREDITS.md. Never use images from Google.
 - `src/game.js` — simulation: spawning, orders, gathering, building, training, combat, projectiles, win/lose.
+  Combat tactics live here too: `PACE` (global fight length), `counterMul` (unit counters), flanking, high ground,
+  cavalry charge (`u.run`), braced spears, morale/rout (`shake`, `moraleTick`; Commander nearby inspires and rallies).
+- `src/battle.js` — Battle mode field: 3 capturable banners, reserves + reinforcement waves, army breaks if all banners held.
 - `src/path.js` — A* pathfinding on the grid (pass a walk function: `cellWalk` for land, `navCell` for ships). `src/ai.js` — enemy AI for Skirmish, Battle, Survival.
 - `src/rts.js` — aerial camera, picking, selection, touch/mouse orders. `src/pov.js` — 1st/3rd person: strike, Follow me,
   Act button (G: board/steer/leave ships, enter/leave buildings — rooms from `interiorGeo` in models.js), Mount (M).

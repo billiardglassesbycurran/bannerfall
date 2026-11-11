@@ -140,3 +140,10 @@ body.bigui #bottom, body.bigui #povact, body.bigui #povbar { zoom:1.12; }
 .btn.glow { animation:glow 1s ease-in-out infinite alternate; border-color:#b8ffb0; }
 @keyframes glow { from { box-shadow:0 0 0 2px rgba(150,255,140,.3), 0 0 6px rgba(150,255,140,.4); } to { box-shadow:0 0 0 3px rgba(150,255,140,.9), 0 0 18px rgba(150,255,140,.9); } }
 @media (max-height:460px) { #tutor { font-size:11.5px; top:calc(38px + var(--st)); padding:5px 10px; } }
+
+#battlebar { position:fixed; left:50%; transform:translateX(-50%); top:calc(40px + var(--st)); z-index:6; pointer-events:none; white-space:nowrap;
+  background:rgba(15,18,24,.78); border:1px solid rgba(255,255,255,.18); border-radius:8px; padding:3px 10px; font-size:12px; }
+#battlebar b { font-size:15px; }
+@media (max-height:460px) { #battlebar { font-size:10.5px; top:calc(34px + var(--st)); } }
+body.battle #toasts { top:calc(72px + var(--st)); }
+@media (max-height:460px) { body.battle #toasts { top:calc(60px + var(--st)); } }

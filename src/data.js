@@ -3,11 +3,11 @@
 export const UD = {
   peasant:   { name: 'Peasant', plural: 'Peasants', cls: 'civ', hp: 45, spd: 3.1, dmg: 4, rng: 1.2, cd: 1.3, arm: 0, cost: { f: 50 }, time: 9, rad: .38, acq: 0, desc: 'Gathers food, wood and gold. Builds.' },
   sword:     { name: 'Swordsman', plural: 'Swordsmen', cls: 'inf', hp: 125, spd: 2.9, dmg: 12, rng: 1.35, cd: 1.0, arm: 2, cost: { f: 60, g: 20 }, time: 13, rad: .42, acq: 9, melee: 1, desc: 'Sturdy all-rounder' },
-  spear:     { name: 'Spearman', plural: 'Spearmen', cls: 'inf', hp: 105, spd: 3.0, dmg: 9, rng: 1.95, cd: 1.1, arm: 1, cost: { f: 35, w: 25 }, time: 11, rad: .42, acq: 9, vsHorse: 3, melee: 1, desc: '3× damage vs cavalry' },
+  spear:     { name: 'Spearman', plural: 'Spearmen', cls: 'inf', hp: 105, spd: 3.0, dmg: 9, rng: 1.95, cd: 1.1, arm: 1, cost: { f: 35, w: 25 }, time: 11, rad: .42, acq: 9, vsHorse: 3, melee: 1, desc: '3× damage vs cavalry. Standing still, they brace and blunt charges' },
   archer:    { age: 1, name: 'Archer', plural: 'Archers', cls: 'arch', hp: 65, spd: 3.0, dmg: 8, rng: 9.5, cd: 1.6, arm: 0, cost: { w: 25, g: 45 }, time: 13, rad: .4, acq: 11, ranged: 1, desc: 'Shoots from range. Weak up close' },
   crossbow:  { age: 2, name: 'Crossbowman', plural: 'Crossbowmen', cls: 'arch', hp: 75, spd: 2.7, dmg: 13, rng: 9, cd: 2.3, arm: 1, pierce: 3, cost: { w: 35, g: 50 }, time: 15, rad: .4, acq: 10, ranged: 1, bolt: 1, desc: 'Slow, hard-hitting bolts that punch through armour' },
   knight:    { age: 2, name: 'Knight', plural: 'Knights', cls: 'cav', hp: 230, spd: 5.0, dmg: 16, rng: 1.75, cd: 1.15, arm: 3, cost: { f: 60, g: 75 }, time: 20, rad: .7, acq: 10, horse: 1, melee: 1, desc: 'Fast heavy cavalry' },
-  lightcav:  { age: 1, name: 'Light Cavalry', plural: 'Light Cavalry', cls: 'cav', hp: 120, spd: 5.8, dmg: 8, rng: 1.6, cd: 1.0, arm: 1, cost: { f: 80 }, time: 14, rad: .7, acq: 11, horse: 1, melee: 1, desc: 'Cheap, very fast raiders. Great against archers' },
+  lightcav:  { age: 1, name: 'Light Cavalry', plural: 'Light Cavalry', cls: 'cav', hp: 120, spd: 5.8, dmg: 8, rng: 1.6, cd: 1.0, arm: 1, cost: { f: 80 }, time: 14, rad: .7, acq: 11, horse: 1, melee: 1, vsArch: 2.2, desc: 'Cheap, very fast raiders. 2× damage vs archers' },
   horsearcher: { age: 2, name: 'Horse Archer', plural: 'Horse Archers', cls: 'cav', hp: 100, spd: 5.0, dmg: 7, rng: 7.5, cd: 1.7, arm: 1, cost: { f: 40, g: 70 }, time: 18, rad: .7, acq: 10, horse: 1, ranged: 1, desc: 'Mounted archer: shoot and run' },
   catapult:  { age: 2, name: 'Catapult', plural: 'Catapults', cls: 'siege', hp: 170, spd: 1.6, dmg: 45, rng: 15, cd: 5.5, arm: 4, cost: { w: 160, g: 120 }, time: 28, rad: .95, acq: 15, ranged: 1, stone: 1, vsBld: 3, splash: 1.8, desc: 'Hurls rocks: wrecks buildings and packed troops' },
   // unique units (one per civilization)
@@ -20,7 +20,7 @@ export const UD = {
   fishboat:  { name: 'Fishing Boat', plural: 'Fishing Boats', cls: 'ship', hp: 80, spd: 3.3, dmg: 0, rng: 0, cd: 1, arm: 0, cost: { w: 60 }, time: 12, rad: .9, acq: 0, ship: 1, fisher: 1, desc: 'Catches fish and brings it to a Dock' },
   transport: { name: 'Transport Ship', plural: 'Transport Ships', cls: 'ship', hp: 160, spd: 3.5, dmg: 0, rng: 0, cd: 1, arm: 1, cost: { w: 100 }, time: 16, rad: 1.3, acq: 0, ship: 1, carry: 10, desc: 'Carries up to 10 units across water' },
   warship:   { age: 1, name: 'Warship', plural: 'Warships', cls: 'ship', hp: 230, spd: 3.3, dmg: 9, rng: 9.5, cd: 1.5, arm: 2, cost: { w: 120, g: 50 }, time: 22, rad: 1.3, acq: 11, ship: 1, ranged: 1, desc: 'Archers on a fast galley; attacks ships and the shore' },
-  hero:      { name: 'Commander', plural: 'Commanders', cls: 'hero', hp: 620, spd: 3.6, dmg: 28, rng: 1.6, cd: .85, arm: 4, cost: null, time: 0, rad: .5, acq: 10, hero: 1, melee: 1, scale: 1.15, desc: 'Your hero. Ride him into battle' },
+  hero:      { name: 'Commander', plural: 'Commanders', cls: 'hero', hp: 620, spd: 3.6, dmg: 28, rng: 1.6, cd: .85, arm: 4, cost: null, time: 0, rad: .5, acq: 10, hero: 1, melee: 1, scale: 1.15, desc: 'Your hero. Soldiers near the Commander fight harder and rally' },
   herohorse: { name: 'Commander', plural: 'Commanders', cls: 'hero', hp: 620, spd: 5.6, dmg: 28, rng: 1.9, cd: .85, arm: 4, cost: null, time: 0, rad: .7, acq: 10, hero: 1, melee: 1, horse: 1, scale: 1.1, desc: 'Your Commander on horseback' },
 };
 

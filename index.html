@@ -21,13 +21,13 @@
 </script>
 <script>
   // ===== Game version: bump on every change you publish (see CLAUDE.md). =====
-  window.BF_VERSION = '0.11.1';
+  window.BF_VERSION = '0.12.0';
   // Every game file is loaded as file.js?v=VERSION so phones never mix old and new files from the browser cache.
   // (On localhost a timestamp is used instead, so edits show up immediately while developing.)
   (function () {
     var local = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
     var v = local ? Date.now() : window.BF_VERSION;
-    var mods = ['main', 'world', 'util', 'geo', 'data', 'models', 'game', 'path', 'ai', 'rts', 'pov', 'hud', 'textures', 'assets', 'effects', 'audio', 'gltfmodels', 'save', 'tutorial'];
+    var mods = ['main', 'world', 'util', 'geo', 'data', 'models', 'game', 'path', 'ai', 'rts', 'pov', 'hud', 'textures', 'assets', 'effects', 'audio', 'gltfmodels', 'save', 'tutorial', 'battle'];
     var imports = {
       'three': 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js',
       'three/addons/': 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/'
@@ -93,6 +93,7 @@
   <div id="povhelp"></div>
 </div>
 
+<div id="battlebar" class="hide"></div>
 <div id="toasts"></div>
 <div id="tutor" class="hide"><div class="tn"></div><div class="tt"></div><button class="btn sm" id="bTutSkip">Skip tutorial</button></div>
 

@@ -58,6 +58,7 @@ export class HUD {
 
   // ---------------- selection panel ----------------
   updateSel() {
+    const bb = document.getElementById('battlebar'), F = this.a.game?.field; bb.classList.toggle('hide', !F || this.a.mode !== 'rts'); document.body.classList.toggle('battle', !!F && this.a.mode === 'rts'); if (F) bb.innerHTML = F.hudText();
     const sel = this.a.sel, name = $('selname'), desc = $('seldesc'), q = $('selq');
     q.innerHTML = '';
     if (!sel.length) { name.textContent = this.a.game.mode === 'battle' ? 'Select your soldiers' : 'Nothing selected'; desc.innerHTML = this.a.hint(); return; }
@@ -80,12 +81,14 @@ export class HUD {
     if (sel.length === 1) {
       name.textContent = (e.team ? 'Enemy ' : '') + e.d.name;
       let t = `HP ${Math.ceil(e.hp)}/${e.maxHp}`;
+      if (e.morale !== undefined && e.d.acq && !e.d.hero && !e.d.ship) t += e.routed ? ' · FLEEING!' : ` · Morale ${Math.round(e.morale)}%` + (e.inspired ? ' (inspired)' : '');
       if (e.team === 0) { let task = TASK[e.task.type] || ''; if (e.task.type === 'gather') task = e.task.res.fish ? 'Fishing' : `Gathering ${RN[e.task.res.rt]}`; if (e.cargo) task += ` · carrying ${e.cargo.length}/${e.d.carry} troops`; t += ` · ${task}`; if (e.carry) t += ` (carrying ${e.carry.amt | 0} ${RN[e.carry.rt]})`; }
       desc.textContent = t; return;
     }
     const counts = {}; for (const u of sel) counts[u.type] = (counts[u.type] || 0) + 1;
     name.textContent = `${sel.length} units`;
-    desc.textContent = Object.entries(counts).map(([k, c]) => `${c} ${c > 1 ? UD[k].plural : UD[k].name}`).join(', ');
+    const mil = sel.filter(u => u.morale !== undefined && u.d.acq && !u.d.hero), fl = mil.filter(u => u.routed).length;
+    desc.textContent = Object.entries(counts).map(([k, c]) => `${c} ${c > 1 ? UD[k].plural : UD[k].name}`).join(', ') + (mil.length ? ` · Morale ${Math.round(mil.reduce((s, u) => s + u.morale, 0) / mil.length)}%` + (fl ? ` · ${fl} fleeing` : '') : '');
   }
 
   // ---------------- command card ----------------

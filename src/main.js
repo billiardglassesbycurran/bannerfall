@@ -4,6 +4,7 @@ import { SIZE, BASES, WL, CLOUDS, buildDistant, buildTerrain, buildWater, buildS
 import { BD, DIFF, MODES, CIVS, CIV_LIST, UD, TECH, AGES } from './data.js';
 import { FX } from './effects.js';
 import { Tutorial } from './tutorial.js';
+import { Field } from './battle.js';
 import { saveGame, loadSave, applySave, saveInfo, clearSave } from './save.js';
 import { Sound } from './audio.js';
 import { Figures, ghostObject } from './models.js';
@@ -215,6 +216,7 @@ app.hint = () => {
 // ---------------- modes ----------------
 function setupGame(mode, diff, civ = 'franks', enemyCiv) {
   const tut = mode === 'tutorial'; if (tut) { mode = 'skirmish'; diff = 0; }
+  if (app.game?.field) for (const f of app.game.field.flags) f.mesh.removeFromParent();
   app.tut = null; document.getElementById('tutor').classList.add('hide');
   if (!CIVS[civ]) civ = 'franks';
   if (!CIVS[enemyCiv]) { const others = CIV_LIST.filter(c => c !== civ); enemyCiv = others[Math.floor(Math.random() * others.length)]; }
@@ -243,6 +245,8 @@ function setupGame(mode, diff, civ = 'franks', enemyCiv) {
     if (team === 0) { if (t.toAge) { app.toast(`Your people enter the ${AGES[t.toAge]}! New buildings, units and upgrades unlocked.`, 5); app.sfx('fanfare'); for (const b of g.blds) if (b.alive && b.team === 0) fx.dust(b.x, b.y, b.z, 6, b.size * .5); } else { app.toast(`${t.name} researched.`, 2.5); app.sfx('chime'); } }
     else if (t.toAge) app.toast(`The enemy has reached the ${AGES[t.toAge]}.`, 3);
   };
+  g.onCharge = (u, e) => { fx.dust(e.x, e.y, e.z, 8, .8); app.sfx('thud', e.x, e.z, 1); };
+  g.onCapture = (f, side) => app.sfx(side === 0 ? 'fanfare' : 'horn');
   g.onHero = h => { if (app.mode === 'rts') rts.lookAt(h.x, h.z); };
   const [B0] = BASES;
   if (mode === 'battle') {
@@ -258,6 +262,7 @@ function setupGame(mode, diff, civ = 'franks', enemyCiv) {
     army(0, 46, 82, 1); army(1, 82, 46, [.75, 1, 1.3][diff]);
     g.hero = g.spawnUnit(0, 'hero', 40, 88); g.spawnUnit(1, 'hero', 88, 40);
     for (const u of g.units) u.yaw = u.team === 0 ? Math.PI * .75 : -Math.PI * .25;
+    g.field = new Field(g, scene, [30, [20, 28, 36][diff]]);
     rts.lookAt(52, 78); rts.dist = rts.distT = 34;
   } else {
     const hall = g.placeBuilding(0, 'hall', B0.x - 2, B0.z - 2, true);

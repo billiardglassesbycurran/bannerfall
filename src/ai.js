@@ -134,15 +134,42 @@ export class AI {
     for (const u of mil) if (u.task.type === 'idle' && dist(u, hall) > 30) { const t = this.attackTarget(u); if (t) g.amove(u, t.x, t.z); }
   }
 
-  // ---------- battle: just fight ----------
+  // ---------- battle: real tactics ----------
+  // Infantry hold a line and advance on the banners, archers stay behind the line, cavalry ride around the flank to
+  // hit the enemy's archers, siege stays at the back, the Commander rides just behind the line to inspire it.
   battle() {
-    const g = this.g, mine = this.my(), foes = g.units.filter(u => u.alive && u.team !== this.team);
+    const g = this.g, F = g.field, mine = this.my(u => u.d.acq && !u.d.ship), foes = g.units.filter(u => u.alive && u.team !== this.team && u.d.acq && !u.d.ship);
     if (!mine.length || !foes.length) return;
-    const cx = mine.reduce((s, u) => s + u.x, 0) / mine.length, cz = mine.reduce((s, u) => s + u.z, 0) / mine.length;
-    const close = foes.some(f => Math.hypot(f.x - cx, f.z - cz) < 30);
-    if (!this.engaged && (close || g.time > 25)) { this.engaged = true; g.toast('The enemy advances!'); }
+    const ctr = l => ({ x: l.reduce((s, u) => s + u.x, 0) / l.length, z: l.reduce((s, u) => s + u.z, 0) / l.length });
+    const C = ctr(mine), near = (p, l) => { let b = null, bd = 1e9; for (const u of l) { const d = dist(u, p); if (d < bd) { bd = d; b = u; } } return b; };
+    if (!this.engaged && (foes.some(f => dist(f, C) < 26) || g.time > 40)) { this.engaged = true; g.toast('The enemy advances!'); }
+    const busy = u => u.routed || (u.task.type === 'attack' && u.task.t.alive && dist(u, u.task.t) < 14);
     if (!this.engaged) return;
-    for (const u of mine) if (u.task.type === 'idle') { let t = null, bd = 1e9; for (const f of foes) { const d = dist(f, u); if (d < bd) { bd = d; t = f; } } if (t) g.amove(u, t.x, t.z); }
+    if ((this.tick = (this.tick || 0) + 1) % 4) { for (const u of mine) if (u.task.type === 'idle' && !u.routed) { const f = near(u, foes); if (f && dist(f, u) < 25) g.amove(u, f.x, f.z); } return; }
+    const role = u => u.d.hero ? 'hero' : u.d.stone ? 'siege' : u.d.horse ? 'cav' : u.d.ranged ? 'ranged' : 'melee';
+    const R = { melee: [], ranged: [], cav: [], siege: [], hero: [] }; for (const u of mine) R[role(u)].push(u);
+    const M = R.melee.length ? ctr(R.melee) : C;
+    let obj = ctr(foes);
+    if (F) { const want = F.flags.filter(f => f.own !== this.team).sort((a, b) => dist(a, M) - dist(b, M))[0]; if (want) obj = want; }
+    const nf = near(M, foes); if (nf && dist(nf, M) < 20) obj = nf; // the enemy is close: fight them, not the flag
+    let dx = obj.x - M.x, dz = obj.z - M.z; const L = Math.hypot(dx, dz) || 1; dx /= L; dz /= L; const px = -dz, pz = dx;
+    const step = Math.min(10, L), fx = M.x + dx * step, fz = M.z + dz * step;
+    const line = (list, back) => {
+      const free = list.filter(u => !busy(u)).sort((a, b) => ((a.x - M.x) * px + (a.z - M.z) * pz) - ((b.x - M.x) * px + (b.z - M.z) * pz));
+      const per = Math.max(8, Math.ceil(free.length / 2));
+      free.forEach((u, i) => { const c = i % per - (Math.min(per, free.length) - 1) / 2, r = i / per | 0; g.amove(u, fx + px * c * 1.25 - dx * (back + r * 1.4), fz + pz * c * 1.25 - dz * (back + r * 1.4)); });
+    };
+    line(R.melee, 0); line(R.ranged, 4.5); line(R.siege, 10);
+    for (const h of R.hero) if (!busy(h)) g.amove(h, fx - dx * 2.5, fz - dz * 2.5);
+    // cavalry: go around the side and hunt archers (on Easy they just charge in)
+    const archers = foes.filter(f => f.d.ranged && !f.d.horse);
+    const side = this.flankSide || (this.flankSide = Math.random() < .5 ? 1 : -1);
+    for (const u of R.cav) {
+      if (busy(u)) continue;
+      if (!archers.length || g.diff === 0) { const f = near(u, foes); g.amove(u, f.x, f.z); continue; }
+      const A = ctr(archers), wx = A.x + px * side * 13 - dx * 4, wz = A.z + pz * side * 13 - dz * 4;
+      if (dist(u, A) > 11 && Math.hypot(u.x - wx, u.z - wz) > 5) g.moveTo(u, wx, wz); else g.attack(u, near(u, archers));
+    }
   }
 
   // ---------- survival: waves ----------

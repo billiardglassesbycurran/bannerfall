@@ -13,6 +13,16 @@ export const bldAt = new Array(N * N).fill(null);
 const wakeGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
 
 let nextId = 1;
+const PACE = .5, TAU = Math.PI * 2;
+/** Rock-paper-scissors bonuses on top of spearmen's 3x vs horses. */
+function counterMul(a, t) {
+  let m = 1;
+  if (a.horse && !a.ranged && t.cls === 'arch') m *= a.vsArch || 1.6;              // cavalry run down archers
+  if (a.cls === 'arch' && !a.horse && t.vsHorse) m *= 1.3;                         // arrows thin out spear blocks
+  if (a.cls === 'inf' && !a.vsHorse && t.vsHorse) m *= 1.3;                        // swordsmen get inside the spears
+  if (a.cls === 'arch' && t.horse && !t.ranged && !a.bolt) m *= .8;                // armoured riders shrug off arrows (bolts pierce)
+  return m;
+}
 export class Game {
   constructor({ scene, figures, Q, mode, diff, civs = ['franks', 'franks'] }) {
     this.civKeys = civs; this.civ = civs.map(k => CIVS[k]); this.statCache = new Map();
@@ -125,7 +135,7 @@ export class Game {
     const u = {
       id: nextId++, kind: 'unit', type, team, d, x: p.x, z: p.z, y: heightAt(p.x, p.z), yaw: team === 0 ? Math.PI * .75 : -Math.PI * .25,
       hp: d.hp, maxHp: d.hp, task: { type: 'idle' }, path: null, carry: null, cd: 0, swingT: 1, phase: Math.random() * 6, speedNow: 0,
-      batch, slot: batch.alloc(), alive: true, cargo: d.carry ? [] : null, boarded: null, dead: false, deathT: 0, selected: false, possessed: false, scale: d.scale || 1, think: Math.random() * .5,
+      batch, slot: batch.alloc(), alive: true, cargo: d.carry ? [] : null, boarded: null, dead: false, deathT: 0, selected: false, possessed: false, scale: d.scale || 1, think: Math.random() * .5, morale: 100, routed: 0, run: 0, px: p.x, pz: p.z,
     };
     this.units.push(u); return u;
   }
@@ -202,7 +212,7 @@ export class Game {
   has(team, type) { return this.blds.some(b => b.alive && b.built && b.team === team && b.type === type); }
 
   // ---------------- orders ----------------
-  setTask(u, task) { u.task = task; u.path = null; u.repath = 0; }
+  setTask(u, task) { if (task.type !== 'idle') u.faceYaw = null; u.task = task; u.path = null; u.repath = 0; }
   moveTo(u, x, z) { this.setTask(u, { type: 'move', x, z }); }
   attack(u, t, resume) { this.setTask(u, { type: 'attack', t, resume }); }
   amove(u, x, z) { this.setTask(u, { type: 'amove', x, z }); }
@@ -227,7 +237,9 @@ export class Game {
   farm(u, b) { if (b.farmer && b.farmer !== u && b.farmer.alive && b.farmer.task.b === b) return false; b.farmer = u; this.setTask(u, { type: 'farm', b }); return true; }
   /** Right-click / tap command for a group. tgt is a unit, building, resource or null (ground). */
   command(sel, tgt, x, z) {
-    sel = sel.filter(u => u.alive && !u.possessed); if (!sel.length) return;
+    sel = sel.filter(u => u.alive && !u.possessed);
+    if (sel.some(u => u.routed) && sel[0].team === 0) { if (sel.every(u => u.routed)) this.toast('They are fleeing and won\'t listen! Bring your Commander close to rally them.'); sel = sel.filter(u => !u.routed); }
+    if (!sel.length) return;
     if (tgt && tgt.team !== undefined && tgt.team !== sel[0].team) { for (const u of sel) this.attack(u, tgt); return 'attack'; }
     if (tgt && tgt.kind === 'unit' && tgt.d.carry && tgt.team === sel[0].team) { // board a transport ship
       const land = sel.filter(u => !u.d.ship);
@@ -257,14 +269,19 @@ export class Game {
     const cols = Math.ceil(Math.sqrt(sel.length * 1.6)), sp = 1.15;
     const walk0 = this.walkFor(sel[0]);
     sel.sort((p, q) => ((p.x - cx) * rx + (p.z - cz) * rz) - ((q.x - cx) * rx + (q.z - cz) * rz));
-    // melee in front, ranged behind
-    const ordered = [...sel.filter(u => !u.d.ranged), ...sel.filter(u => u.d.ranged)];
-    ordered.forEach((u, i) => {
-      const c = i % cols - (cols - 1) / 2, r = Math.floor(i / cols);
-      let tx = x + rx * c * sp - fx * r * sp, tz = z + rz * c * sp - fz * r * sp;
+    // battle line: infantry in front, archers behind, siege at the back, cavalry out on the wings; all face the march direction
+    const cav = sel.filter(u => u.d.horse && !u.d.hero && !u.d.ship), foot = sel.filter(u => !cav.includes(u));
+    const ordered = [...foot.filter(u => !u.d.ranged), ...foot.filter(u => u.d.ranged && !u.d.stone), ...foot.filter(u => u.d.stone)];
+    const fcols = Math.max(1, Math.min(ordered.length, cav.length ? Math.ceil(Math.sqrt(ordered.length * 3)) : Math.ceil(Math.sqrt(ordered.length * 2.2))));
+    const slots = ordered.map((u, i) => [u, i % fcols - (fcols - 1) / 2, Math.floor(i / fcols)]);
+    cav.forEach((u, i) => slots.push([u, (i % 2 ? -1 : 1) * ((fcols - 1) / 2 + 1.6 + Math.floor(i / 2) % 3 * 1.3), Math.floor(i / 6) * 1.2]));
+    void cols;
+    slots.forEach(([u, c, r]) => {
+      const csp = u.d.horse ? 1 : sp;
+      let tx = x + rx * c * csp - fx * r * sp, tz = z + rz * c * csp - fz * r * sp;
       const wk = this.walkFor(u); void walk0;
       if (!wk(tx | 0, tz | 0)) { const p = nearestWalkable(tx, tz, u.d.ship ? 12 : 4, wk) || { x, z }; tx = p.x; tz = p.z; }
-      this.moveTo(u, tx, tz);
+      this.moveTo(u, tx, tz); u.task.face = a;
     });
   }
   train(b, type) {
@@ -283,14 +300,53 @@ export class Game {
     return b;
   }
 
+  // ---------------- morale ----------------
+  /** Lower a soldier's morale; at zero they break and flee. Commanders, peasants, ships and siege never rout. */
+  shake(u, amt) {
+    if (!u.alive || u.d.hero || !u.d.acq || u.d.ship || u.d.stone || u.possessed || u.routed) return;
+    u.morale -= amt;
+    if (u.morale <= 0) {
+      u.morale = 0; u.routed = this.time + 7; u.path = null;
+      const e = this.nearestEnemy(u, 14), home = this.homeOf(u.team);
+      let ax = home.x - u.x, az = home.z - u.z; if (e) { ax = u.x - e.x + ax * .02; az = u.z - e.z + az * .02; }
+      const l = Math.hypot(ax, az) || 1, p = nearestWalkable(u.x + ax / l * 14, u.z + az / l * 14, 8) || home;
+      this.setTask(u, { type: 'move', x: p.x, z: p.z }); this.onRout?.(u);
+      if (u.team === 0 && this.time - (this.lastRoutWarn || 0) > 8) { this.lastRoutWarn = this.time; this.toast(`Your ${u.d.plural} are fleeing! Bring your Commander close to rally them.`); this.onAlert?.(u.x, u.z); }
+    }
+  }
+  homeOf(team) { const h = this.blds.find(b => b.alive && b.team === team && b.type === 'hall'); return h ? { x: h.x, z: h.z } : this.field ? this.field.spawn[team] : BASES[team]; }
+  /** Once a second: morale recovers out of combat, faster near your Commander (who also inspires and rallies). */
+  moraleTick() {
+    const heroes = this.units.filter(u => u.alive && u.d.hero);
+    for (const u of this.units) {
+      if (!u.alive || u.morale === undefined) continue;
+      const h = heroes.find(h => h.team === u.team && Math.hypot(h.x - u.x, h.z - u.z) < 11);
+      u.inspired = !!h && !u.d.hero;
+      if (u.routed) { if (this.time > u.routed || (h && this.time > u.routed - 5)) { u.routed = 0; u.morale = h ? 60 : 40; if (u.task.type === 'move') this.setTask(u, { type: 'idle' }); } continue; }
+      const calm = this.time - (u.hitT || -99) > 4;
+      u.morale = Math.min(100, u.morale + (calm ? 5 : .5) + (h ? 4 : 0));
+    }
+  }
   // ---------------- damage ----------------
   damage(t, dmg, src) {
     if (!t.alive) return;
     let m = 1; if (src?.d?.vsHorse && t.d.horse) m = 3;
     if (t.kind === 'bld' && src?.d?.ranged) m = src.d.vsBld || .3;
     if (t.kind === 'unit' && src?.d?.vsBld) m = .7; // catapults are clumsy against single soldiers
+    let rear = false;
+    if (t.kind === 'unit' && src?.kind === 'unit') {
+      if (!src.possessed) m *= PACE; // fights last longer, so manoeuvre matters
+      m *= counterMul(src.d, t.d);
+      if (!src.d.ranged && !t.d.ship) { // flanking: hits from the side or behind hurt more
+        let df = Math.abs(((Math.atan2(src.x - t.x, src.z - t.z) - t.yaw) % TAU + TAU * 1.5) % TAU - Math.PI);
+        if (df > 2.2) { m *= 1.5; rear = true; } else if (df > 1.25) m *= 1.2;
+      }
+      const dh = (src.y || 0) - (t.y || 0); if (dh > 1.2) m *= 1.25; else if (dh < -1.2) m *= .85; // high ground
+      if (t.routed) m *= 1.3; if (src.inspired) m *= 1.12; if (t.braced && src.d.horse && !src.d.ranged) m *= .6;
+    }
     const arm = Math.max(0, (t.d.arm || 0) - (src?.d?.pierce || 0));
     const amt = Math.max(1, dmg * m - arm);
+    if (t.kind === 'unit' && t.morale !== undefined) this.shake(t, amt / t.maxHp * 55 + (rear ? 6 : 0));
     t.hp -= amt; t.hitT = this.time; this.onHit?.(t, src, amt);
     if (t.team === 0 && t.kind === 'unit' && t.type !== 'peasant' && this.time - (this.lastArmyPing || 0) > 6) { this.lastArmyPing = this.time; this.onAlert?.(t.x, t.z); }
     if (t.kind === 'unit' && src && src.alive && !t.possessed) {
@@ -306,6 +362,8 @@ export class Game {
     if (t.kind === 'unit') {
       if (t.cargo?.length) { for (const c of t.cargo) { c.boarded = null; c.x = t.x; c.z = t.z; this.kill(c); } t.cargo = []; }
       for (const o of this.units) if (o.onShip === t) { const p = nearestWalkable(t.x, t.z, 30); if (p) { o.x = p.x; o.z = p.z; } o.onShip = null; o.yOver = null; this.onShipLost?.(o); }
+      if (t.d.acq) this.unitsNear(t.x, t.z, 9, o => { if (o.alive && o !== t && o.morale !== undefined) { if (o.team === t.team) this.shake(o, t.d.hero ? 30 : 7); else o.morale = Math.min(100, o.morale + 3); } });
+      if (t.d.hero) for (const o of this.units) if (o.alive && o.team === t.team && o !== t) this.shake(o, 14);
       t.dead = true; t.deathT = 0; t.selected = false; if (t.ring) { t.ring.removeFromParent(); t.ring = null; }
       if (t === this.hero) { this.heroRespawn = this.mode === 'battle' ? 0 : 30; this.toast(this.heroRespawn ? 'Your Commander has fallen! Back in 30s.' : 'Your Commander has fallen!'); }
       this.onUnitDeath?.(t);
@@ -328,7 +386,10 @@ export class Game {
     if (this.over) return;
     const alive = t => this.units.some(u => u.alive && u.team === t);
     let res = null;
-    if (this.mode === 'battle') { if (!alive(1)) res = 'win'; else if (!alive(0)) res = 'lose'; }
+    if (this.mode === 'battle') {
+      for (const t of [0, 1]) if (!alive(t) && this.field?.reserves[t] > 0 && !this.over) this.field.lastStand(t); // reserves rush in before the end
+      if (!alive(1) || this.field?.broken === 1) res = 'win'; else if (!alive(0) || this.field?.broken === 0) res = 'lose';
+    }
     else {
       if (this.T[0].hallLost) res = 'lose';
       else if (this.mode === 'skirmish' && this.T[1].hallLost) res = 'win';
@@ -395,17 +456,20 @@ export class Game {
   // ---------------- per-unit AI ----------------
   updateUnit(u, dt) {
     u.cd -= dt; u.swingT += dt; u.speedNow = 0; u.think -= dt;
+    { const mv = Math.hypot(u.x - u.px, u.z - u.pz); u.px = u.x; u.pz = u.z; u.run = mv > u.d.spd * dt * .55 ? Math.min(20, u.run + mv) : Math.max(0, u.run - dt * 5); }
+    u.braced = u.d.vsHorse && u.task.type !== 'move' && u.run < .5;
     if (u.d.regen && u.hp < u.maxHp) u.hp = Math.min(u.maxHp, u.hp + u.d.regen * dt);
     if (u.possessed) return;
     const t = u.task;
     switch (t.type) {
       case 'idle':
-        if (u.d.acq && u.think <= 0) {
+        if (u.faceYaw != null) { this.face(u, u.faceYaw, dt); if (Math.abs(angDiff(u.yaw, u.faceYaw)) < .05) u.faceYaw = null; }
+        if (u.d.acq && u.think <= 0 && !u.routed) {
           u.think = .4; const st = u.stance || 'aggressive', e = this.nearestEnemy(u, st === 'hold' ? u.d.rng + 1 : u.d.acq);
           if (e) this.setTask(u, { type: 'attack', t: e, auto: true, home: { x: u.x, z: u.z } });
         }
         break;
-      case 'move': if (this.goTo(u, t.x, t.z, 0, dt)) this.setTask(u, { type: 'idle' }); break;
+      case 'move': if (this.goTo(u, t.x, t.z, 0, dt)) { this.setTask(u, { type: 'idle' }); u.faceYaw = t.face; } break;
       case 'amove': case 'follow': {
         if (u.d.acq && u.think <= 0) { u.think = .4; const e = this.nearestEnemy(u, u.d.acq, t.type === 'amove'); if (e) { this.attack(u, e, t); break; } }
         if (t.type === 'follow') {
@@ -424,7 +488,14 @@ export class Game {
         if (u.stance === 'defensive' && t.auto && t.home && Math.hypot(u.x - t.home.x, u.z - t.home.z) > 9) { this.moveTo(u, t.home.x, t.home.z); break; }
         if (this.reachDist(u, e) <= rng) {
           u.path = null; this.face(u, Math.atan2(e.x - u.x, e.z - u.z), dt);
-          if (u.cd <= 0) { u.cd = u.d.cd; u.swingT = 0; if (u.d.ranged) this.shoot(u, e, u.d.dmg); else this.damage(e, u.d.dmg, u); }
+          if (u.cd <= 0) {
+            u.cd = u.d.cd; u.swingT = 0;
+            if (u.d.ranged) { this.shoot(u, e, u.d.dmg); if (e.kind === 'unit' && !e.d.ranged && dist(u, e) < 2.2 && !u.d.horse) u.cd *= 1.7; } // archers are clumsy up close
+            else {
+              const charge = u.d.horse && u.run > 6 && e.kind === 'unit'; // cavalry charge: a running start hits twice as hard and shakes the line
+              this.damage(e, u.d.dmg * (charge ? 2 : 1), u); if (charge) { u.run = 0; this.shake(e, 15); this.onCharge?.(u, e); }
+            }
+          }
         } else {
           // chase; ranged units give up chasing far targets when idle-acquired
           if (e.kind === 'unit' && !t.resume && dist(u, e) > (u.d.acq || 8) * 2.2 && t.auto) { this.setTask(u, { type: 'idle' }); break; }
@@ -563,6 +634,8 @@ export class Game {
     if (this.over && this.over !== 'continue') { /* keep animating */ }
     this.time += dt;
     this.rebuildHash();
+    if ((this.moraleT = (this.moraleT || 0) + dt) >= 1) { this.moraleT = 0; this.moraleTick(); }
+    this.field?.update(dt);
     for (const b of this.blds) b.nbNow = 0;
     for (const u of this.units) if (u.alive) { if (u.boarded) { u.x = u.boarded.x; u.z = u.boarded.z; continue; } this.updateUnit(u, dt); }
     // separation
