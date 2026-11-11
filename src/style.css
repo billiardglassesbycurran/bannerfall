@@ -127,3 +127,16 @@ html, body { margin:0; height:100%; overflow:hidden; overscroll-behavior:none; b
 .btn.tech { background:linear-gradient(#3a4a5a,#1e2a36); border-color:#8ab4d8; }
 
 #bAct { width:70px; height:70px; font-size:14px; background:linear-gradient(#2e5a3a,#163020); border-color:#9ad8a0; }
+
+label.set { display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:14px; min-height:40px; }
+label.set input[type=range] { width:46%; accent-color:#d8b45a; touch-action:pan-x; }
+label.set input[type=checkbox] { width:24px; height:24px; accent-color:#d8b45a; }
+body.bigui #bottom, body.bigui #povact, body.bigui #povbar { zoom:1.12; }
+
+#tutor { position:fixed; left:50%; transform:translateX(-50%); top:calc(42px + var(--st)); width:min(560px, 70vw); padding:8px 12px 8px; z-index:8;
+  background:rgba(20,30,20,.92); border:2px solid #9ad8a0; border-radius:10px; font-size:13px; line-height:1.4; box-shadow:0 4px 18px rgba(0,0,0,.5); }
+#tutor .tn { font-size:10px; color:#9ad8a0; letter-spacing:1px; text-transform:uppercase; } #tutor .tt { margin:2px 0 6px; }
+#tutor #bTutSkip { min-height:30px; font-size:11px; float:right; margin-top:-4px; }
+.btn.glow { animation:glow 1s ease-in-out infinite alternate; border-color:#b8ffb0; }
+@keyframes glow { from { box-shadow:0 0 0 2px rgba(150,255,140,.3), 0 0 6px rgba(150,255,140,.4); } to { box-shadow:0 0 0 3px rgba(150,255,140,.9), 0 0 18px rgba(150,255,140,.9); } }
+@media (max-height:460px) { #tutor { font-size:11.5px; top:calc(38px + var(--st)); padding:5px 10px; } }

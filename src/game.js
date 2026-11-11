@@ -162,6 +162,8 @@ export class Game {
     this.setBuildVisual(b);
     this.blds.push(b); this.recount(); return b;
   }
+  /** Remove a building without rubble or events (used when loading a save). */
+  unplace(b) { b.alive = false; b.mesh.removeFromParent(); b.scaffold?.removeFromParent(); b.ring?.removeFromParent(); for (const [i, v] of b.prev) { blocked[i] = v; bldAt[i] = null; navBlock[i] = 0; } }
   setBuildVisual(b) {
     b.mesh.scale.set(1, b.built ? 1 : .12 + .88 * b.progress, 1);
     if (!b.built && !b.scaffold) { b.scaffold = new THREE.Mesh(scaffoldGeo(b.size, b.type === 'tower' ? 5 : b.size > 3 ? 3.2 : 2.2), M.vc); b.scaffold.position.copy(b.mesh.position); b.scaffold.castShadow = true; this.scene.add(b.scaffold); }
@@ -305,7 +307,7 @@ export class Game {
       if (t.cargo?.length) { for (const c of t.cargo) { c.boarded = null; c.x = t.x; c.z = t.z; this.kill(c); } t.cargo = []; }
       for (const o of this.units) if (o.onShip === t) { const p = nearestWalkable(t.x, t.z, 30); if (p) { o.x = p.x; o.z = p.z; } o.onShip = null; o.yOver = null; this.onShipLost?.(o); }
       t.dead = true; t.deathT = 0; t.selected = false; if (t.ring) { t.ring.removeFromParent(); t.ring = null; }
-      if (t === this.hero) { this.heroRespawn = this.mode === 'battle' ? 0 : 30; this.toast(this.heroRespawn ? 'Your Commander has fallen! He returns in 30s.' : 'Your Commander has fallen!'); }
+      if (t === this.hero) { this.heroRespawn = this.mode === 'battle' ? 0 : 30; this.toast(this.heroRespawn ? 'Your Commander has fallen! Back in 30s.' : 'Your Commander has fallen!'); }
       this.onUnitDeath?.(t);
     } else {
       if (t.cargo?.length) this.ungarrison(t);

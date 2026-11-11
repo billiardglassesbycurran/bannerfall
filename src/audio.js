@@ -9,12 +9,13 @@ export class Sound {
     if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return; }
     const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
     const c = this.ctx = new AC();
-    this.master = c.createGain(); this.master.gain.value = this.on ? .7 : 0;
+    this.master = c.createGain(); this.master.gain.value = this.on ? (this.vol ?? .7) : 0;
     const comp = c.createDynamicsCompressor(); this.master.connect(comp); comp.connect(c.destination);
     const len = c.sampleRate; this.noise = c.createBuffer(1, len, c.sampleRate); const d = this.noise.getChannelData(0); for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
     this.ambience();
   }
-  toggle() { this.on = !this.on; try { localStorage.setItem('bf.sound', this.on ? 'on' : 'off'); } catch { /* ignore */ } if (this.master) this.master.gain.value = this.on ? .7 : 0; return this.on; }
+  setVolume(v) { this.vol = v; if (this.master) this.master.gain.value = this.on ? .7 * v / .7 : 0; }
+  toggle() { this.on = !this.on; try { localStorage.setItem('bf.sound', this.on ? 'on' : 'off'); } catch { /* ignore */ } if (this.master) this.master.gain.value = this.on ? (this.vol ?? .7) : 0; return this.on; }
   // ---- building blocks ----
   env(g, t, a, peak, dec) { g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(peak, t + a); g.gain.exponentialRampToValueAtTime(.0001, t + a + dec); }
   tone(type, f, t, peak, dec, out, f2) { const c = this.ctx, o = c.createOscillator(), g = c.createGain(); o.type = type; o.frequency.setValueAtTime(f, t); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + dec); this.env(g, t, .004, peak, dec); o.connect(g); g.connect(out); o.start(t); o.stop(t + dec + .05); }

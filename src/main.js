@@ -3,6 +3,8 @@ import * as THREE from 'three';
 import { SIZE, BASES, WL, CLOUDS, buildDistant, buildTerrain, buildWater, buildSky, buildResources, buildBridge, buildFish, updateFish, heightAt } from './world.js';
 import { BD, DIFF, MODES, CIVS, CIV_LIST, UD, TECH, AGES } from './data.js';
 import { FX } from './effects.js';
+import { Tutorial } from './tutorial.js';
+import { saveGame, loadSave, applySave, saveInfo, clearSave } from './save.js';
 import { Sound } from './audio.js';
 import { Figures, ghostObject } from './models.js';
 import { Game } from './game.js';
@@ -105,6 +107,13 @@ const app = {
 };
 app.scene = scene; app.renderer = renderer;
 const fx = new FX(scene), sound = new Sound();
+// ---------------- player settings (saved on this device) ----------------
+const SET_DEFAULT = { look: 1, cam: 1, vol: .7, music: true, voice: true, big: false, auto: true };
+app.settings = { ...SET_DEFAULT }; try { Object.assign(app.settings, JSON.parse(localStorage.getItem('bf.settings') || '{}')); } catch { /* ignore */ }
+function applySettings() {
+  document.body.classList.toggle('bigui', !!app.settings.big); sound.setVolume?.(app.settings.vol);
+  try { localStorage.setItem('bf.settings', JSON.stringify(app.settings)); } catch { /* ignore */ }
+}
 app.fx = fx; app.sound = sound;
 // sound volume falls off with distance from what you're looking at
 const earDist = (x, z) => { const f = app.mode === 'pov' && pov.unit ? pov.unit : rts.focus; return Math.hypot(x - f.x, z - f.z); };
@@ -205,6 +214,8 @@ app.hint = () => {
 
 // ---------------- modes ----------------
 function setupGame(mode, diff, civ = 'franks', enemyCiv) {
+  const tut = mode === 'tutorial'; if (tut) { mode = 'skirmish'; diff = 0; }
+  app.tut = null; document.getElementById('tutor').classList.add('hide');
   if (!CIVS[civ]) civ = 'franks';
   if (!CIVS[enemyCiv]) { const others = CIV_LIST.filter(c => c !== civ); enemyCiv = others[Math.floor(Math.random() * others.length)]; }
   figures.styles = [CIVS[civ].style, CIVS[enemyCiv].style];
@@ -268,12 +279,14 @@ function setupGame(mode, diff, civ = 'franks', enemyCiv) {
   }
   g.recount();
   app.ai = new AI(g, 1);
+  if (tut) { g.tutorial = true; app.ai.nextAttack = 1e9; app.tut = new Tutorial(app); }
   rts.yaw = -Math.PI / 4;
   app.mode = 'rts'; app.select([]);
   $('title').classList.add('hide'); $('hud').classList.remove('hide');
-  app.toast(MODES[mode].name + ': ' + (mode === 'skirmish' ? 'destroy the enemy Town Hall!' : mode === 'battle' ? 'defeat the enemy army!' : 'survive 10 waves!'), 5);
+  if (!tut) app.toast(MODES[mode].name + ': ' + (mode === 'skirmish' ? 'destroy the enemy Town Hall!' : mode === 'battle' ? 'defeat the enemy army!' : 'survive 10 waves!'), 5);
 }
 function showEnd(res) {
+  clearSave();
   if (app.mode === 'pov') exitPOV();
   $('endT').textContent = res === 'win' ? 'VICTORY' : 'DEFEAT';
   const s = app.game.time | 0;
@@ -338,7 +351,7 @@ onBtn('bLook', () => $('end').classList.add('hide'));
 onBtn('bFs', goFullscreen);
 onBtn('bSound', () => { $('bSound').textContent = sound.toggle() ? 'Sound: on' : 'Sound: off'; });
 $('bSound').textContent = sound.on ? 'Sound: on' : 'Sound: off';
-function setPause(v) { app.paused = v; $('pause').classList.toggle('hide', !v); }
+function setPause(v) { app.paused = v; $('pause').classList.toggle('hide', !v); if (v) saveGame(app); }
 function goFullscreen() {
   const d = document;
   if (d.fullscreenElement) { d.exitFullscreen?.(); return; }
@@ -368,7 +381,23 @@ for (const b of document.querySelectorAll('[data-q]')) b.addEventListener('click
   try { localStorage.setItem('bf.quality', b.dataset.q); localStorage.setItem('bf.cfg', JSON.stringify(app.cfg)); } catch { /* ignore */ }
   reloadTo('');
 });
+onBtn('bTutSkip', () => app.tut?.skip());
 onBtn('bHelp', () => { $('help').classList.remove('hide'); });
+const openSettings = () => {
+  const S = app.settings; $('sLook').value = S.look; $('sCam').value = S.cam; $('sVol').value = S.vol; $('sMusic').checked = S.music; $('sVoice').checked = S.voice; $('sBig').checked = S.big; $('sAuto').checked = S.auto;
+  $('settings').classList.remove('hide');
+};
+onBtn('bSettings', openSettings); onBtn('bSettings2', openSettings);
+onBtn('bSetBack', () => { $('settings').classList.add('hide'); });
+for (const [id, key, num] of [['sLook', 'look', 1], ['sCam', 'cam', 1], ['sVol', 'vol', 1], ['sMusic', 'music'], ['sVoice', 'voice'], ['sBig', 'big'], ['sAuto', 'auto']])
+  $(id).addEventListener('input', e => { app.settings[key] = num ? +e.target.value : e.target.checked; applySettings(); });
+applySettings();
+// auto-pause when the app goes to the background (phone call, switching apps)
+document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(app); if (document.hidden && app.settings.auto && app.game && !app.game.over && !app.multi) setPause(true); });
+// "Install app" (Android Chrome offers this; on iPhone use Share → Add to Home Screen)
+let installEvt = null;
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; $('bInstall').classList.remove('hide'); });
+onBtn('bInstall', async () => { if (!installEvt) return; installEvt.prompt(); await installEvt.userChoice.catch(() => {}); installEvt = null; $('bInstall').classList.add('hide'); });
 onBtn('bHelpBack', () => { $('help').classList.add('hide'); });
 onBtn('bStart', () => {
   try { localStorage.setItem('bf.cfg', JSON.stringify(app.cfg)); } catch { /* ignore */ }
@@ -440,7 +469,7 @@ let menuYaw = 0;
 renderer.setAnimationLoop(() => {
   const real = Math.min(clock.getDelta(), 1 / 20), dt = app.paused ? 0 : real, t = clock.elapsedTime;
   const g = app.game;
-  if (g) { g.update(dt); app.ai.update(dt); }
+  if (g) { g.update(dt); if (!app.tut || app.tut.done) app.ai.update(dt); else if ((app.tutAi = (app.tutAi || 0) + dt) > 1) { app.tutAi = 0; app.ai.update(1.01); app.ai.nextAttack = 1e9; } app.tut?.update(); }
   updateViewOffset();
   if (app.mode === 'pov') pov.update(dt);
   else if (app.mode === 'rts') rts.update(real);
@@ -478,7 +507,11 @@ function emitEffects(dt) {
 // ---------------- boot ----------------
 $('ver').textContent = 'v' + VERSION;
 $('loading').remove();
+setInterval(() => { if (app.game && !app.paused) saveGame(app); }, 30000); // autosave
+{ const info = saveInfo(); if (info) { $('continueRow').classList.remove('hide'); const s = info.time | 0; $('contInfo').textContent = `${MODES[info.mode]?.name || ''} · ${CIVS[info.civs?.[0]]?.name || ''} · ${s / 60 | 0}:${String(s % 60).padStart(2, '0')}`; } }
+onBtn('bContinue', () => reloadTo('resume'));
 const m = /play=(\w+),(\d)(?:,(\w+))?(?:,(\w+))?/.exec(location.hash);
-if (m && MODES[m[1]]) { app.cfg = { mode: m[1], diff: +m[2], civ: m[3] || 'franks' }; setupGame(m[1], +m[2], m[3], m[4]); }
+if (location.hash === '#resume' && loadSave()) { const d = loadSave(); app.cfg = { mode: d.mode, diff: d.diff, civ: d.civs[0] }; setupGame(d.mode, d.diff, d.civs[0], d.civs[1]); applySave(app, d); app.toast('Welcome back! Your game has been restored.', 3); history.replaceState(null, '', location.pathname + location.search); }
+else if (m && MODES[m[1]]) { app.cfg = { mode: m[1], diff: +m[2], civ: m[3] || 'franks' }; setupGame(m[1], +m[2], m[3], m[4]); }
 else $('title').classList.remove('hide');
 window.bannerfall = app; // handy for debugging in the browser console

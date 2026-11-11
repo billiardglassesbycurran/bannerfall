@@ -6,6 +6,9 @@
 <meta name="theme-color" content="#1b140c">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icons/icon-192.png">
+<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
 <title>Bannerfall</title>
 <script>
   // Show any error on screen so problems are visible on a phone (no dev tools there).
@@ -18,13 +21,13 @@
 </script>
 <script>
   // ===== Game version: bump on every change you publish (see CLAUDE.md). =====
-  window.BF_VERSION = '0.10.1';
+  window.BF_VERSION = '0.11.0';
   // Every game file is loaded as file.js?v=VERSION so phones never mix old and new files from the browser cache.
   // (On localhost a timestamp is used instead, so edits show up immediately while developing.)
   (function () {
     var local = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
     var v = local ? Date.now() : window.BF_VERSION;
-    var mods = ['main', 'world', 'util', 'geo', 'data', 'models', 'game', 'path', 'ai', 'rts', 'pov', 'hud', 'textures', 'assets', 'effects', 'audio', 'gltfmodels'];
+    var mods = ['main', 'world', 'util', 'geo', 'data', 'models', 'game', 'path', 'ai', 'rts', 'pov', 'hud', 'textures', 'assets', 'effects', 'audio', 'gltfmodels', 'save', 'tutorial'];
     var imports = {
       'three': 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js',
       'three/addons/': 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/'
@@ -32,6 +35,8 @@
     mods.forEach(function (m) { imports[new URL('src/' + m + '.js', location.href).href] = new URL('src/' + m + '.js?v=' + v, location.href).href; });
     document.write('<script type="importmap">' + JSON.stringify({ imports: imports }) + '<\/script>');
     document.write('<link rel="stylesheet" href="src/style.css?v=' + v + '">');
+    // offline cache / home-screen app (not on localhost, so development always sees fresh files)
+    if (!local && 'serviceWorker' in navigator) addEventListener('load', function () { navigator.serviceWorker.register('sw.js?v=' + v).catch(function () {}); });
   })();
 </script>
 </head>
@@ -89,6 +94,7 @@
 </div>
 
 <div id="toasts"></div>
+<div id="tutor" class="hide"><div class="tn"></div><div class="tt"></div><button class="btn sm" id="bTutSkip">Skip tutorial</button></div>
 
 <!-- ============ screens ============ -->
 <div id="title" class="scr hide">
@@ -101,7 +107,8 @@
     <div id="civInfo"></div>
     <div class="row"><span class="lbl">Enemy</span><button class="btn sb" data-d="0">Squire<small>easy</small></button><button class="btn sb" data-d="1">Knight<small>normal</small></button><button class="btn sb" data-d="2">Warlord<small>hard</small></button></div>
     <div class="row"><span class="lbl">Graphics</span><button class="btn sb" data-q="low">Low</button><button class="btn sb" data-q="med">Medium</button><button class="btn sb" data-q="high">High</button></div>
-    <div class="row"><button class="btn" id="bHelp">How to play</button><button class="btn go" id="bStart">&#9876; Begin</button></div>
+    <div class="row"><button class="btn" id="bHelp">How to play</button><button class="btn" id="bSettings">Settings</button><button class="btn hide" id="bInstall">&#128242; Install app</button><button class="btn go" id="bStart">&#9876; Begin</button></div>
+    <div class="row hide" id="continueRow"><button class="btn go" id="bContinue">&#9654; Continue<small id="contInfo"></small></button></div>
   </div>
 </div>
 <div id="help" class="scr hide">
@@ -116,7 +123,20 @@
 </div>
 <div id="pause" class="scr hide">
   <h1>PAUSED</h1>
-  <div class="row"><button class="btn" id="bResume">Resume</button><button class="btn" id="bRestart">Restart</button><button class="btn" id="bQuit">Main menu</button><button class="btn" id="bFs">Fullscreen</button><button class="btn" id="bSound">Sound</button></div>
+  <div class="row"><button class="btn" id="bResume">Resume</button><button class="btn" id="bRestart">Restart</button><button class="btn" id="bQuit">Main menu</button><button class="btn" id="bFs">Fullscreen</button><button class="btn" id="bSound">Sound</button><button class="btn" id="bSettings2">Settings</button></div>
+</div>
+<div id="settings" class="scr hide">
+  <div class="panel text">
+    <h3 style="margin:0;text-align:center;color:var(--gold2)">Settings</h3>
+    <label class="set">Look sensitivity (3rd person) <input type="range" id="sLook" min="0.4" max="2" step="0.1"></label>
+    <label class="set">Camera speed (view from above) <input type="range" id="sCam" min="0.4" max="2" step="0.1"></label>
+    <label class="set">Volume <input type="range" id="sVol" min="0" max="1" step="0.05"></label>
+    <label class="set">Music <input type="checkbox" id="sMusic"></label>
+    <label class="set">Unit voices <input type="checkbox" id="sVoice"></label>
+    <label class="set">Bigger buttons <input type="checkbox" id="sBig"></label>
+    <label class="set">Pause when the game is in the background <input type="checkbox" id="sAuto"></label>
+    <div class="row"><button class="btn" id="bSetBack">&#8592; Done</button></div>
+  </div>
 </div>
 <div id="end" class="scr hide">
   <h1 id="endT">VICTORY</h1><h2 id="endS"></h2>

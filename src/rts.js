@@ -31,7 +31,7 @@ export class RTSView {
     let mx = 0, my = 0;
     if (keys.KeyW || keys.ArrowUp) my += 1; if (keys.KeyS || keys.ArrowDown) my -= 1;
     if (keys.KeyD || keys.ArrowRight) mx += 1; if (keys.KeyA || keys.ArrowLeft) mx -= 1;
-    const sp = this.dist * 1.1 * dt;
+    const sp = this.dist * 1.1 * dt * (this.a.settings?.cam || 1);
     this.focus.x += (fx * my + rx * mx) * sp; this.focus.z += (fz * my + rz * mx) * sp;
     if (keys.KeyQ) { this.yaw += dt * 1.8; this.yawGoal = null; } if (keys.KeyE) { this.yaw -= dt * 1.8; this.yawGoal = null; }
     if (keys.PageUp) this.pitch = clamp(this.pitch + dt, .5, 1.45); if (keys.PageDown) this.pitch = clamp(this.pitch - dt, .5, 1.45);

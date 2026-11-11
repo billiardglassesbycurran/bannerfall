@@ -212,6 +212,7 @@ export class POVView {
   }
   act() { const a = this.action(); if (a) a.run(); }
   turn(dxPx, dyPx, k) {
+    k *= this.a.settings?.look || 1;
     if (this.a.isTouch) k *= Math.min(1.3, Math.max(.7, 900 / innerWidth)); this.yaw -= dxPx * k; this.pitch = clamp(this.pitch - dyPx * k * .8, -1.2, .9); }
 
   // ---------- pointer events ----------
