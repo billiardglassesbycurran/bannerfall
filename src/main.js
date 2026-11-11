@@ -148,9 +148,9 @@ app.order = (ent, x, z) => {
 };
 app.setPending = p => {
   app.pending = p; hud.sig = ''; hud.updateCard(); $('place').classList.remove('hide'); $('pok').classList.toggle('hide', !(p.type === 'place' && isTouch));
-  $('ptxt').textContent = p.type === 'place' ? (isTouch ? 'Tap the map to position, then ✓' : 'Click to place (Shift: place several)') : p.type === 'amove' ? 'Tap where to attack' : p.type === 'patrol' ? 'Tap the far end of the patrol' : p.type === 'repair' ? 'Tap a damaged building' : p.type === 'unload' ? 'Tap the shore to land your troops' : 'Tap the rally point';
+  $('ptxt').textContent = p.type === 'place' && p.btype === 'wall' ? (isTouch ? 'Tap where the wall starts, then ✓' : 'Click where the wall starts') : p.type === 'place' && p.btype === 'gate' ? (isTouch ? 'Tap a piece of your wall (or open ground), then ✓' : 'Click a piece of your wall (or open ground)') : p.type === 'place' ? (isTouch ? 'Tap the map to position, then ✓' : 'Click to place (Shift: place several)') : p.type === 'amove' ? 'Tap where to attack' : p.type === 'patrol' ? 'Tap the far end of the patrol' : p.type === 'repair' ? 'Tap a damaged building' : p.type === 'unload' ? 'Tap the shore to land your troops' : 'Tap the rally point';
 };
-app.cancelPending = () => { app.pending = null; if (ghost) { ghost.removeFromParent(); ghost = null; } $('place').classList.add('hide'); hud.sig = ''; hud.updateCard(); };
+app.cancelPending = () => { clearLineGhosts(); app.pending = null; if (ghost) { ghost.removeFromParent(); ghost = null; } $('place').classList.add('hide'); hud.sig = ''; hud.updateCard(); };
 
 let ghost = null;
 const ghostMats = [new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: .65, color: 0xb0ffb0, depthWrite: false }), new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: .65, color: 0xff7a6a, depthWrite: false })];
@@ -159,16 +159,50 @@ app.startPlace = type => {
   ghost = ghostObject(type, app.game.look(0), ghostMats[0]); scene.add(ghost);
   const p = rts.pickGround(innerWidth / 2, innerHeight * .42); if (p) moveGhost(p.x, p.z);
 };
+/** Cells of a wall line from a to b, stepping only sideways or forwards so there are no diagonal gaps. */
+function wallCells(a, b) {
+  const out = [[a.cx, a.cz]], ldx = b.cx - a.cx, ldz = b.cz - a.cz, L = Math.hypot(ldx, ldz) || 1, n = Math.abs(ldx) + Math.abs(ldz);
+  const off = ([cx, cz]) => Math.abs((cx - a.cx) * ldz - (cz - a.cz) * ldx) / L; // distance from the straight line
+  let x = a.cx, z = a.cz;
+  for (let i = 0; i < n && out.length < 48; i++) {
+    const c = []; if (x !== b.cx) c.push([x + Math.sign(ldx), z]); if (z !== b.cz) c.push([x, z + Math.sign(ldz)]);
+    [x, z] = c.length > 1 && off(c[1]) < off(c[0]) ? c[1] : c[0]; out.push([x, z]);
+  }
+  return out;
+}
+let lineGhosts = [];
+function clearLineGhosts() { for (const m of lineGhosts) m.removeFromParent(); lineGhosts = []; }
+function showWallLine(p) {
+  clearLineGhosts(); if (!p.a) return;
+  const cells = wallCells(p.a, { cx: p.cx, cz: p.cz }); p.cells = cells;
+  let w = app.game.T[0].w; const cost = BD.wall.cost.w;
+  for (const [cx, cz] of cells) {
+    const ok = app.game.canPlace('wall', cx, cz) && w >= cost; if (ok) w -= cost;
+    const m = ghostObject('wall', { ...app.game.look(0), conn: 5 }, ghostMats[ok ? 0 : 1]); m.position.set(cx + .5, heightAt(cx + .5, cz + .5) + .05, cz + .5); scene.add(m); lineGhosts.push(m);
+  }
+  $('ptxt').textContent = `${cells.length} wall pieces · ${cells.length * cost} wood` + (isTouch ? ' · tap to move the end, then ✓' : ' · click to build');
+}
 function moveGhost(x, z) {
   const p = app.pending; if (!p || p.type !== 'place' || !ghost) return;
   const s = BD[p.btype].size; p.cx = Math.round(x - s / 2); p.cz = Math.round(z - s / 2);
   ghost.position.set(p.cx + s / 2, BD[p.btype].dock ? WL + .02 : heightAt(p.cx + s / 2, p.cz + s / 2) + .05, p.cz + s / 2);
-  p.ok = app.game.canPlace(p.btype, p.cx, p.cz); const gm = ghostMats[p.ok ? 0 : 1]; if (ghost.isMesh) ghost.material = gm; else ghost.traverse(o => { if (o.isMesh) o.material = gm; });
+  p.ok = app.game.canPlace(p.btype, p.cx, p.cz) || (p.btype === 'gate' && !!app.game.gateSpot(0, p.cx, p.cz));
+  if (p.btype === 'wall') { ghost.visible = !p.a; if (p.a) showWallLine(p); } const gm = ghostMats[p.ok ? 0 : 1]; if (ghost.isMesh) ghost.material = gm; else ghost.traverse(o => { if (o.isMesh) o.material = gm; });
 }
 function confirmPlace(keep) {
   const p = app.pending; if (!p || p.type !== 'place') return;
   const builders = app.sel.filter(e => e.kind === 'unit' && e.type === 'peasant' && e.alive);
   const d = BD[p.btype];
+  if (p.btype === 'wall') { // first tap = start of the line, second = build the whole line
+    if (!p.a) { p.a = { cx: p.cx, cz: p.cz }; showWallLine(p); return; }
+    const cells = p.cells || [[p.cx, p.cz]], made = [];
+    for (const [cx, cz] of cells) { const b = app.game.startBuilding(0, 'wall', cx, cz, []); if (b) made.push(b); }
+    if (!made.length) { app.toast(app.game.afford(0, d.cost) ? "Can't build a wall there." : 'Not enough wood.', 2); return; }
+    builders.forEach((u, i) => app.game.build(u, made[Math.min(made.length - 1, Math.floor(i * made.length / Math.max(1, builders.length)))]));
+    app.toast(`${made.length} wall piece${made.length > 1 ? 's' : ''} placed${made.length < cells.length ? ` (${cells.length - made.length} skipped: blocked or not enough wood)` : ''}.`, 3);
+    clearLineGhosts(); p.a = null; p.cells = null; if (!keep) app.cancelPending(); else ghost.visible = true;
+    return;
+  }
   if (!app.game.afford(0, d.cost)) { app.toast('Not enough resources.', 2); app.cancelPending(); return; }
   const b = app.game.startBuilding(0, p.btype, p.cx, p.cz, builders);
   if (!b) { app.toast("Can't build there.", 2); return; }

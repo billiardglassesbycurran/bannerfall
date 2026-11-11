@@ -46,10 +46,13 @@ def open_game(pw, base, hash_='', **ctx):
     errors = []
     page.on('pageerror', lambda e: errors.append(str(e)))
     page.on('console', lambda m: errors.append(m.text) if m.type == 'error' and 'favicon' not in m.text else None)
-    page.goto(base + ('#' + hash_ if hash_ else ''))
-    for _ in range(90):  # poll ourselves: the software renderer can starve Playwright's own waiting
-        if page.evaluate('!!window.bannerfall && !document.getElementById("loading")'): break
-        time.sleep(1.5)
+    for attempt in range(2):  # the software renderer occasionally stalls a first load: reload once before failing
+        page.goto(base + ('#' + hash_ if hash_ else '')) if attempt == 0 else page.reload()
+        for _ in range(90):  # poll ourselves: the software renderer can starve Playwright's own waiting
+            if page.evaluate('!!window.bannerfall && !document.getElementById("loading")'): break
+            time.sleep(1.5)
+        else: continue
+        break
     else: raise TimeoutError('game did not finish loading')
     return page, errors
 

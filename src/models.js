@@ -598,8 +598,41 @@ function crenel(b, cx, y, cz, w, d, col = C.stone) {
  * Building models. look = { age: 0|1|2, fort, guard }: buildings grow from timber-and-thatch (Hamlet Age) to stone and
  * tile (Feudal) to grander, bannered halls (Kingdom); Fortified Hall and Guard Towers are visible upgrades.
  */
+/**
+ * One cell of wall. conn: which neighbours (1 E, 2 S, 4 W, 8 N) it joins, so lines and corners connect.
+ * Wooden palisade (sharpened logs + rails) or, after Stone Walls, a crenellated stone curtain. Gates get two posts,
+ * a lintel and banded doors in the team colour.
+ */
+function wallPiece(b, gate, conn, stone, tc) {
+  const arms = [[1, 0], [0, 1], [-1, 0], [0, -1]].filter((_, k) => conn & (1 << k));
+  const alongX = gate ? !!(conn & 5) || !(conn & 10) : false;
+  if (!gate) {
+    if (!arms.length) arms.push([1, 0], [-1, 0]);
+    if (stone) {
+      box(b, C.stone, 0, .95, 0, .62, 1.9, .62);
+      for (const [dx, dz] of arms) { box(b, C.stone, dx * .27, .95, dz * .27, dx ? .52 : .54, 1.9, dz ? .52 : .54); for (const t of [.18, .42]) box(b, C.stone, dx * t, 2.05, dz * t, dx ? .14 : .54, .3, dz ? .14 : .54); }
+      box(b, C.dstone, 0, .1, 0, .7, .2, .7);
+    } else {
+      const log = (x, z, h) => { b.add(P.cyl(.085, .1, h, 6), C.wood, x, h / 2, z); b.add(P.cone(.095, .22, 6), C.dwood, x, h + .11, z); };
+      log(0, 0, 2.05);
+      for (const [dx, dz] of arms) {
+        for (const t of [.17, .34]) log(dx * t + dz * (t > .2 ? .03 : -.03), dz * t + dx * (t > .2 ? -.03 : .03), 1.75 + ((t * 37) % 1) * .3);
+        for (const y of [.55, 1.35]) box(b, C.dwood, dx * .25, y, dz * .25, dx ? .5 : .07, .08, dz ? .5 : .07);
+      }
+    }
+    return;
+  }
+  // gate: posts at both ends of the opening, a lintel, and two doors
+  const P2 = (u, y, v, sx, sy, sz, col) => alongX ? box(b, col, u, y, v, sx, sy, sz) : box(b, col, v, y, u, sz, sy, sx);
+  const pc = stone ? C.stone : C.wood, ph = stone ? 2.5 : 2.3;
+  for (const u of [-.4, .4]) { P2(u, ph / 2, 0, .22, ph, .3, pc); if (stone) P2(u, ph + .12, 0, .3, .24, .38, C.stone); else (alongX ? b.add(P.cone(.14, .3, 6), C.dwood, u, ph + .15, 0) : b.add(P.cone(.14, .3, 6), C.dwood, 0, ph + .15, u)); }
+  P2(0, ph - .18, 0, 1.0, .2, .26, stone ? C.stone : C.dwood);
+  for (const u of [-.15, .15]) { P2(u, .85, 0, .29, 1.7, .08, C.dwood); P2(u, .5, .045, .3, .07, .03, C.iron || 0x3a3a3a); P2(u, 1.25, .045, .3, .07, .03, C.iron || 0x3a3a3a); }
+  P2(0, 1.75, .06, .5, .3, .02, tc);
+}
 export function buildingGeo(kind, team, look = { age: 1 }) {
   const tc = TEAM[team], b = new Builder(), age = look.age || 0, roofC = age >= 1 ? C.tile : C.thatch;
+  if (kind === 'wall' || kind === 'gate') { wallPiece(b, kind === 'gate', look.conn || 0, !!look.stone, tc); return b.build(); }
   const base = (s, h = .35, col = C.dstone) => box(b, col, 0, h / 2 - .5, 0, s, h + 1, s);
   if (kind === 'hall') {
     base(4.8, .4 + age * .1);
@@ -710,7 +743,7 @@ export function buildingGeo(kind, team, look = { age: 1 }) {
   }
   return b.build();
 }
-const BD_SIZE = { hall: 5, house: 2, farm: 3, store: 3, barracks: 4, range: 4, stable: 4, workshop: 4, smith: 3, tower: 2, dock: 3 };
+const BD_SIZE = { wall: 1, gate: 1, hall: 5, house: 2, farm: 3, store: 3, barracks: 4, range: 4, stable: 4, workshop: 4, smith: 3, tower: 2, dock: 3 };
 /** See-through placement preview (green/red) for a building. */
 export function ghostObject(kind, look, mat) {
   const custom = buildingParts(kind, BD_SIZE[kind] || 3);
