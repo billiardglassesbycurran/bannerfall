@@ -1,7 +1,7 @@
 // HUD: resource bar, selection panel, command card, minimap, health bars, toasts.
 import * as THREE from 'three';
 import { UD, BD, BUILD_LIST } from './data.js';
-import { N, SIZE, resources, minimapColors } from './world.js';
+import { N, SIZE, resources, minimapColors, heightAt, WL } from './world.js';
 
 const $ = id => document.getElementById(id);
 const HK = ['KeyZ', 'KeyX', 'KeyC', 'KeyV', 'KeyB', 'KeyN', 'KeyM', 'Comma', 'Period', 'Slash'];
@@ -14,8 +14,18 @@ export class HUD {
   constructor(app) {
     this.a = app; this.ov = $('ov'); this.ctx = this.ov.getContext('2d');
     this.mini = $('mini'); this.mctx = this.mini.getContext('2d');
-    this.bg = document.createElement('canvas'); this.bg.width = this.bg.height = N;
-    this.bg.getContext('2d').putImageData(new ImageData(minimapColors(), N, N), 0, 0);
+    // minimap background: terrain colours with hill shading (light from the north-west), drawn at 2x for crisp lines
+    const base = minimapColors();
+    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+      const h = heightAt(i + .5, j + .5), k = (j * N + i) * 4;
+      if (h < WL) { const dpt = Math.min(1, (WL - h) / 2.5); base[k] = 70 - dpt * 40; base[k + 1] = 120 - dpt * 50; base[k + 2] = 150 - dpt * 40; continue; }
+      const sh = 1 + (heightAt(i - .5, j - .5) - heightAt(i + 1.5, j + 1.5)) * .22;
+      for (let c = 0; c < 3; c++) base[k + c] = Math.max(0, Math.min(255, base[k + c] * Math.max(.55, Math.min(1.45, sh))));
+    }
+    const small = document.createElement('canvas'); small.width = small.height = N; small.getContext('2d').putImageData(new ImageData(base, N, N), 0, 0);
+    this.bg = document.createElement('canvas'); this.bg.width = this.bg.height = N * 2;
+    const bctx = this.bg.getContext('2d'); bctx.imageSmoothingEnabled = true; bctx.drawImage(small, 0, 0, N * 2, N * 2);
+    this.pings = [];
     this.cardT = 0; this.miniT = 0; this.selT = 0; this.buttons = [];
     this.v = new THREE.Vector3();
     $('card').addEventListener('pointerdown', e => e.stopPropagation());
@@ -116,20 +126,29 @@ export class HUD {
   hotkey(code) { const i = HK.indexOf(code); const b = this.buttons[i]; if (!b) return false; if (!b.dis) b.on(); this.sig = ''; this.updateCard(); return true; }
 
   // ---------------- minimap ----------------
+  ping(x, z) { this.pings.push({ x, z, t: performance.now() }); if (this.pings.length > 6) this.pings.shift(); }
   drawMini() {
-    const c = this.mctx, g = this.a.game; c.drawImage(this.bg, 0, 0);
-    for (const r of resources) if (r.alive && r.rt === 'g') { c.fillStyle = '#ffd84a'; c.fillRect(r.x - 1.5, r.z - 1.5, 3, 3); }
-    for (const b of g.blds) if (b.alive) { c.fillStyle = b.team ? '#e0402a' : '#4a7cff'; c.fillRect(b.cx, b.cz, b.size, b.size); }
-    for (const u of g.units) if (u.alive) { c.fillStyle = u.team ? '#ff5a40' : (u.selected ? '#bfffb0' : '#8fb4ff'); c.fillRect(u.x - 1, u.z - 1, 2, 2); }
-    // camera view
-    const rts = this.a.rts, pts = [];
-    for (const [sx, sy] of [[0, 0], [innerWidth, 0], [innerWidth, innerHeight], [0, innerHeight]]) {
-      const ray = new THREE.Raycaster(); ray.setFromCamera(new THREE.Vector2(sx / innerWidth * 2 - 1, -(sy / innerHeight) * 2 + 1), this.a.camera);
-      const t = (1 - ray.ray.origin.y) / (ray.ray.direction.y || -1e-3); const d = Math.min(t > 0 ? t : 300, 300);
-      pts.push([ray.ray.origin.x + ray.ray.direction.x * d, ray.ray.origin.z + ray.ray.direction.z * d]);
+    const c = this.mctx, g = this.a.game, K = 2; c.drawImage(this.bg, 0, 0);
+    for (const r of resources) if (r.alive && (r.rt === 'g' || r.fish)) { c.fillStyle = r.fish ? '#cfefff' : '#ffd84a'; c.beginPath(); c.arc(r.x * K, r.z * K, r.fish ? 2 : 3, 0, 6.3); c.fill(); }
+    for (const b of g.blds) if (b.alive) { c.fillStyle = b.team ? '#d8402a' : '#3f72ff'; c.strokeStyle = 'rgba(0,0,0,.8)'; c.lineWidth = 1; c.fillRect(b.cx * K, b.cz * K, b.size * K, b.size * K); c.strokeRect(b.cx * K + .5, b.cz * K + .5, b.size * K - 1, b.size * K - 1); }
+    for (const u of g.units) if (u.alive && !u.boarded) {
+      c.fillStyle = u.selected ? '#ffffff' : u.team ? '#ff5a40' : '#7fa8ff'; c.strokeStyle = 'rgba(0,0,0,.85)'; c.lineWidth = 1;
+      const r = u.d.ship ? 3 : 1.8; c.beginPath(); c.arc(u.x * K, u.z * K, r, 0, 6.3); c.fill(); c.stroke();
     }
-    c.strokeStyle = '#fff'; c.lineWidth = 1; c.beginPath(); pts.forEach((p, i) => i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1])); c.closePath(); c.stroke();
-    void rts;
+    // the part of the map you're looking at: a clean white box, rotated with the camera
+    const rts = this.a.rts, cam = this.a.camera, ray = new THREE.Raycaster(), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -rts.focus.y), hit = new THREE.Vector3();
+    const at = (sx, sy) => { ray.setFromCamera(new THREE.Vector2(sx * 2 - 1, -(sy * 2 - 1)), cam); return ray.ray.intersectPlane(plane, hit) ? hit.clone() : null; };
+    const L = at(0, .5), Rr = at(1, .5), T = at(.5, .02) || at(.5, .2), B = at(.5, .98);
+    if (L && Rr && B) {
+      const w = L.distanceTo(Rr), far = T ? T : B.clone().lerp(rts.focus, 3), d = Math.min(B.distanceTo(far), w * 1.6);
+      const fx = -Math.sin(rts.yaw), fz = -Math.cos(rts.yaw), rx = -fz, rz = fx, cx = (B.x + B.x + fx * d) / 2, cz = (B.z + B.z + fz * d) / 2;
+      const pts = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, bb]) => [(cx + rx * a * w / 2 + fx * bb * d / 2) * K, (cz + rz * a * w / 2 + fz * bb * d / 2) * K]);
+      c.lineWidth = 3; c.strokeStyle = 'rgba(0,0,0,.45)'; c.beginPath(); pts.forEach((p, i) => i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1])); c.closePath(); c.stroke();
+      c.lineWidth = 1.5; c.strokeStyle = '#ffffff'; c.stroke();
+    }
+    // red pulses where you're under attack
+    const now = performance.now(); this.pings = this.pings.filter(p => now - p.t < 3000);
+    for (const p of this.pings) { const k = ((now - p.t) % 1000) / 1000; c.strokeStyle = `rgba(255,70,50,${1 - k})`; c.lineWidth = 2; c.beginPath(); c.arc(p.x * K, p.z * K, 4 + k * 14, 0, 6.3); c.stroke(); }
   }
 
   // ---------------- health bars ----------------
@@ -148,9 +167,17 @@ export class HUD {
     for (const b of g.blds) {
       if (!b.alive) continue;
       if (!b.selected && b.hp >= b.maxHp && b.built && !(b.team === 0 && b.queue.length)) continue;
-      const p = scr(b.x, b.y + (b.type === 'tower' ? 6.5 : b.size * .9 + 1), b.z); if (!p) continue;
+      const p = scr(b.x, b.y + (b.type === 'tower' ? 6.5 : b.size * .9 + 1), b.z); if (!p) continue; p[1] = Math.max(p[1], 64); // keep labels clear of the top bar
       const w = 50 * zoomK;
-      if (!b.built) bar(p[0], p[1], w, b.progress, '#ffd56a');
+      if (!b.built) {
+        const bw = Math.max(w, 64); bar(p[0], p[1], bw, b.progress, '#ffd56a');
+        if (b.team === 0) {
+          const nb = b.nb || 0, left = nb ? Math.ceil((1 - b.progress) * b.d.time / nb / (g.civ[0].build || 1)) : 0;
+          const txt = `${Math.floor(b.progress * 100)}% · ` + (nb ? `${nb} builder${nb > 1 ? 's' : ''} · ${left}s` : 'no builders');
+          c.font = 'bold 11px Georgia, serif'; c.textAlign = 'center'; c.lineWidth = 3; c.strokeStyle = 'rgba(0,0,0,.8)'; c.strokeText(txt, p[0], p[1] - 4);
+          c.fillStyle = nb ? '#ffe9a8' : '#ff9a7a'; c.fillText(txt, p[0], p[1] - 4);
+        }
+      }
       else bar(p[0], p[1], w, b.hp / b.maxHp, b.team ? '#e04a3a' : '#5ad24a');
       if (b.team === 0 && b.queue.length) bar(p[0], p[1] + 6, w, Math.min(1, b.queue[0].t), '#8ab4ff');
     }

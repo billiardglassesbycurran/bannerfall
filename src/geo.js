@@ -6,6 +6,7 @@
 // - M: shared materials (physically based on Medium/High quality, cheaper on Low). Call initMaterials() first.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { detailTexture } from './textures.js';
 
 const _c = new THREE.Color(), _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _v = new THREE.Vector3(), _s = new THREE.Vector3();
 
@@ -127,6 +128,20 @@ function building(mat) {
   mat.customProgramCacheKey = () => 'building' + !!U.tWall.value;
   return mat;
 }
+/** Fine surface detail for soldiers' gear (cloth weave, metal scratches), mapped in the part's own space so it moves with them. */
+function detailed(mat, tex, scale, amt, rough, key) {
+  mat.onBeforeCompile = sh => {
+    sh.uniforms.tFine = { value: tex };
+    sh.vertexShader = 'varying vec3 vLP; varying vec3 vLN;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vLP = position; vLN = normal;');
+    sh.fragmentShader = 'uniform sampler2D tFine; varying vec3 vLP; varying vec3 vLN;\n' + sh.fragmentShader
+      .replace('#include <map_fragment>', `vec3 fw = pow(abs(normalize(vLN)), vec3(3.0)); fw /= (fw.x + fw.y + fw.z);
+        float fine = texture2D(tFine, vLP.zy * ${scale.toFixed(1)}).r * fw.x + texture2D(tFine, vLP.xz * ${scale.toFixed(1)}).r * fw.y + texture2D(tFine, vLP.xy * ${scale.toFixed(1)}).r * fw.z;
+        diffuseColor.rgb *= 1.0 + (fine - 0.5) * ${amt.toFixed(2)};`)
+      .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>\n roughnessFactor = clamp(roughnessFactor * (1.0 + (fine - 0.5) * ${rough.toFixed(2)}), 0.05, 1.0);`);
+  };
+  mat.customProgramCacheKey = () => 'fine' + key;
+  return mat;
+}
 export function initMaterials(pbr, A) {
   const S = o => pbr ? new THREE.MeshStandardMaterial({ metalness: 0, ...o }) : new THREE.MeshLambertMaterial({ vertexColors: o.vertexColors, flatShading: o.flatShading, side: o.side, map: o.map, alphaTest: o.alphaTest });
   M.photo = !!(A && A.ok);
@@ -135,6 +150,7 @@ export function initMaterials(pbr, A) {
   M.vcFlat = S({ vertexColors: true, roughness: .9, flatShading: true });
   M.cloth = S({ vertexColors: true, roughness: .78 });
   M.metal = pbr ? new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .42, metalness: .8, envMapIntensity: .7 }) : new THREE.MeshPhongMaterial({ vertexColors: true, shininess: 70, specular: 0x777777 });
+  if (pbr) { detailed(M.cloth, detailTexture('cloth'), 9, .5, .3, 'c'); detailed(M.metal, detailTexture('metal'), 4, .35, 1.1, 'm'); }
   M.stone = building(S({ vertexColors: true, roughness: .95, flatShading: true }));
   M.foliage = windify(S({ vertexColors: true, roughness: .9 }), 1.2, .022, 'f');
   M.grass = windify(S({ vertexColors: true, roughness: 1, envMapIntensity: .25 }), 0, .35, 'g');

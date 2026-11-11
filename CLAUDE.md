@@ -42,7 +42,7 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
 
 ## Code map
 - `index.html` — page shell, all HUD/menu markup, version + import map (cache-busting), on-screen error box.
-- `src/main.js` — renderer, lighting, quality levels, title menu, game-mode setup, 1st/3rd-person switching, input routing, main loop.
+- `src/main.js` — renderer, lighting, quality levels, post-processing composer (Medium/High; none on Low), title menu, game-mode setup, 1st/3rd-person switching, input routing, main loop.
 - `src/data.js` — unit/building stats, civilizations (`CIVS`: per-class stat mods, unique unit, look), difficulty, modes.
   Civ bonuses are applied in `Game.stat(team, type)`; always read unit stats through it, never straight from `UD`.
   Civilizations are historically inspired, but bonuses/unique units are original — don't copy another game's.
@@ -74,6 +74,9 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
 ## Roadmap
 1. ✅ v0.1 Terrain, units, select & move from above, 3rd-person view.
 2. ✅ v0.2 Graphics pass; economy, buildings, training, combat, pathfinding, enemy AI; Skirmish / Battle / Survival modes.
+2f. ✅ v0.7 AAA polish pass: planked ship hulls, cloth sails, rigging, crew, wakes; post-processing (bloom, grade,
+   vignette; GTAO on desktop High); sky clouds + cloud shadows; distant mountains; gear detail; minimap redesign
+   (hill shading, white view box, attack pings); construction scaffolding + progress/builders/ETA label.
 2e. ✅ v0.6 River map (bridge + 2 fords), Dock, fish, fishing boats, transport ships (board/unload), warships; naval AI.
 2d. ✅ v0.5 Civilizations (Franks, Romans, Chinese, Norse, Mongols) with bonuses, penalties, unique units and their own
    look; crossbowmen, light cavalry, horse archers, catapults; Archery Range + Siege Workshop; PC/Mac camera controls.

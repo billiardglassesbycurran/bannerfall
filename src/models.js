@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { Builder, P, M, TEXMAT } from './geo.js';
 import { UD } from './data.js';
+import { planksTexture, sailTexture, foamTexture } from './textures.js';
 
 export const TEAM = [0x2c50a8, 0xa62419];
 const C = {
@@ -351,43 +352,128 @@ function catapultParts(team) {
   box(arm, C.wood, 0, 0, -.8, .12, .12, 1.7); arm.add(P.cyl(.2, .15, .14, 10), C.dwood, 0, .05, -1.6); arm.add(P.ball(.15, 8, 6), 0x7a766e, 0, .15, -1.6);
   return [{ ...b.split(), pivot: [0, 0, 0], anim: null }, { ...arm.split(), pivot: [0, .9, .2], anim: 'cat' }];
 }
-const HULL = (len, wid, dep) => new THREE.SphereGeometry(.5, 20, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2).scale(wid, dep * 2, len);
-/** A square sail bellied by the wind, visible from both sides. */
-function sailGeo(w, h, billow) {
-  const g = new THREE.PlaneGeometry(w, h, 6, 4), p = g.attributes.position;
-  for (let i = 0; i < p.count; i++) { const x = p.getX(i) / (w / 2), y = p.getY(i) / (h / 2); p.setZ(i, billow * (1 - x * x) * (1 - .35 * y * y)); }
-  const back = g.clone(); const idx = back.index.array; for (let i = 0; i < idx.length; i += 3) { const t = idx[i]; idx[i] = idx[i + 2]; idx[i + 2] = t; }
-  g.computeVertexNormals(); back.computeVertexNormals(); return [g, back];
+// ---------------- ships ----------------
+/** A real boat hull: pointed bow and stern, rounded bilge, sheer line rising at both ends. UVs follow the planks. */
+function hullGeo(L, W, D, sheer, yOff) {
+  const NS = 24, NP = 12, pos = [], uv = [], idx = [];
+  for (let i = 0; i <= NS; i++) {
+    const t = i / NS * 2 - 1, at = Math.abs(t), z = t * L / 2;
+    const w = W / 2 * Math.pow(Math.max(0, 1 - Math.pow(at, 2.4)), .5) + .015, top = yOff + sheer * at * at, d = D * (1 - .4 * at * at * at);
+    let arc = 0, px = null, py = null;
+    for (let j = 0; j <= NP; j++) {
+      const a = -Math.PI / 2 + Math.PI * j / NP, x = w * Math.sin(a) * (1 + .1 * Math.cos(a)), y = top - d * Math.pow(Math.cos(a), 1.25);
+      if (px !== null) arc += Math.hypot(x - px, y - py); px = x; py = y;
+      pos.push(x, y, z); uv.push(z / 1.7, arc / .8);
+    }
+  }
+  for (let i = 0; i < NS; i++) for (let j = 0; j < NP; j++) { const a = i * (NP + 1) + j, b = a + 1, c = a + NP + 1, d = c + 1; idx.push(a, b, c, b, d, c); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals();
+  return g;
 }
-function sail(b, tc, team, x, y, z, w, h, billow = .25) {
-  for (const g of sailGeo(w * 2, h, billow)) b.add(g, tc, x, y, z);
-  emblem(b, team, x, y + .1, z + billow + .02, w * 2.2);
+const hullWidth = (L, W, z) => W / 2 * Math.pow(Math.max(0, 1 - Math.pow(Math.abs(z / (L / 2)), 2.4)), .5);
+function deckGeo(L, W, y) {
+  const pts = []; for (let i = 0; i <= 20; i++) { const z = -L / 2 + L * i / 20; pts.push(new THREE.Vector2(hullWidth(L, W, z) * .97, -z)); }
+  for (let i = 20; i >= 0; i--) { const z = -L / 2 + L * i / 20; pts.push(new THREE.Vector2(-hullWidth(L, W, z) * .97, -z)); }
+  const g = new THREE.ShapeGeometry(new THREE.Shape(pts)); g.rotateX(-Math.PI / 2); g.translate(0, y, 0);
+  const p = g.attributes.position, uv = g.attributes.uv; for (let i = 0; i < p.count; i++) uv.setXY(i, p.getZ(i) / 1.7, p.getX(i) / 1.7);
+  return g;
+}
+/** Rope between two points (thin cylinder). */
+function rope(b, a, c, r = .012) {
+  const v = new THREE.Vector3(c[0] - a[0], c[1] - a[1], c[2] - a[2]), len = v.length(), q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), v.normalize()), e = new THREE.Euler().setFromQuaternion(q);
+  b.add(P.cyl(r, r, len, 4), 0x2a2016, (a[0] + c[0]) / 2, (a[1] + c[1]) / 2, (a[2] + c[2]) / 2, e.x, e.y, e.z);
+}
+/** A small sailor / marine figure for decks. */
+function crew(b, tc, x, y, z, kind = 'sailor', ry = 0) {
+  const top = kind === 'archer' ? tc : 0xcfc2a2;
+  b.add(P.cyl(.07, .06, .5, 7), C.pants, x, y + .25, z); b.add(P.cyl(.14, .12, .45, 9), top, x, y + .72, z, 0, 0, 0, 1, 1, .75);
+  b.add(P.ball(.1, 10, 8), C.skin, x, y + 1.06, z);
+  if (kind === 'archer') { b.m(DOME, C.steel, x, y + 1.06, z, 0, 0, 0, .85, .85, .85); b.add(new THREE.TorusGeometry(.4, .015, 4, 10, Math.PI), C.dwood, x + .18, y + .8, z + .1, 0, ry - Math.PI / 2, -Math.PI / 2); }
+  else b.add(P.cyl(.13, .12, .06, 9), 0x8a2a1a, x, y + 1.14, z);
+  for (const s of [-1, 1]) b.add(P.cyl(.045, .04, .42, 6), top, x + s * .17, y + .72, z + .05, .3, 0, s * .2);
+}
+const sailMats = new Map();
+function sailMat(team, style) {
+  const k = team + style; let m = sailMats.get(k);
+  if (!m) {
+    m = M.pbr ? new THREE.MeshStandardMaterial({ map: sailTexture(TEAM[team], team, style), side: THREE.DoubleSide, roughness: .85, vertexColors: true }) : new THREE.MeshLambertMaterial({ map: sailTexture(TEAM[team], team, style), side: THREE.DoubleSide, vertexColors: true });
+    m.onBeforeCompile = sh => { sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', THREE.ShaderChunk.normal_fragment_begin.replace(/\*= faceDirection;/g, '*= 1.0;')); };
+    m.customProgramCacheKey = () => 'sail'; sailMats.set(k, m);
+  }
+  return m;
+}
+let planksMat = null;
+function hullMat() { if (!planksMat) { const t = planksTexture(256); planksMat = M.pbr ? new THREE.MeshStandardMaterial({ map: t, vertexColors: true, roughness: .8, side: THREE.DoubleSide }) : new THREE.MeshLambertMaterial({ map: t, vertexColors: true, side: THREE.DoubleSide }); } return planksMat; }
+/** Square sail with UVs, bellied by the wind. */
+function squareSail(w, h, billow) {
+  const g = new THREE.PlaneGeometry(w, h, 8, 6), p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) { const x = p.getX(i) / (w / 2), y = p.getY(i) / (h / 2); p.setZ(i, billow * (1 - x * x * .85) * (1 - .3 * y * y)); }
+  g.computeVertexNormals(); return g;
+}
+function lateenSail() {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, -1.2, 0, 2.3, .35, 0, .15, 1.05], 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, .5, 1, 1, 0], 2));
+  g.computeVertexNormals(); return g;
 }
 function shipParts(team, kind) {
-  const b = new Builder(), tc = TEAM[team];
+  const b = new Builder(), hull = new Builder(), sails = new Builder(), tc = TEAM[team];
+  const addHull = (L, W, D, sheer, yOff, deckY) => { hull.add(hullGeo(L, W, D, sheer, yOff), 0xd8c8b0); hull.add(deckGeo(L, W, deckY), 0xc0a888);
+    for (let i = 0; i < 24; i++) for (const s of [-1, 1]) { // gunwale rail
+      const z0 = -L / 2 + L * i / 24, z1 = z0 + L / 24, y0 = yOff + sheer * (2 * z0 / L) ** 2, y1 = yOff + sheer * (2 * z1 / L) ** 2;
+      const x0 = s * hullWidth(L, W, z0) * 1.02, x1 = s * hullWidth(L, W, z1) * 1.02, len = Math.hypot(z1 - z0, x1 - x0, y1 - y0);
+      b.add(P.box, C.dwood, (x0 + x1) / 2, (y0 + y1) / 2 + .03, (z0 + z1) / 2, Math.atan2(y0 - y1, z1 - z0), Math.atan2(x1 - x0, z1 - z0), 0, .07, .07, len * 1.05);
+    } };
   if (kind === 'fishboat') {
-    b.add(HULL(2.8, 1.0, .5), C.dwood, 0, .3, 0); b.add(P.cyl(.5, .5, .06, 20, true), C.wood, 0, .3, 0, 0, 0, 0, 1, 1, 2.8);
-    box(b, C.wood, 0, .22, 0, .9, .04, 2.2); b.add(P.cyl(.035, .045, 2.2, 6), C.wood, 0, 1.3, .3);
-    const tri = new THREE.BufferGeometry(); tri.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 1.6, 0, 0, 0, -1.1, 0, 1.6, 0, 0, 0, 0, 0, 0, -1.1], 3)); tri.computeVertexNormals();
-    b.add(tri, tc, .03, .5, .25); b.add(P.ball(.25, 8, 6), 0x5a5a3a, 0, .35, -.9, 0, 0, 0, 1.2, .6, 1); // net pile
-    b.add(P.cyl(.1, .12, .35, 8), C.linen, .15, .55, .8); b.add(P.ball(.08, 8, 6), C.skin, .15, .8, .8); b.add(P.cone(.17, .08, 10), C.straw, .15, .9, .8); // fisherman
+    addHull(3.2, 1.25, .55, .28, .3, .12);
+    b.add(P.cyl(.035, .045, 2.3, 7), C.wood, 0, 1.25, .45); b.add(P.cyl(.025, .025, 2.9, 6), C.wood, 0, 1.4, .3, .95, 0, 0); // mast + lateen yard
+    sails.add(lateenSail(), 0xffffff, .02, .25, .4); sails.add(lateenSail().scale(-1, 1, 1), 0xffffff, -.02, .25, .4);
+    rope(b, [0, 2.4, .45], [0, .35, 1.5]); rope(b, [0, 2.4, .45], [0, .35, -1.4]);
+    crew(b, tc, .2, .12, -.7); b.add(P.ball(.28, 10, 6), 0x55553a, -.2, .2, -.95, 0, 0, 0, 1.2, .5, 1); b.add(P.cyl(.18, .14, .25, 10), C.straw, .3, .25, .9);
+    for (const s of [-1, 1]) b.add(P.cyl(.02, .02, 1.8, 5), C.wood, s * .45, .4, -.1, Math.PI / 2 - .05, 0, s * .12);
   } else if (kind === 'transport') {
-    b.add(HULL(4.6, 1.9, .9), 0x4a3220, 0, .45, 0); for (let i = 0; i < 3; i++) b.add(P.cyl(.95 - i * .08, .95 - i * .08, .05, 22, true), C.dwood, 0, .4 - i * .18, 0, 0, 0, 0, 1, 1, 2.42 - i * .25);
-    box(b, C.wood, 0, .42, 0, 1.75, .06, 4.0); box(b, C.wood, 0, .8, -1.6, 1.6, .7, 1.0); box(b, C.dwood, 0, 1.18, -1.6, 1.7, .08, 1.1); box(b, C.wood, 0, .7, 1.75, 1.2, .5, .7);
-    for (const s of [-1, 1]) for (let i = 0; i < 4; i++) b.add(P.cyl(.16, .16, .03, 12), i % 2 ? TEAM[team] : C.white, s * .93, .75, -1 + i * .7, 0, 0, Math.PI / 2);
-    b.add(P.cyl(.06, .08, 4.2, 8), C.wood, 0, 2.5, .1); box(b, C.wood, 0, 3.6, .1, 2.4, .08, .08);
-    sail(b, tc, team, 0, 2.55, .1, 1.05, 2.0);
+    const L = 5.4, W = 2.3; addHull(L, W, 1.15, .55, .6, .42);
+    for (const [z, len, h] of [[-2.0, 1.3, .8], [2.05, 1.0, .65]]) { // fore and aft castles
+      b.add(P.box, C.wood, 0, .42 + h / 2, z, 0, 0, 0, hullWidth(L, W, z) * 1.8, h, len);
+      for (let i = -2; i <= 2; i++) box(b, tc, i * .35, .45 + h + .1, z + len / 2 - .03, .2, .2, .06); b.add(P.box, C.dwood, 0, .45 + h, z, 0, 0, 0, hullWidth(L, W, z) * 1.85, .06, len + .05);
+    }
+    b.add(P.cyl(.06, .09, 4.8, 9), C.wood, 0, 2.8, .1); b.add(P.cyl(.035, .035, 2.8, 6), C.wood, 0, 4.3, .2, 0, 0, Math.PI / 2); b.add(P.cyl(.1, .1, .25, 8), C.dwood, 0, 4.8, .1);
+    sails.add(squareSail(2.6, 2.4, .45), 0xffffff, 0, 3.0, .25);
+    for (const s of [-1, 1]) { rope(b, [0, 4.9, .1], [s * 1.05, .7, -.6]); rope(b, [0, 4.9, .1], [s * 1.05, .7, .8]); rope(b, [s * 1.35, 4.3, .2], [s * .9, .7, 1.6]); }
+    rope(b, [0, 4.9, .1], [0, 1.2, 2.6]); rope(b, [0, 4.9, .1], [0, 1.4, -2.6]);
+    b.add(P.box, C.dwood, 0, .1, -2.75, 0, 0, 0, .06, .9, .5); // rudder
+    for (const [x, z] of [[-.5, .9], [.4, -.6], [.5, .6]]) b.add(P.cyl(.2, .22, .45, 10), C.wood, x, .65, z);
+    crew(b, tc, -.5, .42, -.3); crew(b, tc, .3, .45 + .8, -2.0); b.add(P.cyl(.012, .012, .9, 4), C.wood, 0, 5.3, .1); box(b, tc, .3, 5.6, .1, .55, .25, .015);
   } else { // warship (galley)
-    b.add(HULL(6.0, 1.6, .7), 0x3a2618, 0, .4, 0); b.add(P.cyl(.8, .8, .07, 24, true), C.wood, 0, .4, 0, 0, 0, 0, 1, 1, 3.75);
-    box(b, C.wood, 0, .38, 0, 1.45, .06, 5.0); b.m(P.cone(.12, .7, 8), C.dsteel, 0, .1, 3.15, Math.PI / 2, 0, 0);
-    box(b, C.dwood, 0, .75, -2.2, 1.2, .5, .9); box(b, tc, 0, 1.05, -2.2, 1.25, .08, .95);
-    for (const s of [-1, 1]) for (let i = 0; i < 7; i++) { box(b, C.wood, s * 1.1, .15, -1.8 + i * .55, .9, .04, .05, 0, 0, s * .5); b.add(P.cyl(.17, .17, .03, 12), i % 2 ? tc : C.gold, s * .8, .62, -1.6 + i * .55, 0, 0, Math.PI / 2); }
-    b.add(P.cyl(.05, .07, 3.6, 8), C.wood, 0, 2.1, .4); box(b, C.wood, 0, 3.6, .4, 2.0, .07, .07);
-    sail(b, tc, team, 0, 2.35, .4, .9, 2.2, .2);
-    b.add(P.cyl(.02, .02, 1.0, 5), C.wood, 0, 4.3, .4); box(b, tc, .3, 4.65, .4, .55, .3, .02);
+    const L = 7.2, W = 1.75; addHull(L, W, .85, .65, .45, .3);
+    b.add(P.cyl(.06, .03, 1.3, 8), C.dwood, 0, .85, 3.65, -.5, 0, 0); b.add(P.ball(.14, 10, 8), tc, 0, 1.45, 3.9, 0, 0, 0, .8, 1, 1.4); // curved prow + figurehead
+    b.m(P.cone(.13, .75, 10), C.brass, 0, -.15, 3.75, Math.PI / 2, 0, 0); // bronze ram
+    b.add(P.cyl(.05, .03, 1.1, 8), C.dwood, 0, .9, -3.6, .6, 0, 0);
+    for (const s of [-1, 1]) for (let i = 0; i < 9; i++) { const z = -2.6 + i * .62; b.add(P.cyl(.022, .018, 2.4, 5), C.wood, s * (hullWidth(L, W, z) + .75), .05, z, 0, 0, s * (Math.PI / 2 + .55)); b.add(P.box, C.wood, s * (hullWidth(L, W, z) + 1.65), -.42, z, 0, 0, s * .55, .05, .28, .14);
+      b.add(P.cyl(.17, .17, .035, 14), i % 2 ? tc : C.gold, s * (hullWidth(L, W, z) + .02), .62, z, 0, 0, Math.PI / 2); b.m(P.ball(.04, 6, 4), C.dsteel, s * (hullWidth(L, W, z) + .05), .62, z); }
+    box(b, C.dwood, 0, .7, -2.5, 1.2, .55, 1.0); b.add(P.box, tc, 0, 1.0, -2.5, 0, 0, 0, 1.25, .06, 1.05);
+    b.add(P.cyl(.05, .07, 4.0, 9), C.wood, 0, 2.3, .5); b.add(P.cyl(.03, .03, 2.4, 6), C.wood, 0, 3.75, .55, 0, 0, Math.PI / 2);
+    sails.add(squareSail(2.2, 2.0, .35), 0xffffff, 0, 2.7, .6);
+    for (const s of [-1, 1]) { rope(b, [0, 4.25, .5], [s * .8, .55, -.4]); rope(b, [0, 4.25, .5], [s * .8, .55, 1.4]); }
+    rope(b, [0, 4.25, .5], [0, 1.2, 3.7]); rope(b, [0, 4.25, .5], [0, 1.3, -3.4]);
+    for (const z of [-1.2, -.3, 1.3, 2.2]) crew(b, tc, (z * 7 % 2 > 1 ? .3 : -.3), .3, z, 'archer');
+    b.add(P.cyl(.012, .012, 1.0, 4), C.wood, 0, 4.7, .5); box(b, tc, .32, 5.0, .5, .6, .3, .015);
   }
-  return [{ ...b.split(), pivot: [0, 0, 0], anim: null }];
+  const s = b.split(), style = kind === 'warship' ? 'stripes' : kind === 'transport' ? 'emblem' : 'plain';
+  return [{ c: s.c, m: s.m, extra: [{ geo: hull.build(), mat: hullMat() }, { geo: sails.build(), mat: sailMat(team, style) }], pivot: [0, 0, 0], anim: null }];
 }
+let wakeMatCache = null;
+export function wakeMaterial() { if (!wakeMatCache) wakeMatCache = new THREE.MeshBasicMaterial({ map: foamTexture(), transparent: true, depthWrite: false, opacity: .8, color: 0xe8f0f0 }); return wakeMatCache; }
+/** Wooden scaffolding poles and planks around a building under construction. */
+const scaffoldCache = new Map();
+export function scaffoldGeo(size, h) {
+  const k = size + ':' + h; let g = scaffoldCache.get(k); if (g) return g;
+  const b = new Builder(), r = size / 2 + .25;
+  for (let i = 0; i <= 2; i++) for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1], [0, -1], [0, 1], [-1, 0], [1, 0]]) if (i === 0) b.add(P.cyl(.04, .05, h, 5), 0x8a6a42, sx * r, h / 2, sz * r);
+  for (let lv = 1; lv <= 3; lv++) { const y = h * lv / 3.2; for (const s of [-1, 1]) { b.add(P.box, 0x9a7a4a, 0, y, s * r, 0, 0, 0, size + .6, .05, .22); b.add(P.box, 0x9a7a4a, s * r, y, 0, 0, 0, 0, .22, .05, size + .6); } }
+  for (const s of [-1, 1]) { b.add(P.box, 0x7a5a32, 0, h / 2, s * r, 0, 0, Math.atan2(h, size) * s, Math.hypot(h, size) * .95, .04, .04); }
+  g = b.build(); scaffoldCache.set(k, g); return g;
+}
+export const SHIP_LEN = { fishboat: 3.2, transport: 5.4, warship: 7.2 };
 
 function figureParts(team, kind, style) {
   const d = UD[kind];
@@ -410,7 +496,7 @@ class FigureBatch {
     this.meshes = [];
     this.parts = figureParts(team, kind, style).map(p => {
       const ms = [];
-      for (const [geo, mat] of [[p.c, M.cloth], [p.m, M.metal]]) {
+      for (const [geo, mat] of [[p.c, M.cloth], [p.m, M.metal], ...(p.extra || []).map(e => [e.geo, e.mat])]) {
         if (!geo) continue;
         const m = new THREE.InstancedMesh(geo, mat, cap); m.count = 0; m.frustumCulled = false; m.castShadow = shadows;
         m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); scene.add(m); ms.push(m); this.meshes.push(m);

@@ -18,7 +18,7 @@
 </script>
 <script>
   // ===== Game version: bump on every change you publish (see CLAUDE.md). =====
-  window.BF_VERSION = '0.6.1';
+  window.BF_VERSION = '0.7.0';
   // Every game file is loaded as file.js?v=VERSION so phones never mix old and new files from the browser cache.
   // (On localhost a timestamp is used instead, so edits show up immediately while developing.)
   (function () {
@@ -54,7 +54,7 @@
     <button class="btn sm" id="bPause">&#10074;&#10074;</button>
   </div>
   <div id="bottom">
-    <div id="miniw"><canvas id="mini" width="128" height="128"></canvas>
+    <div id="miniw"><canvas id="mini" width="256" height="256"></canvas>
       <button class="cbtn" id="bRotL" title="Rotate left (Q)">&#10226;</button><button class="cbtn" id="bRotR" title="Rotate right (E)">&#10227;</button><button class="cbtn" id="bNorth" title="Reset view (Home)">N</button></div>
     <div id="selp"><div id="selname">Nothing selected</div><div id="seldesc"></div><div id="selq"></div></div>
     <div id="quick">

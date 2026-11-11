@@ -1,6 +1,6 @@
 // Bannerfall — entry point: renderer, lighting, menus, game modes, input routing and the main loop.
 import * as THREE from 'three';
-import { SIZE, BASES, WL, buildTerrain, buildWater, buildSky, buildResources, buildBridge, buildFish, updateFish, heightAt } from './world.js';
+import { SIZE, BASES, WL, CLOUDS, buildDistant, buildTerrain, buildWater, buildSky, buildResources, buildBridge, buildFish, updateFish, heightAt } from './world.js';
 import { BD, DIFF, MODES, CIVS, CIV_LIST, UD } from './data.js';
 import { Figures, buildingGeo } from './models.js';
 import { Game } from './game.js';
@@ -11,6 +11,13 @@ import { HUD } from './hud.js';
 import { initMaterials, U } from './geo.js';
 import { groundTextures } from './textures.js';
 import { loadAssets } from './assets.js';
+import { cloudTexture } from './textures.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 
 // The version lives in index.html (window.BF_VERSION) — bump it there on every change you publish.
 export const VERSION = window.BF_VERSION || 'dev';
@@ -38,8 +45,9 @@ initMaterials(qLevel !== 'low', A);
 renderer.shadowMap.enabled = Q.shadow > 0; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.shadowMap.autoUpdate = false;
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0xd5e0e2, 90, 240);
-const camera = new THREE.PerspectiveCamera(48, 1, .2, 700); camera.layers.enable(1); // layer 1 = grass (skipped in reflections)
+scene.fog = new THREE.Fog(0xd5e0e2, 110, 380);
+CLOUDS.value = cloudTexture();
+const camera = new THREE.PerspectiveCamera(48, 1, .2, 900); camera.layers.enable(1); // layer 1 = grass (skipped in reflections)
 // sky reflections: render the sky once into an environment map that lights and reflects off every surface
 if (qLevel !== 'low') {
   const pmrem = new THREE.PMREMGenerator(renderer), envScene = new THREE.Scene(); envScene.add(buildSky());
@@ -59,8 +67,32 @@ const water = buildWater(Q);
 scene.add(buildSky(), terrain, water);
 buildResources(scene, Q);
 buildBridge(scene, Q.shadow > 0);
+buildDistant(scene);
 buildFish(scene);
 const figures = new Figures(scene, Q.shadow > 0);
+
+// ---------------- film look: bloom, ambient-occlusion (PC), colour grading ----------------
+const GRADE = {
+  uniforms: { tDiffuse: { value: null }, uVig: { value: .32 }, uSat: { value: 1.08 }, uTime: U.time },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float uVig, uSat, uTime; varying vec2 vUv;
+    void main(){ vec4 c = texture2D(tDiffuse, vUv); float l = dot(c.rgb, vec3(.2126,.7152,.0722));
+      c.rgb = mix(vec3(l), c.rgb, uSat);                                   // a touch more colour
+      c.rgb *= mix(vec3(.96,.98,1.04), vec3(1.05,1.0,.94), smoothstep(.05,.8,l)); // cool shadows, warm highlights
+      vec2 d = vUv - .5; c.rgb *= 1.0 - uVig * dot(d, d) * 1.6;             // soft vignette
+      float gr = fract(sin(dot(vUv * 913.0 + uTime, vec2(12.9898,78.233))) * 43758.5453); c.rgb += (gr - .5) * .012; // fine film grain
+      gl_FragColor = c; }`,
+};
+let composer = null;
+if (qLevel !== 'low') {
+  const rt = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: Q.aa ? 4 : 0 });
+  composer = new EffectComposer(renderer, rt);
+  composer.addPass(new RenderPass(scene, camera));
+  if (qLevel === 'high' && !isTouch) try { const ao = new GTAOPass(scene, camera, 4, 4); ao.blendIntensity = .8; ao.updateGtaoMaterial?.({ radius: .5, distanceExponent: 1.5, thickness: 1, scale: 1 }); composer.addPass(ao); } catch (e) { console.warn('AO unavailable', e); }
+  composer.addPass(new UnrealBloomPass(new THREE.Vector2(256, 256), .18, .5, .92));
+  composer.addPass(new ShaderPass(GRADE));
+  composer.addPass(new OutputPass());
+}
 
 // ---------------- app state ----------------
 const app = {
@@ -158,6 +190,7 @@ function setupGame(mode, diff, civ = 'franks', enemyCiv) {
     if (app.sel.includes(u)) app.select(app.sel.filter(e => e !== u));
     if (pov.unit === u) { app.toast('You have fallen!', 3); setTimeout(() => { if (pov.unit === u) exitPOV(); }, 1500); }
   };
+  g.onAlert = (x, z) => hud.ping(x, z);
   g.onHero = h => { if (app.mode === 'rts') rts.lookAt(h.x, h.z); };
   const [B0] = BASES;
   if (mode === 'battle') {
@@ -342,7 +375,7 @@ const groups = {}, lastGroup = { n: 0, t: 0 };
 document.addEventListener('mouseleave', () => { rts.mouse.in = false; });
 addEventListener('blur', () => { rts.mouse.in = false; });
 
-function resize() { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; viewOff = -1; updateViewOffset(); hud.resize(); }
+function resize() { renderer.setSize(innerWidth, innerHeight, false); if (composer) { composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(innerWidth, innerHeight); } camera.aspect = innerWidth / innerHeight; viewOff = -1; updateViewOffset(); hud.resize(); }
 // In command view, centre the picture in the space between the top bar and the bottom panel.
 let viewOff = -1;
 function updateViewOffset() {
@@ -372,7 +405,7 @@ renderer.setAnimationLoop(() => {
   hud.update(real);
   water.userData.reflect?.(renderer, scene, camera); // mirror image for the water (High quality)
   renderer.shadowMap.needsUpdate = true;
-  renderer.render(scene, camera);
+  if (composer) composer.render(real); else renderer.render(scene, camera);
 });
 
 // ---------------- boot ----------------

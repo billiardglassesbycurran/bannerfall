@@ -3,13 +3,14 @@ import * as THREE from 'three';
 import { UD, BD, DIFF, CIVS } from './data.js';
 import { N, SIZE, WL, heightAt, groundY, blocked, resCell, cellWalk, navCell, navBlock, water, resources, takeRes, BASES } from './world.js';
 import { findPath, nearestWalkable } from './path.js';
-import { buildingMesh, arrowGeo, boltGeo, stoneGeo, ringGeo } from './models.js';
+import { buildingMesh, arrowGeo, boltGeo, stoneGeo, ringGeo, wakeMaterial, SHIP_LEN, scaffoldGeo } from './models.js';
 import { M } from './geo.js';
 import { angDiff, clamp, dist } from './util.js';
 
 const CARRY = 10, RATE = { f: .9, w: .75, g: .65 };
 const ringMats = [0x8dff7a, 0xff6a5a].map(c => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: .9, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 }));
 export const bldAt = new Array(N * N).fill(null);
+const wakeGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
 
 let nextId = 1;
 export class Game {
@@ -83,7 +84,11 @@ export class Game {
     this.setBuildVisual(b);
     this.blds.push(b); this.recount(); return b;
   }
-  setBuildVisual(b) { b.mesh.scale.set(1, b.built ? 1 : .12 + .88 * b.progress, 1); }
+  setBuildVisual(b) {
+    b.mesh.scale.set(1, b.built ? 1 : .12 + .88 * b.progress, 1);
+    if (!b.built && !b.scaffold) { b.scaffold = new THREE.Mesh(scaffoldGeo(b.size, b.type === 'tower' ? 5 : b.size > 3 ? 3.2 : 2.2), M.vc); b.scaffold.position.copy(b.mesh.position); b.scaffold.castShadow = true; this.scene.add(b.scaffold); }
+    if (b.built && b.scaffold) { b.scaffold.removeFromParent(); b.scaffold = null; }
+  }
 
   // ---------------- queries ----------------
   enemiesOf(t) { return t === 0 ? 1 : 0; }
@@ -205,12 +210,13 @@ export class Game {
     const arm = Math.max(0, (t.d.arm || 0) - (src?.d?.pierce || 0));
     const amt = Math.max(1, dmg * m - arm);
     t.hp -= amt; t.hitT = this.time;
+    if (t.team === 0 && t.kind === 'unit' && t.type !== 'peasant' && this.time - (this.lastArmyPing || 0) > 6) { this.lastArmyPing = this.time; this.onAlert?.(t.x, t.z); }
     if (t.kind === 'unit' && src && src.alive && !t.possessed) {
       const busy = t.task.type === 'attack' && t.task.t.alive && t.task.t.kind === 'unit';
       if (t.d.acq && !busy && t.task.type !== 'move') this.attack(t, src, t.task.type === 'attack' ? null : t.task);
-      if (t.type === 'peasant' && src.kind === 'unit' && t.team === 0 && this.time - (this.lastWarn || 0) > 10) { this.lastWarn = this.time; this.toast('Your peasants are under attack!'); }
+      if (t.type === 'peasant' && src.kind === 'unit' && t.team === 0 && this.time - (this.lastWarn || 0) > 10) { this.lastWarn = this.time; this.toast('Your peasants are under attack!'); this.onAlert?.(t.x, t.z); }
     }
-    if (t.kind === 'bld' && t.team === 0 && this.time - (this.lastBWarn || 0) > 12) { this.lastBWarn = this.time; this.toast(`Your ${t.d.name} is under attack!`); }
+    if (t.kind === 'bld' && t.team === 0 && this.time - (this.lastBWarn || 0) > 12) { this.lastBWarn = this.time; this.toast(`Your ${t.d.name} is under attack!`); this.onAlert?.(t.x, t.z); }
     if (t.hp <= 0) this.kill(t);
   }
   kill(t) {
@@ -221,7 +227,7 @@ export class Game {
       if (t === this.hero) { this.heroRespawn = this.mode === 'battle' ? 0 : 30; this.toast(this.heroRespawn ? 'Your Commander has fallen! He returns in 30s.' : 'Your Commander has fallen!'); }
       this.onUnitDeath?.(t);
     } else {
-      t.mesh.removeFromParent(); t.selected = false; if (t.ring) { t.ring.removeFromParent(); t.ring = null; }
+      t.mesh.removeFromParent(); t.scaffold?.removeFromParent(); t.selected = false; if (t.ring) { t.ring.removeFromParent(); t.ring = null; }
       for (const [i, v] of t.prev) { blocked[i] = v; bldAt[i] = null; navBlock[i] = 0; }
       this.rubble(t);
       if (t.type === 'hall') { this.T[t.team].hallLost = true; this.toast(t.team === 0 ? 'Your Town Hall has fallen!' : 'The enemy Town Hall burns!'); }
@@ -394,6 +400,7 @@ export class Game {
         }
         if (this.edgeDist(u, b) <= (b.d.dock ? 2.4 : 1.0) || (u.near === b && this.edgeDist(u, b) < 3.2)) {
           u.path = null; this.face(u, Math.atan2(b.x - u.x, b.z - u.z), dt); if (u.swingT > .6) u.swingT = 0;
+          b.nbNow = (b.nbNow || 0) + 1; // every builder adds their share, so more builders finish faster
           const add = dt / b.d.time * (this.civ[u.team].build || 1); b.progress = Math.min(1, b.progress + add); b.hp = Math.min(b.maxHp, b.hp + add * b.maxHp);
           if (b.progress >= 1) { b.built = true; this.recount(); if (b.team === 0) this.toast(`${b.d.name} complete.`); }
           this.setBuildVisual(b);
@@ -436,6 +443,7 @@ export class Game {
     if (this.over && this.over !== 'continue') { /* keep animating */ }
     this.time += dt;
     this.rebuildHash();
+    for (const b of this.blds) b.nbNow = 0;
     for (const u of this.units) if (u.alive) { if (u.boarded) { u.x = u.boarded.x; u.z = u.boarded.z; continue; } this.updateUnit(u, dt); }
     // separation
     for (const u of this.units) {
@@ -449,7 +457,7 @@ export class Game {
         } else if (d2 <= 1e-6) { o.x += .05; }
       });
     }
-    for (const b of this.blds) if (b.alive) this.updateBuilding(b, dt);
+    for (const b of this.blds) { b.nb = b.nbNow || 0; if (b.alive) this.updateBuilding(b, dt); }
     this.updateShots(dt);
     if (this.hero && !this.hero.alive && this.heroRespawn > 0 && !this.over) {
       this.heroRespawn -= dt;
@@ -470,6 +478,18 @@ export class Game {
       if (u.d.ship) { tilt = Math.sin(this.time * 1.1 + u.id) * .035; y += Math.sin(this.time * 1.6 + u.id) * .04 - (u.type === 'fishboat' ? .12 : .28); if (u.dead) { tilt += u.deathT * .2; y -= u.deathT * .7; } } // rocking / sinking
       else if (u.dead) { tilt = -Math.min(1, u.deathT * 2.5) * Math.PI / 2 * .95; y -= Math.max(0, u.deathT - 1.5) * .6; }
       u.batch.set(u.slot, { x: u.x, y, z: u.z, yaw: u.yaw, scale: u.scale, s: Math.sin(u.phase) * .7 * k, swing: sw, tilt, hidden: u.id === hideId || !!u.boarded });
+      if (u.d.ship) {
+        if (!u.wake && u.alive) { u.wake = new THREE.Mesh(wakeGeo, wakeMaterial().clone()); this.scene.add(u.wake); }
+        if (u.wake) {
+          if (!u.alive) { u.wake.removeFromParent(); u.wake = null; }
+          else {
+            u.wakeK = (u.wakeK || 0) + ((u.speedNow > 0 ? 1 : 0) - (u.wakeK || 0)) * Math.min(1, dt * 2);
+            const L = SHIP_LEN[u.type] || 4, len = 2 + 5 * u.wakeK, fx = Math.sin(u.yaw), fz = Math.cos(u.yaw);
+            u.wake.position.set(u.x - fx * (len / 2 + L * .32), WL + .03, u.z - fz * (len / 2 + L * .32)); u.wake.rotation.y = u.yaw;
+            u.wake.scale.set(L * .32 + .4, 1, len); u.wake.material.opacity = .15 + .6 * u.wakeK;
+          }
+        }
+      }
       if (u.selected && u.alive && !u.possessed) {
         if (!u.ring) { u.ring = new THREE.Mesh(ringGeo, ringMats[u.team]); this.scene.add(u.ring); }
         u.ring.position.set(u.x, u.y + .06, u.z); u.ring.scale.setScalar(u.d.rad / .45 * 1.1);

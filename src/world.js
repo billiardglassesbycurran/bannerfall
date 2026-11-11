@@ -2,7 +2,8 @@
 import * as THREE from 'three';
 import { clamp, lerp, smooth, fbm, vnoise, hash2, mulberry32, segDist, TAU } from './util.js';
 import { Builder, P, M, U, bake, jitter, shadeAO } from './geo.js';
-import { tileFbm } from './textures.js';
+import { tileFbm, cloudTexture } from './textures.js';
+export const CLOUDS = { value: null };
 
 export const SIZE = 128, N = SIZE, HN = SIZE + 1;
 export const WL = -0.45;
@@ -159,9 +160,9 @@ export function buildTerrain(Q, tex) {
   geo.computeVertexNormals();
   const mat = M.pbr ? new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .96, metalness: 0 }) : new THREE.MeshLambertMaterial({ vertexColors: true });
   mat.onBeforeCompile = sh => {
-    Object.assign(sh.uniforms, { tG: { value: tex.grass }, tD: { value: tex.dirt }, tR: { value: tex.rock }, tS: { value: tex.sand } });
+    Object.assign(sh.uniforms, { tG: { value: tex.grass }, tD: { value: tex.dirt }, tR: { value: tex.rock }, tS: { value: tex.sand }, tCloud: CLOUDS, uTime: U.time });
     sh.vertexShader = 'attribute vec4 splat; varying vec4 vSplat; varying vec2 vXZ;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vSplat = splat; vXZ = position.xz;');
-    sh.fragmentShader = 'uniform sampler2D tG, tD, tR, tS; varying vec4 vSplat; varying vec2 vXZ;\n' + sh.fragmentShader.replace('#include <map_fragment>', `
+    sh.fragmentShader = 'uniform sampler2D tG, tD, tR, tS, tCloud; uniform float uTime; varying vec4 vSplat; varying vec2 vXZ;\n' + sh.fragmentShader.replace('#include <map_fragment>', `
       ${tex.photo ? `
       vec2 r2 = vec2(vXZ.y, -vXZ.x);
       vec3 cg = mix(texture2D(tG, vXZ * 0.13).rgb, texture2D(tG, r2 * 0.047 + 0.37).rgb, 0.45) * vec3(0.78, 1.12, 0.48);
@@ -169,7 +170,8 @@ export function buildTerrain(Q, tex) {
       vec3 cr = mix(texture2D(tR, vXZ * 0.085).rgb, texture2D(tR, r2 * 0.031 + 0.5).rgb, 0.4) * vec3(0.78, 0.78, 0.84);
       vec3 cs = mix(texture2D(tS, vXZ * 0.25).rgb, texture2D(tS, r2 * 0.09).rgb, 0.3);
       vec3 ground = cg * vSplat.x + cd * vSplat.y + cr * vSplat.z + cs * vSplat.w;
-      diffuseColor.rgb *= ground * 1.4;` : `
+      diffuseColor.rgb *= ground * 1.4;
+      float cloudSh = texture2D(tCloud, vXZ * 0.0075 + vec2(uTime * 0.0035, uTime * 0.0018) * 0.9).r; diffuseColor.rgb *= 1.0 - 0.3 * smoothstep(0.5, 0.75, cloudSh); // cloud shadows` : `
       vec2 u1 = vXZ * 0.3, u2 = vec2(vXZ.y, -vXZ.x) * 0.083 + 0.37;
       vec3 cg = mix(texture2D(tG, u1).rgb, texture2D(tG, u2).rgb, 0.4);
       vec3 cd = mix(texture2D(tD, u1 * 0.9).rgb, texture2D(tD, u2).rgb, 0.35);
@@ -294,21 +296,48 @@ export function buildWater(Q) {
 }
 
 // ---------------- sky ----------------
-export const SKY = { top: { value: new THREE.Color(0x3d78c4) }, mid: { value: new THREE.Color(0x9cc3e6) }, bot: { value: new THREE.Color(0xdfe6e3) }, sun: { value: new THREE.Vector3(-.5, .62, .35).normalize() } };
+export const SKY = { top: { value: new THREE.Color(0x3d78c4) }, mid: { value: new THREE.Color(0x9cc3e6) }, bot: { value: new THREE.Color(0xdfe6e3) }, sun: { value: new THREE.Vector3(-.5, .62, .35).normalize() }, tCloud: CLOUDS, uTime: U.time };
 export function buildSky() {
   const mat = new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false,
     uniforms: SKY,
     vertexShader: 'varying vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); gl_Position.z = gl_Position.w; }',
-    fragmentShader: `uniform vec3 top, mid, bot, sun; varying vec3 vD;
-      void main(){ float y = vD.y; vec3 c = y > 0.0 ? mix(mid, top, pow(clamp(y*1.6,0.0,1.0), .8)) : bot;
+    fragmentShader: `uniform vec3 top, mid, bot, sun; uniform sampler2D tCloud; uniform float uTime; varying vec3 vD;
+      void main(){ vec3 d = normalize(vD); float y = d.y; vec3 c = y > 0.0 ? mix(mid, top, pow(clamp(y*1.6,0.0,1.0), .8)) : bot;
         c = mix(bot, c, smoothstep(-0.02, 0.18, y));
-        float s = max(dot(normalize(vD), sun), 0.0); c += vec3(1.0,.9,.7) * (pow(s, 600.0) * 2.0 + pow(s, 12.0) * .25);
+        float s = max(dot(d, sun), 0.0); c += vec3(1.0,.9,.7) * (pow(s, 600.0) * 2.0 + pow(s, 12.0) * .25);
+        // drifting clouds projected on a high dome, lit from the sun side
+        if (y > 0.0) {
+          vec2 uv = d.xz / (y + 0.12) * 0.32 + vec2(uTime * 0.0035, uTime * 0.0018);
+          float n = texture2D(tCloud, uv).r * 0.65 + texture2D(tCloud, uv * 2.7 + 0.3).r * 0.35;
+          float cl = smoothstep(0.48, 0.78, n) * smoothstep(0.0, 0.25, y);
+          vec3 cc = mix(vec3(0.62, 0.66, 0.72), vec3(1.05, 1.02, 0.98), smoothstep(0.5, 0.95, n) * 0.6 + pow(s, 4.0) * 0.4);
+          c = mix(c, cc, cl * 0.9);
+        }
         gl_FragColor = vec4(c, 1.0); }`,
   });
   const m = new THREE.Mesh(new THREE.SphereGeometry(320, 24, 12), mat);
   m.frustumCulled = false; m.renderOrder = -1;
   return m;
+}
+
+// ---------------- distant mountains (so the world doesn't end at the map edge) ----------------
+export function buildDistant(scene) {
+  const g = new THREE.Group(), r = mulberry32(31);
+  for (const [R, H, hue, seg] of [[175, 26, .58, 120], [225, 44, .6, 140], [290, 70, .62, 160]]) {
+    const geo = new THREE.CylinderGeometry(R, R, 1, seg, 4, true), p = geo.attributes.position, col = new Float32Array(p.count * 3), c = new THREE.Color();
+    const ph = r() * 10;
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), z = p.getZ(i), a = Math.atan2(z, x), t = p.getY(i) + .5; // 0 bottom .. 1 top
+      const ridge = .35 + .65 * Math.abs(Math.sin(a * 5 + ph) * .5 + Math.sin(a * 13 + ph * 2) * .3 + Math.sin(a * 31) * .2);
+      const y = -8 + t * H * ridge; p.setY(i, y);
+      const snow = t > .75 && ridge > .7 ? (t - .75) * 4 : 0;
+      c.setHSL(hue, .18, .28 + t * .2).lerp(new THREE.Color(0xe8eef4), Math.min(1, snow)); col.set([c.r, c.g, c.b], i * 3);
+    }
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3)); geo.computeVertexNormals();
+    const m = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.BackSide })); m.position.set(SIZE / 2, 0, SIZE / 2); g.add(m);
+  }
+  scene.add(g); return g;
 }
 
 // ---------------- bridge & fish ----------------

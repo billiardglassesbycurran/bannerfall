@@ -39,7 +39,7 @@ html, body { margin:0; height:100%; overflow:hidden; overscroll-behavior:none; b
 /* bottom panel */
 #bottom { position:fixed; left:0; right:0; bottom:0; height:calc(118px + var(--sb)); padding:6px 8px calc(6px + var(--sb)); padding-left:calc(6px + var(--sl)); padding-right:calc(8px + var(--sr));
   display:flex; gap:8px; background:linear-gradient(rgba(26,18,10,.75),var(--panel)); border-top:1px solid var(--edge); z-index:5; }
-#mini { flex:none; width:106px; height:106px; border:1px solid var(--gold); border-radius:4px; image-rendering:pixelated; background:#223; }
+#mini { flex:none; width:106px; height:106px; border:2px solid var(--gold); border-radius:6px; background:#223; box-shadow:0 0 0 1px #000, inset 0 0 8px rgba(0,0,0,.6); }
 #selp { flex:1; min-width:0; overflow:hidden; font-size:12px; padding:2px 4px; }
 #selname { color:var(--gold2); font-size:14px; font-weight:bold; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 #seldesc { opacity:.9; margin-top:2px; line-height:1.3; }
