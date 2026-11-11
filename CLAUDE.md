@@ -10,6 +10,9 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
 - After each change, tell them how to see it: the live URL and that they may need to wait ~1–2 minutes for
   GitHub Pages to update, then reload (or bump `?v=` on the URL to skip the phone's cache).
 
+- **Accounts & APIs (Tripo, GitHub, anything else): always tell the owner before using one and walk them through it**
+  (what's needed, why, what it costs, exact clicks). Never use an account or spend credits without their OK.
+
 ## Platforms (both are first-class)
 - The owner tests on a **Samsung Galaxy S25 Ultra** (high-end); still keep Medium quality smooth on mid-range phones.
 - **Android Chrome first**, then desktop browsers (Chrome/Edge/Firefox/Safari). iPhone Safari should not break.
