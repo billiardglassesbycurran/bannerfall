@@ -18,13 +18,13 @@
 </script>
 <script>
   // ===== Game version: bump on every change you publish (see CLAUDE.md). =====
-  window.BF_VERSION = '0.7.0';
+  window.BF_VERSION = '0.8.0';
   // Every game file is loaded as file.js?v=VERSION so phones never mix old and new files from the browser cache.
   // (On localhost a timestamp is used instead, so edits show up immediately while developing.)
   (function () {
     var local = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
     var v = local ? Date.now() : window.BF_VERSION;
-    var mods = ['main', 'world', 'util', 'geo', 'data', 'models', 'game', 'path', 'ai', 'rts', 'pov', 'hud', 'textures', 'assets'];
+    var mods = ['main', 'world', 'util', 'geo', 'data', 'models', 'game', 'path', 'ai', 'rts', 'pov', 'hud', 'textures', 'assets', 'effects', 'audio'];
     var imports = {
       'three': 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js',
       'three/addons/': 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/'
@@ -114,7 +114,7 @@
 </div>
 <div id="pause" class="scr hide">
   <h1>PAUSED</h1>
-  <div class="row"><button class="btn" id="bResume">Resume</button><button class="btn" id="bRestart">Restart</button><button class="btn" id="bQuit">Main menu</button><button class="btn" id="bFs">Fullscreen</button></div>
+  <div class="row"><button class="btn" id="bResume">Resume</button><button class="btn" id="bRestart">Restart</button><button class="btn" id="bQuit">Main menu</button><button class="btn" id="bFs">Fullscreen</button><button class="btn" id="bSound">Sound</button></div>
 </div>
 <div id="end" class="scr hide">
   <h1 id="endT">VICTORY</h1><h2 id="endS"></h2>

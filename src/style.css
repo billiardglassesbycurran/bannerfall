@@ -122,3 +122,5 @@ html, body { margin:0; height:100%; overflow:hidden; overscroll-behavior:none; b
 #civs .btn { min-width:74px; }
 @media (max-height:460px) { #civInfo { font-size:11px; min-height:0; } }
 .btn .cost { max-width:100%; overflow:hidden; text-overflow:ellipsis; display:block; }
+
+.btn.tech { background:linear-gradient(#3a4a5a,#1e2a36); border-color:#8ab4d8; }

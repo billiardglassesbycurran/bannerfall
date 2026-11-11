@@ -1,13 +1,13 @@
 // HUD: resource bar, selection panel, command card, minimap, health bars, toasts.
 import * as THREE from 'three';
-import { UD, BD, BUILD_LIST } from './data.js';
+import { UD, BD, BUILD_ECO, BUILD_MIL, TECH, AGES } from './data.js';
 import { N, SIZE, resources, minimapColors, heightAt, WL } from './world.js';
 
 const $ = id => document.getElementById(id);
 const HK = ['KeyZ', 'KeyX', 'KeyC', 'KeyV', 'KeyB', 'KeyN', 'KeyM', 'Comma', 'Period', 'Slash'];
 const HKL = ['Z', 'X', 'C', 'V', 'B', 'N', 'M', ',', '.', '/'];
 export const costHtml = c => !c ? '' : ['f', 'w', 'g'].filter(k => c[k]).map(k => `<span class="${k}">${c[k]}${k}</span>`).join(' ');
-const TASK = { board: 'Boarding ship', unload: 'Sailing to land troops', idle: 'Idle', move: 'Moving', amove: 'Attacking', attack: 'Fighting', follow: 'Following', build: 'Building', farm: 'Farming', return: 'Carrying to storage' };
+const TASK = { patrol: 'Patrolling', garrison: 'Running to the Town Hall', repair: 'Repairing', board: 'Boarding ship', unload: 'Sailing to land troops', idle: 'Idle', move: 'Moving', amove: 'Attacking', attack: 'Fighting', follow: 'Following', build: 'Building', farm: 'Farming', return: 'Carrying to storage' };
 const RN = { f: 'food', w: 'wood', g: 'gold' };
 
 export class HUD {
@@ -66,12 +66,13 @@ export class HUD {
     if (e.kind === 'bld') {
       name.textContent = (e.team ? 'Enemy ' : '') + e.d.name;
       let t = `HP ${Math.ceil(e.hp)}/${e.maxHp}`;
-      if (!e.built) t += ` · Under construction ${Math.floor(e.progress * 100)}%`;
+      if (!e.built) t += ` · Under construction ${Math.floor(e.progress * 100)}%` + (e.team === 0 ? ` · ${e.nb || 0} builder${e.nb === 1 ? '' : 's'}` : '');
+      else if (e.cargo?.length) t += ` · ${e.cargo.length} peasants sheltering`;
       else if (e.type === 'farm') t += ` · ${Math.ceil(e.food)} food left`;
       else if (e.d.desc) t += ` · ${e.d.desc}`;
       desc.textContent = t;
       if (e.team === 0) e.queue.forEach((it, i) => {
-        const d = document.createElement('div'); d.className = 'qi'; d.innerHTML = `${UD[it.type].name}<i style="width:${Math.min(1, it.t) * 100}%"></i>`;
+        const d = document.createElement('div'); d.className = 'qi'; d.innerHTML = `${it.tech ? TECH[it.tech].name : UD[it.type].name}<i style="width:${Math.min(1, it.t) * 100}%"></i>`;
         d.title = 'Tap to cancel'; d.onpointerdown = ev => { ev.stopPropagation(); this.a.game.cancelTrain(e, i); this.updateSel(); this.updateCard(); }; q.appendChild(d);
       });
       return;
@@ -92,38 +93,77 @@ export class HUD {
     const a = this.a, g = a.game, sel = a.sel, card = $('card'), btns = [];
     const T = g.T[0], touch = a.isTouch;
     const mine = sel.filter(e => e.alive !== false && e.team === 0);
+    const short = n => n.replace('Storehouse', 'Store').replace('Watchtower', 'Tower').replace('Archery Range', 'Range').replace('Siege Workshop', 'Siege').replace('Light Cavalry', 'Light Cav').replace('Crossbowman', 'Crossbow').replace('Fishing Boat', 'Fisher').replace('Transport Ship', 'Transport').replace('Blacksmith', 'Smith');
+    const ageName = n => AGES[n].replace(' Age', '');
+    const back = () => btns.push({ label: '&#9664;', sub: 'back', on: () => { this.page = null; } });
+    // what kind of thing is selected decides the panel; pages keep it to 10 buttons
     if (a.pending) btns.push({ label: '&#10005;', sub: 'cancel', on: () => a.cancelPending() });
-    else if (mine.length && mine[0].kind === 'unit') {
-      if (mine.some(u => u.type === 'peasant') && g.mode !== 'battle') for (const t of BUILD_LIST) {
-        const d = BD[t], req = d.req && !g.has(0, d.req);
-        btns.push({ label: d.name.replace('Storehouse', 'Store').replace('Watchtower', 'Tower').replace('Archery Range', 'Range').replace('Siege Workshop', 'Siege'), sub: req ? 'needs ' + BD[d.req].name.replace('Archery ', '') : costHtml(d.cost), dis: req || !g.afford(0, d.cost), on: () => a.startPlace(t), tip: d.desc });
+    else if (!mine.length && sel[0]?.kind === 'res' && !sel[0].fish && g.mode !== 'battle') {
+      const r = sel[0];
+      for (const n of [1, 3, 5]) btns.push({ label: `+${n}`, sub: n === 1 ? 'peasant' : 'peasants', on: () => { const k = g.sendPeasants(0, r, n); a.toast(k ? `${k} peasant${k > 1 ? 's' : ''} sent.` : 'No free peasants.', 1.5); } });
+    } else if (mine.length && mine[0].kind === 'unit') {
+      const peas = mine.filter(u => u.type === 'peasant'), mil = mine.filter(u => u.type !== 'peasant' && !u.d.ship), ships = mine.filter(u => u.d.ship);
+      if (peas.length && g.mode !== 'battle' && (this.page === 'eco' || this.page === 'mil')) {
+        for (const t of this.page === 'eco' ? BUILD_ECO : BUILD_MIL) {
+          const d = BD[t], req = d.req && !g.has(0, d.req), old = !g.ageOK(0, d);
+          btns.push({ label: short(d.name), sub: old ? ageName(d.age) + ' Age' : req ? 'needs ' + short(BD[d.req].name) : costHtml(d.cost), dis: old || req || !g.afford(0, d.cost), why: old ? `Requires the ${AGES[d.age]}.` : req ? `Requires a ${BD[d.req].name}.` : null, on: () => { a.startPlace(t); this.page = null; }, tip: d.desc });
+        }
+        back();
+      } else {
+        if (peas.length && g.mode !== 'battle') {
+          const go = rt => () => { let k = 0; for (const u of peas) { const r = rt === 'f' ? (g.blds.find(b => b.alive && b.built && b.team === 0 && b.type === 'farm' && (!b.farmer || !b.farmer.alive || b.farmer.task.b !== b)) || g.nearestRes(u.x, u.z, 'f', 60)) : g.nearestRes(u.x, u.z, rt, 70); if (r) { if (r.kind === 'bld') g.farm(u, r); else g.gather(u, r); k++; } } if (!k) a.toast('None nearby.', 1.5); };
+          btns.push({ label: 'Food', sub: 'gather', on: go('f') }, { label: 'Wood', sub: 'chop', on: go('w') }, { label: 'Gold', sub: 'mine', on: go('g') });
+          btns.push({ label: 'Build', sub: 'economy &#9654;', on: () => { this.page = 'eco'; } }, { label: 'Build', sub: 'military &#9654;', on: () => { this.page = 'mil'; } });
+          btns.push({ label: 'Repair', sub: 'pick building', on: () => a.setPending({ type: 'repair' }) });
+          if (peas.some(u => u.carry)) btns.push({ label: 'Return', sub: 'goods', on: () => { for (const u of peas) if (u.carry) g.setTask(u, { type: 'return' }); } });
+        }
+        if (mil.length || ships.some(u => u.d.dmg > 0)) {
+          btns.push({ label: 'Attack', sub: 'move', on: () => a.setPending({ type: 'amove' }) });
+          btns.push({ label: 'Patrol', sub: 'pick point', on: () => a.setPending({ type: 'patrol' }) });
+          const st = (mil[0] || ships[0]).stance || 'aggressive', next = { aggressive: 'defensive', defensive: 'hold', hold: 'aggressive' }[st];
+          btns.push({ label: { aggressive: 'Aggressive', defensive: 'Defensive', hold: 'Hold' }[st], sub: 'stance &#8635;', on: () => { for (const u of [...mil, ...ships]) u.stance = next; a.toast(`Stance: ${next === 'hold' ? 'hold ground (no chasing)' : next === 'defensive' ? 'defensive (chase a little, then return)' : 'aggressive (chase enemies)'}.`, 2); } });
+          if (g.hero?.alive && mil.length && !mil.includes(g.hero)) btns.push({ label: 'Follow', sub: 'commander', on: () => { mil.forEach((u, i) => { const row = Math.floor(i / 6) + 1, col = (i % 6) - 2.5; g.setTask(u, { type: 'follow', leader: g.hero, off: { a: Math.atan2(col * 1.2, row * 1.4), d: Math.hypot(col * 1.2, row * 1.4) } }); }); } });
+        }
+        const tr = ships.find(u => u.d.carry);
+        if (tr) { btns.push({ label: 'Unload', sub: 'pick shore', on: () => a.setPending({ type: 'unload', ship: tr }) }); btns.push({ label: 'Land', sub: 'here', on: () => g.unloadAt(tr, tr.x, tr.z) }); }
+        btns.push({ label: 'Stop', sub: '', on: () => { for (const u of mine) g.setTask(u, { type: 'idle' }); } });
       }
-      if (mine.some(u => u.type !== 'peasant' && u.d.dmg > 0)) btns.push({ label: 'Attack', sub: 'move', on: () => a.setPending({ type: 'amove' }) });
-      const tr = mine.find(u => u.d.carry);
-      if (tr) { btns.push({ label: 'Unload', sub: 'pick shore', on: () => a.setPending({ type: 'unload', ship: tr }) }); btns.push({ label: 'Land', sub: 'here', on: () => g.unloadAt(tr, tr.x, tr.z) }); }
-      btns.push({ label: 'Stop', sub: '', on: () => { for (const u of mine) g.setTask(u, { type: 'idle' }); } });
-    } else if (mine.length && mine[0].kind === 'bld' && mine[0].built) {
+    } else if (mine.length && mine[0].kind === 'bld') {
       const b = mine[0];
-      for (const t of g.trainsFor(b)) {
-        const d = g.stat(0, t), n = b.queue.filter(q => q.type === t).length;
-        btns.push({ label: d.name.replace('Light Cavalry', 'Light Cav').replace('Horse Archer', 'Horse Archer').replace('Crossbowman', 'Crossbow').replace('Fishing Boat', 'Fisher').replace('Transport Ship', 'Transport').replace("Khan's Guard", "Khan's Guard"), sub: costHtml(d.cost), dis: !g.afford(0, d.cost) || b.queue.length >= 5, badge: n || '', on: () => { const r = g.train(b, t); if (r === 'cost') a.toast('Not enough resources.', 2); else if (r === 'full') a.toast('Queue is full.', 2); this.updateSel(); this.updateCard(); }, tip: d.desc });
+      if (b.built) {
+        for (const t of g.trainsFor(b)) {
+          const d = g.stat(0, t), n = b.queue.filter(q => q.type === t).length, old = !g.ageOK(0, d);
+          btns.push({ label: short(d.name), sub: old ? ageName(d.age) + ' Age' : costHtml(d.cost), dis: old || !g.afford(0, d.cost) || b.queue.length >= 5, why: old ? `Requires the ${AGES[d.age]}.` : null, badge: n || '', on: () => { const r = g.train(b, t); if (r === 'cost') a.toast('Not enough resources.', 2); else if (r === 'full') a.toast('Queue is full.', 2); this.updateSel(); }, tip: d.desc });
+        }
+        for (const k of g.techsFor(b)) {
+          const t = TECH[k], old = (t.age || 0) > T.age;
+          btns.push({ label: (t.toAge ? '&#9733; ' : '') + t.name.replace('Double-Bit ', '').replace(' Infantry', ''), sub: old ? ageName(t.age) + ' Age' : costHtml(t.cost), dis: old || !g.afford(0, t.cost) || b.queue.length >= 5, why: old ? `Requires the ${AGES[t.age]}.` : null, tech: 1, on: () => { const r = g.research(b, k); if (r === 'cost') a.toast('Not enough resources.', 2); else if (r === 'no') a.toast('Already advancing.', 2); this.updateSel(); }, tip: t.desc });
+        }
+        if (b.type === 'hall' && g.mode !== 'battle') btns.push({ label: b.cargo?.length ? 'All Clear' : '&#128276; Bell', sub: b.cargo?.length ? `${b.cargo.length} inside` : 'peasants hide', on: () => { const n = g.ringBell(0); a.toast(n < 0 ? 'All clear! Back to work.' : n ? `${n} peasants run for the Town Hall!` : 'No peasants nearby.', 2); } });
+        if (b.d.trains) btns.push({ label: 'Rally', sub: 'point', on: () => a.setPending({ type: 'rally', b }) });
       }
-      if (b.d.trains) btns.push({ label: 'Rally', sub: 'point', on: () => a.setPending({ type: 'rally', b }) });
+      if (b.type !== 'hall' || g.blds.filter(o => o.alive && o.team === 0 && o.type === 'hall').length > 1) btns.push({ label: this.confirmDel === b.id ? 'Sure?' : 'Demolish', sub: this.confirmDel === b.id ? 'tap again' : '', on: () => { if (this.confirmDel === b.id) { g.kill(b); a.select([]); this.confirmDel = null; } else { this.confirmDel = b.id; setTimeout(() => { this.confirmDel = null; this.sig = ''; }, 3000); } } });
     }
+    if (btns.length > 10) btns.length = 10;
     // only rebuild DOM when something changed
-    const sig = btns.map(b => b.label + b.sub + b.dis + b.badge).join('|');
+    const sig = (this.page || '') + btns.map(b => b.label + b.sub + b.dis + b.badge).join('|');
     this.buttons = btns;
     if (sig === this.sig) return; this.sig = sig;
     card.innerHTML = '';
     btns.forEach((b, i) => {
-      const el = document.createElement('button'); el.className = 'btn' + (b.dis ? ' dis' : '');
+      const el = document.createElement('button'); el.className = 'btn' + (b.dis ? ' dis' : '') + (b.tech ? ' tech' : '');
       el.innerHTML = `${b.label}<span class="cost">${b.sub || ''}</span>${b.badge ? `<span class="q">${b.badge}</span>` : ''}${!touch && HKL[i] ? `<span class="hk">${HKL[i]}</span>` : ''}`;
       if (b.tip) el.title = b.tip;
-      el.addEventListener('click', ev => { ev.stopPropagation(); if (b.dis) { a.toast(b.sub && b.sub.startsWith('needs') ? `Requires a ${b.sub.slice(6)}.` : 'Not enough resources.', 2); return; } b.on(); this.sig = ''; this.updateCard(); });
+      el.addEventListener('click', ev => { ev.stopPropagation(); this.press(b); });
       card.appendChild(el);
     });
   }
-  hotkey(code) { const i = HK.indexOf(code); const b = this.buttons[i]; if (!b) return false; if (!b.dis) b.on(); this.sig = ''; this.updateCard(); return true; }
+  press(b) {
+    const a = this.a;
+    if (b.dis) { a.toast(b.why || (b.sub && b.sub.startsWith('needs') ? `Requires a ${b.sub.slice(6)}.` : 'Not enough resources.'), 2); return; }
+    a.sfx?.('click'); b.on(); this.sig = ''; this.updateCard(); if (b.tip && this.a.isTouch && b.tech) a.toast(b.tip, 2.5);
+  }
+  hotkey(code) { const i = HK.indexOf(code); const b = this.buttons[i]; if (!b) return false; this.press(b); return true; }
 
   // ---------------- minimap ----------------
   ping(x, z) { this.pings.push({ x, z, t: performance.now() }); if (this.pings.length > 6) this.pings.shift(); }

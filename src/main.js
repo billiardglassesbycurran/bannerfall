@@ -1,7 +1,9 @@
 // Bannerfall — entry point: renderer, lighting, menus, game modes, input routing and the main loop.
 import * as THREE from 'three';
 import { SIZE, BASES, WL, CLOUDS, buildDistant, buildTerrain, buildWater, buildSky, buildResources, buildBridge, buildFish, updateFish, heightAt } from './world.js';
-import { BD, DIFF, MODES, CIVS, CIV_LIST, UD } from './data.js';
+import { BD, DIFF, MODES, CIVS, CIV_LIST, UD, TECH, AGES } from './data.js';
+import { FX } from './effects.js';
+import { Sound } from './audio.js';
 import { Figures, buildingGeo } from './models.js';
 import { Game } from './game.js';
 import { AI } from './ai.js';
@@ -100,6 +102,13 @@ const app = {
   cfg: { mode: 'skirmish', diff: 1, civ: 'franks' },
 };
 app.scene = scene; app.renderer = renderer;
+const fx = new FX(scene), sound = new Sound();
+app.fx = fx; app.sound = sound;
+// sound volume falls off with distance from what you're looking at
+const earDist = (x, z) => { const f = app.mode === 'pov' && pov.unit ? pov.unit : rts.focus; return Math.hypot(x - f.x, z - f.z); };
+app.sfx = (name, x, z, vol = 1) => sound.play(name, x === undefined ? vol : vol * Math.max(0, 1 - earDist(x, z) / (app.mode === 'pov' ? 45 : 30 + rts.dist)));
+addEventListener('pointerdown', () => sound.init(), { capture: true });
+addEventListener('keydown', () => sound.init(), { capture: true });
 const rts = new RTSView(app), pov = new POVView(app), hud = new HUD(app);
 Object.assign(app, { rts, pov, hud });
 app.toast = (m, s) => hud.toast(m, s);
@@ -125,7 +134,7 @@ app.order = (ent, x, z) => {
 };
 app.setPending = p => {
   app.pending = p; hud.sig = ''; hud.updateCard(); $('place').classList.remove('hide'); $('pok').classList.toggle('hide', !(p.type === 'place' && isTouch));
-  $('ptxt').textContent = p.type === 'place' ? (isTouch ? 'Tap the map to position, then ✓' : 'Click to place (Shift: place several)') : p.type === 'amove' ? 'Tap where to attack' : p.type === 'unload' ? 'Tap the shore to land your troops' : 'Tap the rally point';
+  $('ptxt').textContent = p.type === 'place' ? (isTouch ? 'Tap the map to position, then ✓' : 'Click to place (Shift: place several)') : p.type === 'amove' ? 'Tap where to attack' : p.type === 'patrol' ? 'Tap the far end of the patrol' : p.type === 'repair' ? 'Tap a damaged building' : p.type === 'unload' ? 'Tap the shore to land your troops' : 'Tap the rally point';
 };
 app.cancelPending = () => { app.pending = null; if (ghost) { ghost.removeFromParent(); ghost = null; } $('place').classList.add('hide'); hud.sig = ''; hud.updateCard(); };
 
@@ -133,7 +142,7 @@ let ghost = null;
 const ghostMats = [new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: .65, color: 0xb0ffb0, depthWrite: false }), new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: .65, color: 0xff7a6a, depthWrite: false })];
 app.startPlace = type => {
   app.setPending({ type: 'place', btype: type });
-  ghost = new THREE.Mesh(buildingGeo(type, 0), ghostMats[0]); scene.add(ghost);
+  ghost = new THREE.Mesh(buildingGeo(type, 0, app.game.look(0)), ghostMats[0]); scene.add(ghost);
   const p = rts.pickGround(innerWidth / 2, innerHeight * .42); if (p) moveGhost(p.x, p.z);
 };
 function moveGhost(x, z) {
@@ -158,6 +167,13 @@ app.pendingAt = (x, z, ent, shift) => {
     const units = app.sel.filter(e => e.kind === 'unit' && e.team === 0 && e.alive && e.type !== 'peasant');
     g.formation(units, x, z); for (const u of units) u.task.type = 'amove';
     showMarker(x, z, 0xff6a4a);
+  } else if (p.type === 'patrol') {
+    const units = app.sel.filter(e => e.kind === 'unit' && e.team === 0 && e.alive && e.type !== 'peasant');
+    for (const u of units) g.setTask(u, { type: 'patrol', a: { x: u.x, z: u.z }, b: { x, z }, leg: true }); showMarker(x, z, 0xffb04a);
+  } else if (p.type === 'repair') {
+    const peas = app.sel.filter(e => e.kind === 'unit' && e.type === 'peasant' && e.alive);
+    if (ent && ent.kind === 'bld' && ent.team === 0 && ent.built && ent.hp < ent.maxHp) { for (const u of peas) g.setTask(u, { type: 'repair', b: ent }); showMarker(x, z, 0x9dff8a); }
+    else app.toast('Pick one of your damaged buildings.', 2);
   } else if (p.type === 'unload') { g.setTask(p.ship, { type: 'unload', x, z }); showMarker(x, z, 0x8ab4ff);
   } else if (p.type === 'rally') { p.b.rally = ent && ent.kind === 'res' ? { x, z, res: ent } : { x, z }; app.toast('Rally point set.', 2); showMarker(x, z, 0x8ab4ff); }
   app.cancelPending();
@@ -166,11 +182,18 @@ app.hoverAt = (sx, sy) => { if (app.pending?.type === 'place') { const p = rts.p
 $('pok').addEventListener('click', e => { e.stopPropagation(); confirmPlace(false); });
 $('pno').addEventListener('click', e => { e.stopPropagation(); app.cancelPending(); });
 
+app.resClick = res => {
+  const g = app.game; if (!g || g.mode === 'battle' || res.fish) return;
+  if (app.sel.some(e => e.kind === 'unit' && e.type === 'peasant' && e.alive)) return;
+  const n = g.sendPeasants(0, res, 1);
+  app.toast(n ? `A peasant is on the way to ${{ f: 'gather berries', w: 'chop wood', g: 'mine gold' }[res.rt]}.` : 'No free peasants — train more at the Town Hall.', 2);
+  if (n) showMarker(res.x, res.z, 0x9dff8a);
+};
 app.infoText = () => {
   const g = app.game; if (!g) return '';
   if (g.mode === 'survival') { const ai = app.ai; return ai.wave >= 10 ? 'Final wave!' : `Wave ${ai.wave}/10 · next in ${Math.max(0, Math.ceil(ai.nextWave - g.time))}s`; }
   if (g.mode === 'battle') { const n = t => g.units.filter(u => u.alive && u.team === t).length; return `${g.civ[0].name} ${n(0)} · ${g.civ[1].name} ${n(1)}`; }
-  return `${g.civ[0].name} vs ${g.civ[1].name} (${DIFF[g.diff].name})`;
+  return `${AGES[g.T[0].age]} · ${g.civ[0].name} vs ${g.civ[1].name} (${DIFF[g.diff].name})`;
 };
 app.hint = () => {
   const g = app.game;
@@ -190,7 +213,23 @@ function setupGame(mode, diff, civ = 'franks', enemyCiv) {
     if (app.sel.includes(u)) app.select(app.sel.filter(e => e !== u));
     if (pov.unit === u) { app.toast('You have fallen!', 3); setTimeout(() => { if (pov.unit === u) exitPOV(); }, 1500); }
   };
-  g.onAlert = (x, z) => hud.ping(x, z);
+  g.onAlert = (x, z) => { hud.ping(x, z); if (performance.now() - (app.lastHorn || 0) > 15000) { app.lastHorn = performance.now(); app.sfx('horn'); } };
+  g.onHit = (t, src, amt) => {
+    const melee = src?.d?.melee, y = t.kind === 'bld' ? t.y + 1.2 : t.y + 1.1;
+    if (melee) { const metal = (t.d.arm || 0) >= 2; if (metal && Math.random() < .6) fx.sparks(t.x, y, t.z, 5); app.sfx(metal ? 'clang' : 'thud', t.x, t.z, .7); }
+    else if (t.kind === 'bld') fx.dust(t.x, t.y + .5, t.z, 3, .8);
+  };
+  g.onShoot = (src, kind) => { if (kind === 'stone') app.sfx('thud', src.x, src.z, .6); else if (Math.random() < .5) app.sfx('arrow', src.x, src.z, .5); };
+  g.onSplash = (x, z) => { const h = heightAt(x, z); if (h < WL) { fx.splash(x, WL, z, 16); app.sfx('splash', x, z); } else { fx.dust(x, h, z, 14, 2.2); app.sfx('stone', x, z); } };
+  g.onDestroyed = b => { fx.dust(b.x, b.y, b.z, 30, b.size * .9, [.42, .38, .34]); for (let i = 0; i < 8; i++) fx.smoke(b.x, b.y + 1, b.z, .25, 1.5); app.sfx('collapse', b.x, b.z); };
+  g.onBuilt = b => { fx.dust(b.x, b.y, b.z, 16, b.size * .6); if (b.team === 0) app.sfx('chime'); };
+  g.onWork = (u, kind) => { if (kind) app.sfx(kind, u.x, u.z, .45); };
+  g.onTrained = (u, b) => { if (u.team === 0 && app.sel.includes(b)) app.sfx('chime', b.x, b.z, .5); };
+  g.onTech = (team, key) => {
+    const t = TECH[key];
+    if (team === 0) { if (t.toAge) { app.toast(`Your people enter the ${AGES[t.toAge]}! New buildings, units and upgrades unlocked.`, 5); app.sfx('fanfare'); for (const b of g.blds) if (b.alive && b.team === 0) fx.dust(b.x, b.y, b.z, 6, b.size * .5); } else { app.toast(`${t.name} researched.`, 2.5); app.sfx('chime'); } }
+    else if (t.toAge) app.toast(`The enemy has reached the ${AGES[t.toAge]}.`, 3);
+  };
   g.onHero = h => { if (app.mode === 'rts') rts.lookAt(h.x, h.z); };
   const [B0] = BASES;
   if (mode === 'battle') {
@@ -219,7 +258,7 @@ function setupGame(mode, diff, civ = 'franks', enemyCiv) {
       for (let i = 0; i < 4; i++) g.spawnUnit(1, 'peasant', eh.x - 4 - i * .8, eh.z + 3.5);
       g.spawnUnit(1, 'hero', eh.x - 4.5, eh.z + 1);
     } else {
-      Object.assign(g.T[0], { f: 300, w: 350, g: 150 });
+      Object.assign(g.T[0], { f: 300, w: 350, g: 150, age: 1 }); g.refreshLooks(0);
       for (let i = 0; i < 3; i++) g.spawnUnit(0, 'sword', hall.x + 6 + i, hall.z - 6);
       for (let i = 0; i < 2; i++) g.spawnUnit(0, 'archer', hall.x + 5 + i, hall.z - 7.5);
     }
@@ -292,6 +331,8 @@ onBtn('bAgain', () => reloadTo(playHash()));
 onBtn('bMenu', () => reloadTo(''));
 onBtn('bLook', () => $('end').classList.add('hide'));
 onBtn('bFs', goFullscreen);
+onBtn('bSound', () => { $('bSound').textContent = sound.toggle() ? 'Sound: on' : 'Sound: off'; });
+$('bSound').textContent = sound.on ? 'Sound: on' : 'Sound: off';
 function setPause(v) { app.paused = v; $('pause').classList.toggle('hide', !v); }
 function goFullscreen() {
   const d = document;
@@ -375,7 +416,7 @@ const groups = {}, lastGroup = { n: 0, t: 0 };
 document.addEventListener('mouseleave', () => { rts.mouse.in = false; });
 addEventListener('blur', () => { rts.mouse.in = false; });
 
-function resize() { renderer.setSize(innerWidth, innerHeight, false); if (composer) { composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(innerWidth, innerHeight); } camera.aspect = innerWidth / innerHeight; viewOff = -1; updateViewOffset(); hud.resize(); }
+function resize() { renderer.setSize(innerWidth, innerHeight, false); fx.setScale(innerHeight * renderer.getPixelRatio() / (2 * Math.tan(camera.fov * Math.PI / 360))); if (composer) { composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(innerWidth, innerHeight); } camera.aspect = innerWidth / innerHeight; viewOff = -1; updateViewOffset(); hud.resize(); }
 // In command view, centre the picture in the space between the top bar and the bottom panel.
 let viewOff = -1;
 function updateViewOffset() {
@@ -399,6 +440,8 @@ renderer.setAnimationLoop(() => {
   else { menuYaw += real * .05; rts.yaw = menuYaw; rts.dist = rts.distT = 75; rts.lookAt(64, 64); rts.update(real); }
   if (g) g.syncVisuals(dt, pov.first && pov.unit ? pov.unit.id : -1);
   water.userData.update(t); U.time.value = t; updateFish(t);
+  if (g) emitEffects(dt);
+  fx.update(dt);
   const f = app.mode === 'pov' && pov.unit ? pov.unit : rts.focus; // keep the sharp-shadow area centred on the action
   sun.target.position.set(f.x, 0, f.z); sun.position.copy(sun.target.position).addScaledVector(SUN_DIR, 110);
   if (marker.visible) { markerT += real; marker.scale.setScalar(1 + markerT * 1.5); marker.material.opacity = 1 - markerT / .7; if (markerT > .7) marker.visible = false; }
@@ -407,6 +450,22 @@ renderer.setAnimationLoop(() => {
   renderer.shadowMap.needsUpdate = true;
   if (composer) composer.render(real); else renderer.render(scene, camera);
 });
+
+// ---------------- ambient effects: smoke & fire from damaged buildings, chimneys, forges, ship spray ----------------
+let emitT = 0;
+function emitEffects(dt) {
+  if (!dt || (emitT += dt) < .1) return; emitT = 0;
+  const g = app.game;
+  for (const b of g.blds) {
+    if (!b.alive || !b.built) continue;
+    const f = b.hp / b.maxHp, top = b.y + (b.type === 'tower' ? 4.5 : b.size * .7 + .8);
+    if (f < .6 && Math.random() < .7) fx.smoke(b.x + (Math.random() - .5) * b.size * .6, top, b.z + (Math.random() - .5) * b.size * .6, .18, 1 + b.size * .15);
+    if (f < .35) { fx.fire(b.x + (Math.random() - .5) * b.size * .7, top - .6, b.z + (Math.random() - .5) * b.size * .7, .8 + b.size * .1); if (Math.random() < .3) fx.ember(b.x, top, b.z); }
+    if ((b.type === 'house' || b.type === 'hall') && Math.random() < .12) fx.chimney(b.x + (b.type === 'house' ? .5 : -1), b.y + (b.type === 'house' ? 3.0 : 4.5), b.z - .3);
+    if (b.type === 'smith') { if (Math.random() < .35) fx.chimney(b.x + .8, b.y + 3.9, b.z - .8); if (Math.random() < .25) fx.ember(b.x - .3, b.y + .8, b.z - .15); }
+  }
+  for (const u of g.units) if (u.alive && u.d.ship && u.speedNow > 0 && Math.random() < .5) { const fxx = Math.sin(u.yaw), fz = Math.cos(u.yaw), L = u.type === 'warship' ? 3.6 : u.type === 'transport' ? 2.7 : 1.6; fx.splash(u.x + fxx * L, WL, u.z + fz * L, 2); }
+}
 
 // ---------------- boot ----------------
 $('ver').textContent = 'v' + VERSION;

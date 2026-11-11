@@ -119,7 +119,7 @@ export class RTSView {
       return true;
     }
     if (ent && ent.kind === 'bld') { this.a.select([ent]); return true; }
-    if (ent && ent.kind === 'res') { this.a.select([ent]); return true; }
+    if (ent && ent.kind === 'res') { this.a.select([ent]); this.a.resClick?.(ent); return true; } // clicking a resource sends a peasant
     return false;
   }
   orderAt(sx, sy, touch) {

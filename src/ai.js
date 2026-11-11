@@ -1,5 +1,5 @@
 // Enemy AI for each mode.
-import { BD } from './data.js';
+import { BD, TECH } from './data.js';
 import { dist } from './util.js';
 import { BASES, blocked, N } from './world.js';
 
@@ -101,11 +101,21 @@ export class AI {
     if (T.pop < T.cap) for (const b of g.blds) {
       if (!b.alive || !b.built || b.team !== this.team || !b.d.trains || b.type === 'hall' || b.queue.length >= 2) continue;
       // weight each option by the difficulty's army mix; the civilization's unique unit is favoured
-      const opts = g.trainsFor(b), uniq = g.civ[this.team].unique?.type, w = t => (this.D.mix[UD[t].cls] || 0) * (t === uniq ? 2.5 : 1);
+      const opts = g.trainsFor(b).filter(t => g.ageOK(this.team, UD[t])), uniq = g.civ[this.team].unique?.type, w = t => (this.D.mix[UD[t].cls] || 0) * (t === uniq ? 2.5 : 1);
       let pick = null, r = Math.random() * opts.reduce((s2, t) => s2 + w(t), 0);
       for (const t of opts) { r -= w(t); if (r <= 0) { pick = t; break; } }
       if (pick) g.train(b, pick);
     }
+    // advance through the ages, then research upgrades while keeping a reserve
+    if (T.age === 0 && time > this.D.a1 && peas.length >= 8) g.research(hall, 'feudal');
+    if (T.age === 1 && time > this.D.a2 && peas.length >= 14) g.research(hall, 'kingdom');
+    if (!g.queuedTech(this.team, 'feudal') && !g.queuedTech(this.team, 'kingdom') && (this.techT = (this.techT || 0) + 1) % 6 === 0) {
+      const pri = ['watch', 'wheelbarrow', 'axe', 'forging', 'fletching', 'chainmail', 'goldmining', 'plough', 'veterans', 'masonry', 'handcart', 'ironcast', 'bodkin', 'plate', 'pikemen', 'marksmen', 'chivalry', 'elite', 'guardtower', 'fortify', 'gillnets', 'careening'];
+      outer: for (const k of pri) for (const b of g.blds) if (b.alive && b.built && b.team === this.team && b.queue.length === 0 && g.techsFor(b).includes(k)) {
+        const c = TECH[k].cost; if (T.f >= (c.f || 0) + 150 && T.w >= (c.w || 0) + 80 && T.g >= (c.g || 0) + 60 && g.research(b, k) === 'ok') break outer;
+      }
+    }
+    if (time > 280 && nOf('smith') === 0 && T.age >= 1) this.tryBuild('smith', hall);
     // defence: enemies near our base
     const threat = g.nearestEnemy({ x: hall.x, z: hall.z, team: this.team }, 22, false);
     if (threat) for (const u of [...mil, ...this.my(u => u.type === 'hero')]) if (u.task.type === 'idle' || u.task.type === 'move') g.amove(u, threat.x, threat.z);

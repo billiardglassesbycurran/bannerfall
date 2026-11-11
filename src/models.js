@@ -554,27 +554,50 @@ function flag(b, tc, x, y, z, h = 2) {
   b.add(P.cyl(.04, .05, h, 5), C.wood, x, y + h / 2, z); b.add(P.ball(.07, 6, 4), C.gold, x, y + h + .03, z);
   box(b, tc, x + .4, y + h - .3, z, .75, .5, .02);
 }
-export function buildingGeo(kind, team) {
-  const tc = TEAM[team], b = new Builder();
+/** Crenellations (castle teeth) along a square wall top. */
+function crenel(b, cx, y, cz, w, d, col = C.stone) {
+  const n = Math.max(2, Math.round(w / .5)), m = Math.max(2, Math.round(d / .5));
+  for (let i = 0; i < n; i++) for (const s of [-1, 1]) box(b, col, cx - w / 2 + (i + .5) * w / n, y, cz + s * d / 2, w / n * .55, .32, .22);
+  for (let i = 0; i < m; i++) for (const s of [-1, 1]) box(b, col, cx + s * w / 2, y, cz - d / 2 + (i + .5) * d / m, .22, .32, d / m * .55);
+}
+/**
+ * Building models. look = { age: 0|1|2, fort, guard }: buildings grow from timber-and-thatch (Hamlet Age) to stone and
+ * tile (Feudal) to grander, bannered halls (Kingdom); Fortified Hall and Guard Towers are visible upgrades.
+ */
+export function buildingGeo(kind, team, look = { age: 1 }) {
+  const tc = TEAM[team], b = new Builder(), age = look.age || 0, roofC = age >= 1 ? C.tile : C.thatch;
   const base = (s, h = .35, col = C.dstone) => box(b, col, 0, h / 2 - .5, 0, s, h + 1, s);
   if (kind === 'hall') {
-    base(4.8, .4);
-    box(b, C.stone, 0, .4 + .7, 0, 4.2, 1.4, 3.4);
-    timberWalls(b, 4.0, 1.3, 3.2, 1.8);
-    roof(b, 4.4, 1.6, 3.8, C.tile, 0, 3.1, 0);
-    box(b, C.stone, 1.2, 2.6, -.8, 1.5, 5.2, 1.5); b.add(P.cone(1.25, 1.6, 4), C.tile, 1.2, 6.0, -.8, 0, Math.PI / 4, 0);
-    for (let i = 0; i < 4; i++) box(b, C.stone, 1.2 + (i % 2 ? .6 : -.6), 5.25, -.8 + (i < 2 ? .6 : -.6), .3, .3, .3);
+    base(4.8, .4 + age * .1);
+    if (look.fort) { // stone keep with corner turrets
+      box(b, C.stone, 0, 1.6, 0, 4.2, 2.6, 3.4); crenel(b, 0, 3.05, 0, 4.2, 3.4);
+      for (const [x, z] of [[-2, -1.6], [2, -1.6], [-2, 1.6], [2, 1.6]]) { b.add(P.cyl(.5, .55, 3.6, 10), C.stone, x, 1.8, z); b.add(P.cone(.62, 1.0, 10), roofC, x, 4.1, z); }
+      roof(b, 3.6, 1.3, 2.8, C.tile, 0, 2.9, 0);
+    } else {
+      box(b, age ? C.stone : C.dstone, 0, .4 + .7, 0, 4.2, 1.4, 3.4);
+      timberWalls(b, 4.0, 1.3, 3.2, 1.8);
+      roof(b, 4.4, 1.6, 3.8, roofC, 0, 3.1, 0);
+    }
+    if (age >= 1) {
+      const th = age >= 2 ? 6.4 : 5.2;
+      box(b, C.stone, 1.2, th / 2, -.8, 1.5, th, 1.5); b.add(P.cone(1.25, 1.6, 4), C.tile, 1.2, th + .8, -.8, 0, Math.PI / 4, 0);
+      for (let i = 0; i < 4; i++) box(b, C.stone, 1.2 + (i % 2 ? .6 : -.6), th + .05, -.8 + (i < 2 ? .6 : -.6), .3, .3, .3);
+      flag(b, tc, 1.2, th + 1.3, -.8, 1.6);
+      if (age >= 2) { b.m(P.ball(.12, 8, 6), C.gold, 1.2, th + 1.65, -.8); box(b, C.stone, -1.4, 2.4, -1.1, 1.0, 4.8, 1.0); b.add(P.cone(.85, 1.2, 4), C.tile, -1.4, 5.4, -1.1, 0, Math.PI / 4, 0); flag(b, tc, -1.4, 6.0, -1.1, 1.2); }
+    } else { b.add(P.cyl(.08, .1, 3.2, 6), C.wood, 1.6, 1.6, -1.3); box(b, C.wood, 1.6, 3.2, -1.3, .9, .12, .9); flag(b, tc, 1.6, 3.3, -1.3, 1.3); }
     box(b, C.dwood, 0, .95, 1.72, .9, 1.3, .08); box(b, C.stone, 0, 1.65, 1.72, 1.1, .2, .12);
     for (const x of [-1.4, 1.4]) box(b, 0x2a2018, x, 2.4, 1.62, .35, .45, .05);
     box(b, tc, -1.0, 1.1, 1.72, .5, 1.0, .03); box(b, tc, 1.0, 1.1, 1.72, .5, 1.0, .03);
-    flag(b, tc, 1.2, 6.5, -.8, 1.6); flag(b, tc, -2.2, .4, 2.2, 2.6);
+    flag(b, tc, -2.2, .4, 2.2, 2.6);
     box(b, C.wood, -1.8, .7, 2.3, .5, .6, .5); b.add(P.cyl(.25, .3, .6, 8), C.wood, 1.9, .7, 2.2);
   } else if (kind === 'house') {
     base(1.9, .3);
-    timberWalls(b, 1.6, 1.1, 1.4, .3); roof(b, 1.9, .9, 1.8, C.thatch, 0, 1.4, 0);
-    box(b, C.stone, .5, 2.0, -.3, .25, .8, .25);
-    box(b, C.dwood, 0, .7, .72, .4, .8, .05); box(b, 0x2a2018, -.5, .95, .72, .25, .25, .04);
-    box(b, tc, .45, 1.0, .72, .3, .3, .03);
+    if (age >= 1) box(b, C.stone, 0, .55, 0, 1.65, .5, 1.45);
+    const wy = age >= 1 ? .8 : .3, wh = age >= 2 ? 1.6 : 1.1;
+    timberWalls(b, 1.6, wh, 1.4, wy); roof(b, 1.9, .9, 1.8, roofC, 0, wy + wh, 0);
+    box(b, C.stone, .5, wy + wh + .6, -.3, .25, .8, .25);
+    box(b, C.dwood, 0, .7, .72, .4, .8, .05); box(b, 0x2a2018, -.5, wy + .65, .72, .25, .25, .04);
+    box(b, tc, .45, wy + .7, .72, .3, .3, .03);
   } else if (kind === 'farm') {
     box(b, C.dirt, 0, .02, 0, 2.9, .1, 2.9);
     for (let i = 0; i < 5; i++) { box(b, 0x5a4229, -1.1 + i * .55, .08, 0, .25, .06, 2.6); box(b, C.crop, -1.1 + i * .55, .22, 0, .18, .25, 2.4); }
@@ -583,17 +606,18 @@ export function buildingGeo(kind, team) {
   } else if (kind === 'store') {
     base(2.8, .25);
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(b, C.timber, sx * 1.1, 1.0, sz * 1.0, .16, 1.8, .16);
-    box(b, C.plaster, 0, .9, -1.0, 2.2, 1.5, .1);
-    roof(b, 2.7, .9, 2.6, C.thatch, 0, 1.9, 0);
+    box(b, age >= 1 ? C.stone : C.plaster, 0, .9, -1.0, 2.2, 1.5, .1);
+    roof(b, 2.7, .9, 2.6, roofC, 0, 1.9, 0);
     box(b, C.wood, -.6, .5, .2, .55, .55, .55); box(b, C.wood, .1, .45, .5, .45, .45, .45);
     b.add(P.cyl(.25, .27, .65, 8), C.wood, .7, .55, -.1); b.add(P.cyl(.25, .27, .65, 8), C.wood, .7, .55, .55);
     b.add(P.cyl(.18, .18, .9, 8), C.hay, -.6, .45, -.5, 0, 0, Math.PI / 2);
     flag(b, tc, -1.25, .25, 1.2, 2);
   } else if (kind === 'barracks') {
     base(3.9, .35);
-    box(b, C.stone, 0, 1.15, -.2, 3.6, 1.6, 2.6);
-    box(b, C.dstone, 0, .65, -.2, 3.7, .5, 2.7);
-    roof(b, 3.9, 1.1, 3.0, C.tile, 0, 1.95, -.2);
+    if (age >= 1) { box(b, C.stone, 0, 1.15, -.2, 3.6, 1.6, 2.6); box(b, C.dstone, 0, .65, -.2, 3.7, .5, 2.7); }
+    else timberWalls(b, 3.6, 1.5, 2.6, .35);
+    roof(b, 3.9, 1.1, 3.0, roofC, 0, 1.95, -.2);
+    if (age >= 2) { crenel(b, 0, 1.95, -.2, 3.7, 2.7); flag(b, tc, -1.6, .35, -1.6, 3.2); }
     box(b, C.dwood, 0, .9, 1.12, .8, 1.1, .06);
     box(b, tc, -1.1, 1.3, 1.13, .55, .9, .03); box(b, tc, 1.1, 1.3, 1.13, .55, .9, .03);
     box(b, C.wood, -1.3, .8, 1.7, 1.0, .08, .08); for (let i = 0; i < 4; i++) box(b, C.steel, -1.7 + i * .25, .9, 1.68, .03, .9, .03, .2);
@@ -603,7 +627,7 @@ export function buildingGeo(kind, team) {
     base(3.9, .3);
     box(b, C.wood, 0, 1.0, -.3, 3.6, 1.5, 2.4);
     for (let i = -3; i <= 3; i++) box(b, C.dwood, i * .55, 1.0, .91, .06, 1.5, .03);
-    roof(b, 3.9, 1.0, 2.9, C.thatch, 0, 1.75, -.3);
+    roof(b, 3.9, 1.0, 2.9, age >= 2 ? C.tile : C.thatch, 0, 1.75, -.3);
     box(b, C.dwood, 0, .8, .92, 1.2, 1.1, .05);
     for (const x of [-1.4, -.9]) b.add(P.cyl(.3, .3, .7, 10), C.hay, x, .45, 1.5, 0, 0, Math.PI / 2);
     for (let i = 0; i < 5; i++) box(b, C.wood, -1.6 + i * .8, .45, 1.9, .07, .7, .07); box(b, C.wood, 0, .6, 1.9, 3.3, .06, .05);
@@ -611,7 +635,7 @@ export function buildingGeo(kind, team) {
   } else if (kind === 'range') {
     base(3.9, .3);
     for (const x of [-1.6, -.55, .55, 1.6]) for (const z of [-1.2, .3]) box(b, C.timber, x, 1.05, z, .16, 1.6, .16);
-    box(b, C.plaster, 0, 1.0, -1.25, 3.4, 1.5, .1); roof(b, 3.8, .9, 2.2, C.thatch, 0, 1.8, -.45);
+    box(b, age >= 2 ? C.stone : C.plaster, 0, 1.0, -1.25, 3.4, 1.5, .1); roof(b, 3.8, .9, 2.2, age >= 2 ? C.tile : C.thatch, 0, 1.8, -.45);
     for (const x of [-1.2, 0, 1.2]) { b.add(P.cyl(.32, .32, .08, 18), C.straw, x, .75, 1.55, Math.PI / 2, 0, 0); b.add(P.cyl(.2, .2, .085, 18), C.white, x, .75, 1.555, Math.PI / 2, 0, 0); b.add(P.cyl(.09, .09, .09, 14), 0xb01c1c, x, .75, 1.56, Math.PI / 2, 0, 0); box(b, C.wood, x, .4, 1.5, .06, .8, .06); }
     for (let i = 0; i < 5; i++) box(b, C.dwood, -1.5 + i * .12, .9, -.9, .02, 1.2, .02, 0, 0, .1);
     flag(b, tc, 1.75, .3, -1.6, 2.4);
@@ -623,27 +647,38 @@ export function buildingGeo(kind, team) {
     box(b, C.wood, 1.5, 1.6, 1.4, .14, 3.0, .14); box(b, C.wood, 1.1, 3.0, 1.4, 1.0, .12, .12); b.add(P.cyl(.01, .01, .9, 4), C.linen, .7, 2.5, 1.4);
     b.add(P.dode(.25), 0x7a766e, -.4, .35, 1.6); b.add(P.dode(.2), 0x7a766e, -.1, .3, 1.75);
     flag(b, tc, -1.7, .3, -1.6, 2.6);
+  } else if (kind === 'smith') { // forge with a big chimney, open front, anvil and water trough
+    base(2.9, .3);
+    box(b, C.stone, 0, 1.0, -.6, 2.6, 1.6, 1.4); for (const x of [-1.2, 1.2]) box(b, C.timber, x, 1.0, .55, .16, 1.7, .16);
+    roof(b, 2.9, 1.0, 2.6, roofC, 0, 1.8, 0);
+    box(b, C.stone, .8, 2.3, -.8, .6, 2.8, .6); box(b, 0x2a2018, .8, 3.72, -.8, .45, .05, .45);
+    box(b, 0xff7a20, -.3, .55, -.15, .8, .25, .4); box(b, C.dstone, -.3, .35, -.15, 1.0, .3, .6); // glowing hearth
+    b.m(P.box, C.dsteel, .55, .55, .7, 0, 0, 0, .45, .14, .18); b.add(P.cyl(.12, .16, .4, 8), C.dwood, .55, .25, .7);
+    box(b, C.wood, -.9, .35, .95, .9, .35, .4); box(b, 0x2c4a5a, -.9, .5, .95, .8, .05, .3);
+    for (let i = 0; i < 3; i++) b.m(P.box, C.steel, -1.2 + i * .15, 1.1, -1.27, 0, 0, .2, .03, .7, .03);
+    flag(b, tc, 1.3, .3, 1.2, 2.2);
   } else if (kind === 'dock') {
-    // wooden pier on posts (stands at water level), small shed and a crane
     box(b, C.wood, 0, .35, 0, 3.0, .12, 3.0); for (let i = 0; i < 9; i++) box(b, i % 2 ? C.dwood : C.wood, -1.33 + i * .333, .42, 0, .3, .02, 3.0);
     for (const x of [-1.4, 0, 1.4]) for (const z of [-1.4, 0, 1.4]) b.add(P.cyl(.09, .1, 2.2, 7), C.dwood, x, -.7, z);
-    box(b, C.plaster, -.8, .95, -.8, 1.2, 1.0, 1.2); roof(b, 1.4, .6, 1.4, C.thatch, -.8, 1.45, -.8);
+    box(b, age >= 1 ? C.stone : C.plaster, -.8, .95, -.8, 1.2, 1.0, 1.2); roof(b, 1.4, .6, 1.4, roofC, -.8, 1.45, -.8);
     box(b, C.wood, .9, 1.4, .9, .12, 2.0, .12); box(b, C.wood, .6, 2.35, .9, .8, .1, .1); b.add(P.cyl(.01, .01, .7, 4), C.linen, .25, 2.0, .9);
     b.add(P.cyl(.22, .25, .5, 10), C.wood, .9, .65, -1.0); b.add(P.cyl(.22, .25, .5, 10), C.wood, 1.25, .65, -.6);
     flag(b, tc, -1.4, .4, 1.4, 2.2);
   } else if (kind === 'tower') {
     base(1.9, .3);
-    box(b, C.stone, 0, 2.2, 0, 1.4, 4.0, 1.4);
-    box(b, C.dstone, 0, 4.3, 0, 1.7, .3, 1.7);
-    for (let i = 0; i < 4; i++) for (let k = -1; k <= 1; k += 2) { box(b, C.stone, k * .65, 4.65, (i - 1.5) * .45, .25, .4, .25); box(b, C.stone, (i - 1.5) * .45, 4.65, k * .65, .25, .4, .25); }
-    b.add(P.cone(1.15, 1.3, 4), tc, 0, 5.5, 0, 0, Math.PI / 4, 0);
-    box(b, 0x2a2018, 0, 2.8, .71, .15, .5, .03); box(b, C.dwood, 0, .8, .71, .5, .9, .04);
-    flag(b, tc, 0, 6.1, 0, 1.2);
+    const g = look.guard, H = g ? 5.2 : 4.0, W = g ? 1.6 : 1.4;
+    box(b, C.stone, 0, .2 + H / 2, 0, W, H, W); if (g) box(b, C.dstone, 0, .6, 0, W + .25, 1.0, W + .25);
+    box(b, C.dstone, 0, H + .3, 0, W + .3, .3, W + .3);
+    for (let i = 0; i < 4; i++) for (let k = -1; k <= 1; k += 2) { box(b, C.stone, k * (W / 2 - .05), H + .65, (i - 1.5) * W / 3.1, .25, .4, .25); box(b, C.stone, (i - 1.5) * W / 3.1, H + .65, k * (W / 2 - .05), .25, .4, .25); }
+    b.add(P.cone(W * .82, 1.3 + (g ? .4 : 0), g ? 8 : 4), g ? C.tile : tc, 0, H + 1.5 + (g ? .2 : 0), 0, 0, Math.PI / 4, 0);
+    box(b, 0x2a2018, 0, H * .7, W / 2 + .01, .15, .5, .03); box(b, C.dwood, 0, .8, W / 2 + .01, .5, .9, .04);
+    flag(b, tc, 0, H + 2.1 + (g ? .6 : 0), 0, 1.2);
   }
   return b.build();
 }
-export function buildingMesh(kind, team, shadows) {
-  const m = new THREE.Mesh(buildingGeo(kind, team), M.stone); m.castShadow = shadows; m.receiveShadow = true; return m;
+export function buildingMesh(kind, team, shadows, look) {
+  const m = new THREE.Mesh(buildingGeo(kind, team, look), M.stone); m.castShadow = shadows; m.receiveShadow = true; return m;
+
 }
 
 // ---------------- arrows ----------------
