@@ -547,6 +547,23 @@ class FigureBatch {
   }
   flush() { for (const m of this.meshes) m.instanceMatrix.needsUpdate = true; }
 }
+/**
+ * A plain (non-instanced) copy of a unit, for exporting to Unity/Blender. Every moving part (legL/legR, armL/armR,
+ * hA/hB, cat) is its own child object with its pivot at the joint, so it can be animated in another program.
+ */
+export function figureGroup(team, kind, style = 'franks') {
+  const root = new THREE.Group(); root.name = kind;
+  figureParts(team, kind, style).forEach((p, n) => {
+    const node = p.anim ? new THREE.Group() : root;
+    if (p.anim) { node.name = p.anim + (root.children.filter(c => c.name.startsWith(p.anim)).length || ''); node.position.set(...p.pivot); root.add(node); }
+    // part geometry is already built relative to its joint
+    for (const [geo, mat, tag] of [[p.c, M.cloth, 'cloth'], [p.m, M.metal, 'metal'], ...(p.extra || []).map((e, i) => [e.geo, e.mat, 'extra' + i])]) {
+      if (!geo) continue;
+      const m = new THREE.Mesh(geo.clone(), mat); m.name = `${node === root ? 'body' + n : node.name}_${tag}`; node.add(m);
+    }
+  });
+  return root;
+}
 export class Figures {
   constructor(scene, shadows) { this.scene = scene; this.shadows = shadows; this.batches = new Map(); this.styles = ['franks', 'franks']; }
   get(team, kind) {

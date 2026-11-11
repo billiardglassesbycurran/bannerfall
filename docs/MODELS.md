@@ -63,3 +63,23 @@ spending credits.
 ~/.local/bannerfall-tools/bin/python tools/test_game.py [--live]             # automated browser tests (Playwright)
 ```
 Extra options: `--faces N` (polygon budget), `--yaw 90` (turn the model), `--height 6` / `--length 7` (size).
+
+## Unity
+
+Bannerfall stays a web game (so it plays from a link on your phone), but it can swap models with **Unity**.
+
+**Send Bannerfall's models to Unity:** ask Claude to "export the models for Unity", or run
+`~/.local/bannerfall-tools/bin/python tools/unity.py export`. Every unit, horse, ship and building (all three ages) lands in
+the `exports/unity/` folder inside the game folder on your Desktop: `fbx/` for Unity's normal importer, `glb/` for Unity's
+free glTF package. Open `exports/unity/README.txt` for the Unity steps. Soldiers' arms and legs are separate pieces
+with their joints in the right place, ready to animate.
+
+**Use a Unity Asset Store model in Bannerfall:**
+1. On assetstore.unity.com, open the model's page and check its licence allows use **outside Unity** (look under
+   "License" / "Extension Asset" or ask the publisher). Bannerfall's files are public on GitHub, so this matters.
+2. Get the `.unitypackage` file. Download it in Unity (Window → Package Manager → My Assets → Download), then find it in
+   Finder: press Cmd+Shift+G and type `~/Library/Unity/Asset Store-5.x`.
+3. Tell Claude where it is, e.g. "put the cottage from this Unity package in as the House". Claude runs
+   `tools/unity.py unpack <file>`, which copies out only the 3D models and textures. Then `models.py prepare` fits the
+   chosen model into the game.
+Models stored inside Unity-only formats (`.prefab` or `.asset`) can't be read outside Unity. Ones in FBX/OBJ files work.

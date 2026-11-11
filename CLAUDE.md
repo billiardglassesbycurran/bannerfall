@@ -73,6 +73,9 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
   `manifest.json`); the game loads them via `src/gltfmodels.js` for buildings, ships, trees and bushes. Owner-facing guide:
   `docs/MODELS.md`. Raw downloads go in `assets/incoming/` (git-ignored). Budget: buildings ≤10k triangles, ships ≤7k,
   trees ≤700 (they're instanced hundreds of times). Units/horses still procedural (need rigged, animated models).
+- **Unity bridge** (`tools/unity.py`): `export` writes every unit/building as FBX+GLB to `exports/unity/` (git-ignored; built
+  from `figureGroup`/`buildingMesh` in models.js); `unpack <x.unitypackage>` safely copies models/textures to `assets/incoming/unity/`.
+  The game itself stays Three.js on the web. Asset Store models: check the licence allows non-Unity use before publishing.
 - **Tripo API key** lives only in `~/.config/bannerfall/tripo_key` (owner sets it with `models.py tripo-setup`); never read
   it into chat, print it, or commit it. API generations cost the owner money: get their OK first.
 - Check the owner's Tripo plan licence before publishing a Tripo model; record custom models in `assets/CREDITS.md`.
