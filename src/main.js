@@ -316,7 +316,7 @@ addEventListener('keydown', e => {
     if (e.code === 'Escape') { if (app.pending) app.cancelPending(); else app.select([]); return; }
     if ((e.code === 'KeyA' && (e.ctrlKey || e.metaKey)) || e.code === 'F2') { e.preventDefault(); $('bAll').click(); return; }
     if (e.code === 'KeyH') { $('bLead').click(); return; }
-    if (e.code === 'KeyI' || e.code === 'Period') { selectIdle(); return; }
+    if (e.code === 'KeyI') { selectIdle(); return; }
     if (e.code === 'Home') { rts.resetView(); return; }
     const dig = /^Digit([1-9])$/.exec(e.code);
     if (dig) { // control groups: Ctrl+number saves the selection, number recalls it (twice = jump to it)

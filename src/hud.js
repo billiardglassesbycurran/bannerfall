@@ -4,8 +4,8 @@ import { UD, BD, BUILD_LIST } from './data.js';
 import { N, SIZE, resources, minimapColors } from './world.js';
 
 const $ = id => document.getElementById(id);
-const HK = ['KeyZ', 'KeyX', 'KeyC', 'KeyV', 'KeyB', 'KeyN', 'KeyM', 'Comma'];
-const HKL = ['Z', 'X', 'C', 'V', 'B', 'N', 'M', ','];
+const HK = ['KeyZ', 'KeyX', 'KeyC', 'KeyV', 'KeyB', 'KeyN', 'KeyM', 'Comma', 'Period', 'Slash'];
+const HKL = ['Z', 'X', 'C', 'V', 'B', 'N', 'M', ',', '.', '/'];
 export const costHtml = c => !c ? '' : ['f', 'w', 'g'].filter(k => c[k]).map(k => `<span class="${k}">${c[k]}${k}</span>`).join(' ');
 const TASK = { board: 'Boarding ship', unload: 'Sailing to land troops', idle: 'Idle', move: 'Moving', amove: 'Attacking', attack: 'Fighting', follow: 'Following', build: 'Building', farm: 'Farming', return: 'Carrying to storage' };
 const RN = { f: 'food', w: 'wood', g: 'gold' };
@@ -86,7 +86,7 @@ export class HUD {
     else if (mine.length && mine[0].kind === 'unit') {
       if (mine.some(u => u.type === 'peasant') && g.mode !== 'battle') for (const t of BUILD_LIST) {
         const d = BD[t], req = d.req && !g.has(0, d.req);
-        btns.push({ label: d.name.replace('Storehouse', 'Store').replace('Watchtower', 'Tower').replace('Archery Range', 'Range').replace('Siege Workshop', 'Siege'), sub: req ? 'needs ' + BD[d.req].name : costHtml(d.cost), dis: req || !g.afford(0, d.cost), on: () => a.startPlace(t), tip: d.desc });
+        btns.push({ label: d.name.replace('Storehouse', 'Store').replace('Watchtower', 'Tower').replace('Archery Range', 'Range').replace('Siege Workshop', 'Siege'), sub: req ? 'needs ' + BD[d.req].name.replace('Archery ', '') : costHtml(d.cost), dis: req || !g.afford(0, d.cost), on: () => a.startPlace(t), tip: d.desc });
       }
       if (mine.some(u => u.type !== 'peasant' && u.d.dmg > 0)) btns.push({ label: 'Attack', sub: 'move', on: () => a.setPending({ type: 'amove' }) });
       const tr = mine.find(u => u.d.carry);
