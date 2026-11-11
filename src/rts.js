@@ -24,6 +24,8 @@ export class RTSView {
   }
   zoom(f, smoothly = false) { this.distT = clamp(this.distT * f, 9, 80); if (!smoothly) this.dist = this.distT; }
   lookAt(x, z) { this.focus.x = x; this.focus.z = z; }
+  rotateBy(a) { this.yawGoal = (this.yawGoal ?? this.yaw) + a; }
+  resetView() { this.yawGoal = -Math.PI / 4 + Math.round((this.yaw + Math.PI / 4) / (Math.PI * 2)) * Math.PI * 2; this.pitch = .92; this.distT = 32; }
   update(dt) {
     const keys = this.a.keys, [fx, fz] = this.fwd(), rx = -fz, rz = fx;
     let mx = 0, my = 0;
@@ -31,7 +33,9 @@ export class RTSView {
     if (keys.KeyD || keys.ArrowRight) mx += 1; if (keys.KeyA || keys.ArrowLeft) mx -= 1;
     const sp = this.dist * 1.1 * dt;
     this.focus.x += (fx * my + rx * mx) * sp; this.focus.z += (fz * my + rz * mx) * sp;
-    if (keys.KeyQ) this.yaw += dt * 1.8; if (keys.KeyE) this.yaw -= dt * 1.8;
+    if (keys.KeyQ) { this.yaw += dt * 1.8; this.yawGoal = null; } if (keys.KeyE) { this.yaw -= dt * 1.8; this.yawGoal = null; }
+    if (keys.PageUp) this.pitch = clamp(this.pitch + dt, .5, 1.45); if (keys.PageDown) this.pitch = clamp(this.pitch - dt, .5, 1.45);
+    if (this.yawGoal != null) { const d = this.yawGoal - this.yaw; this.yaw += d * Math.min(1, dt * 8); if (Math.abs(d) < .002) this.yawGoal = null; }
     if (keys.KeyR) this.zoom(1 - dt * 1.5); if (keys.KeyF) this.zoom(1 + dt * 1.5);
     // screen-edge scrolling with the mouse (PC)
     const m = this.mouse, E = 10;
@@ -147,7 +151,7 @@ export class RTSView {
   // ---------- pointer events ----------
   down(e) {
     this.vel.x = this.vel.y = 0;
-    const p = { id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, t: performance.now(), btn: e.button, type: e.pointerType, mode: null };
+    const p = { id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, t: performance.now(), btn: e.button, type: e.pointerType, mode: null, alt: e.altKey };
     this.ptrs.set(e.pointerId, p);
     if (p.type === 'touch' && this.ptrs.size === 2) { for (const q of this.ptrs.values()) q.mode = 'multi'; this.box.classList.add('hide'); this.pinch = null; }
   }
@@ -166,8 +170,8 @@ export class RTSView {
         p.vx = (p.vx || 0) * .6 + dx / dtm * .4; p.vy = (p.vy || 0) * .6 + dy / dtm * .4;
       }
     } else {
-      if (!p.mode && moved > 6) p.mode = p.btn === 0 && !this.a.pending ? 'box' : p.btn === 0 ? 'none' : 'rotate';
-      if (p.mode === 'rotate') { this.yaw -= dx * .006; this.pitch = clamp(this.pitch + dy * .004, .5, 1.45); }
+      if (!p.mode && moved > 6) p.mode = (p.alt || p.btn === 1 || p.btn === 2) ? 'rotate' : !this.a.pending ? 'box' : 'none'; // Option/Alt-drag, middle- or right-drag = rotate & tilt
+      if (p.mode === 'rotate') { this.yawGoal = null; this.yaw -= dx * .006; this.pitch = clamp(this.pitch + dy * .004, .5, 1.45); }
       this.a.hoverAt(e.clientX, e.clientY);
     }
     if (p.mode === 'box') this.showBox(p.x0, p.y0, p.x, p.y);
@@ -194,5 +198,10 @@ export class RTSView {
     if (p.mode === 'multi') for (const q of this.ptrs.values()) q.mode = 'done';
   }
   cancel() { this.ptrs.clear(); this.pinch = null; this.box.classList.add('hide'); this.vel.x = this.vel.y = 0; }
-  wheel(e) { this.zoom(Math.exp(e.deltaY * .0015), true); }
+  wheel(e) {
+    // trackpad: two-finger sideways swipe rotates, pinch (ctrl+wheel) zooms; mouse wheel zooms
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY) && !e.ctrlKey) { this.yawGoal = null; this.yaw -= e.deltaX * .004; return; }
+    if (e.shiftKey && !e.ctrlKey) { this.yawGoal = null; this.yaw -= e.deltaY * .004; return; }
+    this.zoom(Math.exp(e.deltaY * (e.ctrlKey ? .01 : .0015)), true);
+  }
 }

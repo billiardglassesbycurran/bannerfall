@@ -92,9 +92,9 @@ export class HUD {
       btns.push({ label: 'Stop', sub: '', on: () => { for (const u of mine) g.setTask(u, { type: 'idle' }); } });
     } else if (mine.length && mine[0].kind === 'bld' && mine[0].built) {
       const b = mine[0];
-      for (const t of b.d.trains || []) {
-        const d = UD[t], n = b.queue.filter(q => q.type === t).length;
-        btns.push({ label: d.name, sub: costHtml(d.cost), dis: !g.afford(0, d.cost) || b.queue.length >= 5, badge: n || '', on: () => { const r = g.train(b, t); if (r === 'cost') a.toast('Not enough resources.', 2); else if (r === 'full') a.toast('Queue is full.', 2); this.updateSel(); this.updateCard(); }, tip: d.desc });
+      for (const t of g.trainsFor(b)) {
+        const d = g.stat(0, t), n = b.queue.filter(q => q.type === t).length;
+        btns.push({ label: d.name.replace('Light Cavalry', 'Light Cav').replace('Horse Archer', 'Horse Archer').replace('Crossbowman', 'Crossbow').replace("Khan's Guard", "Khan's Guard"), sub: costHtml(d.cost), dis: !g.afford(0, d.cost) || b.queue.length >= 5, badge: n || '', on: () => { const r = g.train(b, t); if (r === 'cost') a.toast('Not enough resources.', 2); else if (r === 'full') a.toast('Queue is full.', 2); this.updateSel(); this.updateCard(); }, tip: d.desc });
       }
       if (b.d.trains) btns.push({ label: 'Rally', sub: 'point', on: () => a.setPending({ type: 'rally', b }) });
     }

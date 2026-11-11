@@ -43,7 +43,9 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
 ## Code map
 - `index.html` — page shell, all HUD/menu markup, version + import map (cache-busting), on-screen error box.
 - `src/main.js` — renderer, lighting, quality levels, title menu, game-mode setup, 1st/3rd-person switching, input routing, main loop.
-- `src/data.js` — unit/building stats, difficulty levels, game modes (balance ported from the prototype).
+- `src/data.js` — unit/building stats, civilizations (`CIVS`: per-class stat mods, unique unit, look), difficulty, modes.
+  Civ bonuses are applied in `Game.stat(team, type)`; always read unit stats through it, never straight from `UD`.
+  Civilizations are historically inspired, but bonuses/unique units are original — don't copy another game's.
 - `src/world.js` — heightmap, walkability grid, roads, terrain splat shader, resources (trees/berries/gold), grass/rocks,
   water, sky, minimap colours. Tree/grass detail scales with the quality level — keep Medium near ~1M triangles.
 - `src/models.js` — unit figures (GPU-instanced per team+type: keeps big armies fast), knight + horse, building models, arrows.
@@ -72,6 +74,8 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
 ## Roadmap
 1. ✅ v0.1 Terrain, units, select & move from above, 3rd-person view.
 2. ✅ v0.2 Graphics pass; economy, buildings, training, combat, pathfinding, enemy AI; Skirmish / Battle / Survival modes.
+2d. ✅ v0.5 Civilizations (Franks, Romans, Chinese, Norse, Mongols) with bonuses, penalties, unique units and their own
+   look; crossbowmen, light cavalry, horse archers, catapults; Archery Range + Siege Workshop; PC/Mac camera controls.
 2c. ✅ v0.4 Photo textures (ground, buildings, bark), photo-leaf trees, realistic water (waves, shoreline foam, depth
    colour; mirror reflections on High).
 2b. ✅ v0.3 Realistic look (PBR + sky reflections, textured terrain, new trees, wind), remodelled soldiers/horses,

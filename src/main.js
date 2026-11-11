@@ -1,7 +1,7 @@
 // Bannerfall — entry point: renderer, lighting, menus, game modes, input routing and the main loop.
 import * as THREE from 'three';
 import { SIZE, BASES, buildTerrain, buildWater, buildSky, buildResources, heightAt } from './world.js';
-import { BD, DIFF, MODES } from './data.js';
+import { BD, DIFF, MODES, CIVS, CIV_LIST, UD } from './data.js';
 import { Figures, buildingGeo } from './models.js';
 import { Game } from './game.js';
 import { AI } from './ai.js';
@@ -63,7 +63,7 @@ const figures = new Figures(scene, Q.shadow > 0);
 // ---------------- app state ----------------
 const app = {
   isTouch, canvas, camera, terrain, keys: {}, sel: [], pending: null, mode: 'menu', game: null, ai: null, paused: false,
-  cfg: { mode: 'skirmish', diff: 1 },
+  cfg: { mode: 'skirmish', diff: 1, civ: 'franks' },
 };
 app.scene = scene; app.renderer = renderer;
 const rts = new RTSView(app), pov = new POVView(app), hud = new HUD(app);
@@ -134,8 +134,8 @@ $('pno').addEventListener('click', e => { e.stopPropagation(); app.cancelPending
 app.infoText = () => {
   const g = app.game; if (!g) return '';
   if (g.mode === 'survival') { const ai = app.ai; return ai.wave >= 10 ? 'Final wave!' : `Wave ${ai.wave}/10 · next in ${Math.max(0, Math.ceil(ai.nextWave - g.time))}s`; }
-  if (g.mode === 'battle') { const n = t => g.units.filter(u => u.alive && u.team === t).length; return `Your army ${n(0)} · Enemy ${n(1)}`; }
-  return `Skirmish vs ${DIFF[g.diff].name}`;
+  if (g.mode === 'battle') { const n = t => g.units.filter(u => u.alive && u.team === t).length; return `${g.civ[0].name} ${n(0)} · ${g.civ[1].name} ${n(1)}`; }
+  return `${g.civ[0].name} vs ${g.civ[1].name} (${DIFF[g.diff].name})`;
 };
 app.hint = () => {
   const g = app.game;
@@ -144,8 +144,11 @@ app.hint = () => {
 };
 
 // ---------------- modes ----------------
-function setupGame(mode, diff) {
-  const g = new Game({ scene, figures, Q, mode, diff });
+function setupGame(mode, diff, civ = 'franks', enemyCiv) {
+  if (!CIVS[civ]) civ = 'franks';
+  if (!CIVS[enemyCiv]) { const others = CIV_LIST.filter(c => c !== civ); enemyCiv = others[Math.floor(Math.random() * others.length)]; }
+  figures.styles = [CIVS[civ].style, CIVS[enemyCiv].style];
+  const g = new Game({ scene, figures, Q, mode, diff, civs: [civ, enemyCiv] });
   app.game = g; g.toast = (m, s) => hud.toast(m, s);
   g.onEnd = res => setTimeout(() => showEnd(res), 1600);
   g.onUnitDeath = u => {
@@ -156,7 +159,8 @@ function setupGame(mode, diff) {
   const [B0] = BASES;
   if (mode === 'battle') {
     const army = (team, cx, cz, mul) => {
-      const s = team === 0 ? 1 : -1, rows = [['knight', 4], ['sword', 10], ['spear', 8], ['archer', 8]];
+      const s = team === 0 ? 1 : -1, uq = g.civ[team].unique.type;
+      const rows = [['knight', 3], ['lightcav', 3], [uq, 5], ['sword', 8], ['spear', 7], ['archer', 6], ['crossbow', 4], ['horsearcher', 2], ['catapult', 1]];
       // ranks run along the line x+z = const, facing the enemy
       rows.forEach(([type, n0], r) => {
         const n = Math.round(n0 * mul);
@@ -200,7 +204,7 @@ function showEnd(res) {
   $('end').classList.remove('hide');
 }
 const reloadTo = hash => { location.hash = hash; location.reload(); };
-const playHash = () => `play=${app.game.mode},${app.game.diff}`;
+const playHash = () => `play=${app.game.mode},${app.game.diff},${app.game.civKeys[0]},${app.game.civKeys[1]}`;
 
 // ---------------- 1st/3rd person ----------------
 function enterPOV(unit) {
@@ -209,7 +213,7 @@ function enterPOV(unit) {
   app.mode = 'pov'; pov.enter(unit);
   $('hud').classList.add('hide'); $('pov').classList.remove('hide'); $('joyIdle').classList.toggle('hide', !isTouch);
   $('pvn').textContent = (unit.d.hero ? '⚑ ' : '') + unit.d.name;
-  $('povhelp').textContent = isTouch ? 'Left thumb: move · Right thumb: look' : 'Click to aim · WASD move · Shift sprint · Click strike · F follow · V view · Tab back';
+  $('povhelp').textContent = isTouch ? 'Left thumb: move · Right thumb: look' : 'Drag mouse to look around · W/S/↑/↓ move · A/D sidestep · ←/→ or Q/E turn · Click or Space strike · Shift sprint · F follow · V 1st/3rd · Tab back · Double-click: mouse-look';
   $('povhelp').classList.remove('hide'); clearTimeout(enterPOV.t); enterPOV.t = setTimeout(() => $('povhelp').classList.add('hide'), 6000);
 }
 function exitPOV() {
@@ -230,6 +234,11 @@ function selectIdle() {
   const u = idle[idleIx++ % idle.length]; app.select([u]); rts.lookAt(u.x, u.z);
 }
 onBtn('bIdle', selectIdle);
+onBtn('bRotL', () => rts.rotateBy(Math.PI / 4));
+onBtn('bRotR', () => rts.rotateBy(-Math.PI / 4));
+onBtn('bNorth', () => rts.resetView());
+for (const id of ['bRotL', 'bRotR', 'bNorth']) $(id).addEventListener('pointerdown', e => e.stopPropagation());
+canvas.addEventListener('dblclick', () => { if (app.mode === 'pov') pov.lockMouse(); });
 onBtn('bBox', () => { rts.boxMode = !rts.boxMode; $('bBox').classList.toggle('on', rts.boxMode); app.toast(rts.boxMode ? 'Box select: drag a box around units. Tap Box again to pan.' : 'Drag to move the camera.', 2.5); });
 if (!isTouch) $('bBox').classList.add('hide');
 onBtn('bRide', () => { const u = rideTarget(); if (u) enterPOV(u); else app.toast('Select a unit to ride.', 2); });
@@ -257,7 +266,13 @@ function goFullscreen() {
 // title menu
 const modesEl = $('modes');
 for (const [k, m] of Object.entries(MODES)) { const b = document.createElement('button'); b.className = 'btn'; b.dataset.mode = k; b.textContent = m.name; modesEl.appendChild(b); }
+const civsEl = $('civs');
+for (const k of CIV_LIST) { const b = document.createElement('button'); b.className = 'btn'; b.dataset.civ = k; b.textContent = CIVS[k].name; civsEl.appendChild(b); b.addEventListener('click', () => { app.cfg.civ = k; refreshMenu(); }); }
 function refreshMenu() {
+  if (!CIVS[app.cfg.civ]) app.cfg.civ = 'franks';
+  for (const b of document.querySelectorAll('[data-civ]')) b.classList.toggle('on', b.dataset.civ === app.cfg.civ);
+  const c = CIVS[app.cfg.civ];
+  $('civInfo').innerHTML = `<b>${c.name}</b> — ${c.motto} Unique unit: <b>${UD[c.unique.type].name}</b><br>` + c.pros.map(p => `<span class="pro">+ ${p}</span>`).join(' · ') + ' · ' + c.cons.map(p => `<span class="con">− ${p}</span>`).join(' · ');
   for (const b of document.querySelectorAll('[data-mode]')) b.classList.toggle('on', b.dataset.mode === app.cfg.mode);
   for (const b of document.querySelectorAll('[data-d]')) b.classList.toggle('on', +b.dataset.d === app.cfg.diff);
   for (const b of document.querySelectorAll('[data-q]')) b.classList.toggle('on', b.dataset.q === qLevel);
@@ -276,7 +291,7 @@ onBtn('bHelpBack', () => { $('help').classList.add('hide'); });
 onBtn('bStart', () => {
   try { localStorage.setItem('bf.cfg', JSON.stringify(app.cfg)); } catch { /* ignore */ }
   if (isTouch) goFullscreen();
-  setupGame(app.cfg.mode, app.cfg.diff);
+  setupGame(app.cfg.mode, app.cfg.diff, app.cfg.civ);
 });
 refreshMenu();
 
@@ -299,6 +314,7 @@ addEventListener('keydown', e => {
     if ((e.code === 'KeyA' && (e.ctrlKey || e.metaKey)) || e.code === 'F2') { e.preventDefault(); $('bAll').click(); return; }
     if (e.code === 'KeyH') { $('bLead').click(); return; }
     if (e.code === 'KeyI' || e.code === 'Period') { selectIdle(); return; }
+    if (e.code === 'Home') { rts.resetView(); return; }
     const dig = /^Digit([1-9])$/.exec(e.code);
     if (dig) { // control groups: Ctrl+number saves the selection, number recalls it (twice = jump to it)
       const n = +dig[1];
@@ -359,7 +375,7 @@ renderer.setAnimationLoop(() => {
 // ---------------- boot ----------------
 $('ver').textContent = 'v' + VERSION;
 $('loading').remove();
-const m = /play=(\w+),(\d)/.exec(location.hash);
-if (m && MODES[m[1]]) { app.cfg = { mode: m[1], diff: +m[2] }; setupGame(m[1], +m[2]); }
+const m = /play=(\w+),(\d)(?:,(\w+))?(?:,(\w+))?/.exec(location.hash);
+if (m && MODES[m[1]]) { app.cfg = { mode: m[1], diff: +m[2], civ: m[3] || 'franks' }; setupGame(m[1], +m[2], m[3], m[4]); }
 else $('title').classList.remove('hide');
 window.bannerfall = app; // handy for debugging in the browser console

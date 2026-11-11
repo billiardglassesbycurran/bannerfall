@@ -53,7 +53,7 @@ export class POVView {
   strike() {
     const u = this.unit; if (!u || !u.alive || u.cd > 0) return;
     const g = this.g, t = this.target;
-    u.cd = u.d.cd * .75; u.swingT = 0;
+    u.cd = u.d.cd * .75; u.swingT = 0; this.faceT = .6;
     if (u.d.ranged) { if (t) g.shoot(u, t, u.d.dmg * 1.2); else this.a.toast('No target in sight — aim at an enemy.', 1.5); return; }
     if (t && t.kind === 'unit') { // lunge toward the target
       const dx = t.x - u.x, dz = t.z - u.z, d = Math.hypot(dx, dz), gap = d - t.d.rad - u.d.rng * .8;
@@ -90,21 +90,27 @@ export class POVView {
 
   update(dt) {
     const u = this.unit, keys = this.a.keys; if (!u) return;
+    // movement: W/S or ↑/↓ forward/back, A/D strafe; turning: ←/→ or Q/E, or drag with the mouse
     let mx = this.stick.x, my = this.stick.y;
     if (keys.KeyW || keys.ArrowUp) my += 1; if (keys.KeyS || keys.ArrowDown) my -= 1;
-    if (keys.KeyD || keys.ArrowRight) mx += 1; if (keys.KeyA || keys.ArrowLeft) mx -= 1;
-    if (keys.KeyQ) this.yaw += dt * 2.2; if (keys.KeyE) this.yaw -= dt * 2.2;
+    if (keys.KeyD) mx += 1; if (keys.KeyA) mx -= 1;
+    const turnK = dt * 2.4;
+    if (keys.ArrowLeft || keys.KeyQ) this.yaw += turnK; if (keys.ArrowRight || keys.KeyE) this.yaw -= turnK;
+    if (keys.KeyZ || keys.PageUp) this.pitch = clamp(this.pitch + dt * 1.2, -1.2, .9); if (keys.KeyX || keys.PageDown) this.pitch = clamp(this.pitch - dt * 1.2, -1.2, .9);
     const len = Math.hypot(mx, my); if (len > 1) { mx /= len; my /= len; }
     const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw), rx = -fz, rz = fx;
     const sprint = keys.ShiftLeft || keys.ShiftRight || Math.hypot(this.stick.x, this.stick.y) > .95;
     const sp = u.d.spd * (sprint ? 1.45 : 1) * Math.min(1, Math.hypot(mx, my));
-    let moved = false;
+    let moved = false, mdx = 0, mdz = 0;
     if (sp > 0 && u.alive) {
-      const dx = (fx * my + rx * mx), dz = (fz * my + rz * mx), dl = Math.hypot(dx, dz) || 1;
-      moved = this.g.step(u, dx / dl * sp * dt, dz / dl * sp * dt);
+      mdx = fx * my + rx * mx; mdz = fz * my + rz * mx; const dl = Math.hypot(mdx, mdz) || 1;
+      moved = this.g.step(u, mdx / dl * sp * dt, mdz / dl * sp * dt);
     }
     u.speedNow = moved ? sp : 0;
-    if (u.alive) u.yaw += angDiff(u.yaw, this.yaw) * Math.min(1, dt * 12);
+    // in 3rd person the Commander turns to face where he walks (so you can turn around and run toward the camera);
+    // while fighting, in 1st person, or standing still he faces where you look
+    this.faceT = Math.max(0, (this.faceT || 0) - dt);
+    if (u.alive) { const want = this.first || this.faceT > 0 ? this.yaw : moved ? Math.atan2(mdx, mdz) : u.yaw; u.yaw += angDiff(u.yaw, want) * Math.min(1, dt * 10); }
     const cam = this.a.camera, sc = u.scale * (u.d.horse ? 1.55 : 1), cp = Math.cos(this.pitch);
     const dir = new THREE.Vector3(Math.sin(this.yaw) * cp, Math.sin(this.pitch), Math.cos(this.yaw) * cp);
     const head = new THREE.Vector3(u.x, heightAt(u.x, u.z) + 1.62 * sc, u.z);
@@ -129,10 +135,11 @@ export class POVView {
     if (this.a.isTouch) k *= Math.min(1.3, Math.max(.7, 900 / innerWidth)); this.yaw -= dxPx * k; this.pitch = clamp(this.pitch - dyPx * k * .8, -1.2, .9); }
 
   // ---------- pointer events ----------
+  // Mouse/trackpad: drag (either button) to look around, click to strike, double-click for full mouse-look (Esc to release).
   down(e) {
     if (e.pointerType === 'mouse') {
-      if (!document.pointerLockElement) this.a.canvas.requestPointerLock?.();
-      else if (e.button === 0) { this.holding = true; this.strike(); }
+      if (document.pointerLockElement) { if (e.button === 0) { this.holding = true; this.strike(); } return; }
+      this.drag = { x: e.clientX, y: e.clientY, btn: e.button, moved: 0, t: performance.now() };
       return;
     }
     if (e.clientX < innerWidth * .45 && !this.joy) {
@@ -142,7 +149,11 @@ export class POVView {
     } else if (!this.look) this.look = { id: e.pointerId, x: e.clientX, y: e.clientY };
   }
   move(e) {
-    if (e.pointerType === 'mouse') { if (document.pointerLockElement) this.turn(e.movementX, e.movementY, .0025); return; }
+    if (e.pointerType === 'mouse') {
+      if (document.pointerLockElement) this.turn(e.movementX, e.movementY, .0025);
+      else if (this.drag) { const dx = e.clientX - this.drag.x, dy = e.clientY - this.drag.y; this.drag.moved += Math.abs(dx) + Math.abs(dy); this.drag.x = e.clientX; this.drag.y = e.clientY; this.turn(dx, dy, .005); }
+      return;
+    }
     if (this.joy && e.pointerId === this.joy.id) {
       let dx = e.clientX - this.joy.x0, dy = e.clientY - this.joy.y0; const d = Math.hypot(dx, dy);
       if (d > JOY_R) { dx *= JOY_R / d; dy *= JOY_R / d; }
@@ -154,10 +165,19 @@ export class POVView {
     }
   }
   up(e) {
-    if (e.pointerType === 'mouse' && e.button === 0) this.holding = false;
+    if (e.pointerType === 'mouse') {
+      if (e.button === 0) this.holding = false;
+      if (this.drag && this.drag.moved < 5 && this.drag.btn === 0) this.strike(); // a click (not a drag) strikes
+      this.drag = null;
+    }
     if (this.joy && e.pointerId === this.joy.id) { this.joy = null; this.stick.x = this.stick.y = 0; this.joyEl.classList.add('hide'); this.joyIdle.classList.remove('hide'); }
     if (this.look && e.pointerId === this.look.id) this.look = null;
   }
-  cancel() { this.joy = this.look = null; this.stick.x = this.stick.y = 0; this.joyEl.classList.add('hide'); }
-  wheel(e) { if (!this.first) this.camDist = clamp(this.camDist * Math.exp(e.deltaY * .001), 2.2, 9); }
+  cancel() { this.drag = null; this.joy = this.look = null; this.stick.x = this.stick.y = 0; this.joyEl.classList.add('hide'); }
+  wheel(e) {
+    // vertical scroll / trackpad pinch = zoom; sideways two-finger swipe = turn
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY) && !e.ctrlKey) { this.yaw -= e.deltaX * .004; return; }
+    if (!this.first) this.camDist = clamp(this.camDist * Math.exp(e.deltaY * (e.ctrlKey ? .01 : .001)), 2.2, 9);
+  }
+  lockMouse() { if (!this.a.isTouch && !document.pointerLockElement) this.a.canvas.requestPointerLock?.(); }
 }

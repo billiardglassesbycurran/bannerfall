@@ -3,7 +3,7 @@ import { BD } from './data.js';
 import { dist } from './util.js';
 import { BASES, blocked, N } from './world.js';
 
-const MIL = ['sword', 'spear', 'archer', 'knight'];
+import { UD } from './data.js';
 
 export class AI {
   constructor(game, team = 1) {
@@ -72,14 +72,18 @@ export class AI {
     const nOf = t => g.blds.filter(b => b.alive && b.team === this.team && b.type === t).length;
     if (T.pop >= T.cap - 3 && T.cap < 100 && !building('house')) this.tryBuild('house', hall);
     if (!hasBarracks && peas.length >= 7) this.tryBuild('barracks', hall);
+    if (hasBarracks && time > 200 && nOf('range') === 0) this.tryBuild('range', hall);
     if (hasBarracks && this.g.diff >= 1 && time > 300 && nOf('stable') === 0) this.tryBuild('stable', hall);
+    if (nOf('range') && this.g.diff >= 1 && time > 520 && nOf('workshop') === 0) this.tryBuild('workshop', hall);
     if (hasBarracks && time > 260 && nOf('tower') < this.g.diff + 1 && T.g > 120) this.tryBuild('tower', hall);
     if (time > 480 && nOf('barracks') < 1 + this.g.diff) this.tryBuild('barracks', hall);
     // training military
     if (T.pop < T.cap) for (const b of g.blds) {
       if (!b.alive || !b.built || b.team !== this.team || !b.d.trains || b.type === 'hall' || b.queue.length >= 2) continue;
-      const opts = b.d.trains; let pick = null, r = Math.random() * opts.reduce((s, t) => s + this.D.mix[MIL.indexOf(t)], 0);
-      for (const t of opts) { r -= this.D.mix[MIL.indexOf(t)]; if (r <= 0) { pick = t; break; } }
+      // weight each option by the difficulty's army mix; the civilization's unique unit is favoured
+      const opts = g.trainsFor(b), uniq = g.civ[this.team].unique?.type, w = t => (this.D.mix[UD[t].cls] || 0) * (t === uniq ? 2.5 : 1);
+      let pick = null, r = Math.random() * opts.reduce((s2, t) => s2 + w(t), 0);
+      for (const t of opts) { r -= w(t); if (r <= 0) { pick = t; break; } }
       if (pick) g.train(b, pick);
     }
     // defence: enemies near our base
@@ -114,7 +118,10 @@ export class AI {
       const n = Math.round((3 + this.wave * 2.2) * this.D.waveMul), B = BASES[1];
       for (let i = 0; i < n; i++) {
         const r = Math.random(); let type = 'sword';
-        if (this.wave >= 2 && r < .3) type = 'spear'; if (this.wave >= 3 && r > .65) type = 'archer'; if (this.wave >= 5 && r > .85) type = 'knight';
+        if (this.wave >= 2 && r < .3) type = 'spear'; if (this.wave >= 3 && r > .62) type = r > .75 ? 'crossbow' : 'archer';
+        if (this.wave >= 4 && r > .82) type = r > .9 ? 'lightcav' : 'horsearcher'; if (this.wave >= 6 && r > .92) type = 'knight';
+        if (this.wave >= 5 && i < this.wave - 4 && i < 3) type = g.civ[this.team].unique.type;
+        if (this.wave >= 7 && i === n - 1) type = 'catapult';
         const u = g.spawnUnit(this.team, type, B.x + (i % 6) * 1.1 - 3, B.z + Math.floor(i / 6) * 1.1);
         const t = this.attackTarget(u); if (t) g.amove(u, t.x, t.z);
       }

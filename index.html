@@ -18,7 +18,7 @@
 </script>
 <script>
   // ===== Game version: bump on every change you publish (see CLAUDE.md). =====
-  window.BF_VERSION = '0.4.0';
+  window.BF_VERSION = '0.5.0';
   // Every game file is loaded as file.js?v=VERSION so phones never mix old and new files from the browser cache.
   // (On localhost a timestamp is used instead, so edits show up immediately while developing.)
   (function () {
@@ -54,7 +54,8 @@
     <button class="btn sm" id="bPause">&#10074;&#10074;</button>
   </div>
   <div id="bottom">
-    <canvas id="mini" width="128" height="128"></canvas>
+    <div id="miniw"><canvas id="mini" width="128" height="128"></canvas>
+      <button class="cbtn" id="bRotL" title="Rotate left (Q)">&#10226;</button><button class="cbtn" id="bRotR" title="Rotate right (E)">&#10227;</button><button class="cbtn" id="bNorth" title="Reset view (Home)">N</button></div>
     <div id="selp"><div id="selname">Nothing selected</div><div id="seldesc"></div><div id="selq"></div></div>
     <div id="quick">
         <button class="btn" id="bAll">Army<small>select</small></button>
@@ -94,6 +95,8 @@
   <div class="panel">
     <div class="row" id="modes"></div>
     <p id="modeDesc"></p>
+    <div class="row" id="civs"><span class="lbl">Your people</span></div>
+    <div id="civInfo"></div>
     <div class="row"><span class="lbl">Enemy</span><button class="btn sb" data-d="0">Squire<small>easy</small></button><button class="btn sb" data-d="1">Knight<small>normal</small></button><button class="btn sb" data-d="2">Warlord<small>hard</small></button></div>
     <div class="row"><span class="lbl">Graphics</span><button class="btn sb" data-q="low">Low</button><button class="btn sb" data-q="med">Medium</button><button class="btn sb" data-q="high">High</button></div>
     <div class="row"><button class="btn" id="bHelp">How to play</button><button class="btn go" id="bStart">&#9876; Begin</button></div>
@@ -103,8 +106,9 @@
   <div class="panel text">
     <p><b>Goal (Skirmish):</b> peasants gather food (berry bushes, farms), wood (trees) and gold (mines) and carry it to your Town Hall or a Storehouse. Build Houses for more population, a Barracks for soldiers and a Stable for knights. Destroy the enemy Town Hall.</p>
     <p><b>Phone:</b> drag to pan, pinch to zoom, twist to rotate. Tap a unit to select it; double-tap for all of that type; hold then drag to box-select. With units selected, tap the ground to move, an enemy to attack, a tree/bush/mine to gather. The command panel (bottom right) builds and trains. Tap the minimap to jump.</p>
-    <p><b>PC:</b> WASD/arrows pan, Q/E rotate, wheel zoom. Left-click select, drag to box, Shift adds, double-click selects a type. Right-click to order. Command panel keys: Z X C V B N M. I = idle peasant, Ctrl+A = army, Tab = ride selected unit, H = lead as hero, P = pause.</p>
-    <p><b>Riding:</b> left thumb moves, right thumb looks, Strike attacks, Follow me makes nearby troops follow you. PC: click to aim, WASD, left-click strike, F follow, V switches 1st/3rd, Tab returns.</p>
+    <p><b>PC / Mac:</b> WASD/arrows pan, Q/E or the ⟲ ⟳ buttons rotate, Option/Alt-drag or right-drag rotates and tilts, wheel or pinch zooms, two-finger sideways swipe rotates, Home resets the view. Left-click select, drag to box, Shift adds, double-click selects a type. Right-click to order. Command panel keys: Z X C V B N M. I = idle peasant, Ctrl+A = army, Tab = ride selected unit, H = lead as hero, P = pause.</p>
+    <p><b>Riding:</b> left thumb moves, right thumb looks, Strike attacks, Follow me makes nearby troops follow you. PC/Mac: drag the mouse to look around, W/S or ↑/↓ walk, A/D sidestep, ←/→ or Q/E turn, click or Space strikes, F follow, V switches 1st/3rd, Tab returns; double-click for full mouse-look (Esc releases).</p>
+    <p><b>Civilizations:</b> each people has bonuses, weaknesses and one unique unit trained at the Barracks, Archery Range or Stable.</p>
     <button class="btn" id="bHelpBack">&#8592; Back</button>
   </div>
 </div>

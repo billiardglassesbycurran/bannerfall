@@ -110,3 +110,14 @@ html, body { margin:0; height:100%; overflow:hidden; overscroll-behavior:none; b
   background:rgba(26,18,10,.18); z-index:4; pointer-events:none; display:flex; align-items:center; justify-content:center; flex-direction:column; }
 #joyIdle div { width:44px; height:44px; border-radius:50%; background:rgba(243,215,138,.25); }
 #joyIdle span { font-size:10px; opacity:.6; margin-top:4px; }
+
+#miniw { position:relative; flex:none; }
+.cbtn { position:absolute; width:30px; height:30px; border-radius:50%; border:1px solid var(--gold); background:rgba(45,32,20,.9); color:var(--ink);
+  font-size:16px; line-height:1; padding:0; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+.cbtn:active { background:#8f6a32; }
+#bRotL { left:-4px; bottom:-4px; } #bRotR { right:-4px; bottom:-4px; } #bNorth { right:-4px; top:-4px; font-size:11px; font-weight:bold; }
+
+#civInfo { font-size:12px; text-align:center; max-width:560px; line-height:1.4; min-height:36px; }
+#civInfo .pro { color:#9fe08a; } #civInfo .con { color:#ff9a7a; } #civInfo b { color:var(--gold2); }
+#civs .btn { min-width:74px; }
+@media (max-height:460px) { #civInfo { font-size:11px; min-height:0; } }

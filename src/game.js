@@ -1,9 +1,9 @@
 // Core simulation: units, buildings, economy, combat, projectiles, win/lose.
 import * as THREE from 'three';
-import { UD, BD, DIFF } from './data.js';
+import { UD, BD, DIFF, CIVS } from './data.js';
 import { N, SIZE, heightAt, blocked, resCell, cellWalk, resources, takeRes, BASES } from './world.js';
 import { findPath, nearestWalkable } from './path.js';
-import { buildingMesh, arrowGeo, ringGeo } from './models.js';
+import { buildingMesh, arrowGeo, boltGeo, stoneGeo, ringGeo } from './models.js';
 import { M } from './geo.js';
 import { angDiff, clamp, dist } from './util.js';
 
@@ -13,7 +13,8 @@ export const bldAt = new Array(N * N).fill(null);
 
 let nextId = 1;
 export class Game {
-  constructor({ scene, figures, Q, mode, diff }) {
+  constructor({ scene, figures, Q, mode, diff, civs = ['franks', 'franks'] }) {
+    this.civKeys = civs; this.civ = civs.map(k => CIVS[k]); this.statCache = new Map();
     Object.assign(this, { scene, figures, Q, mode, diff }); this.diffD = DIFF[diff] || DIFF[1];
     this.units = []; this.blds = []; this.shots = [];
     this.T = [0, 1].map(() => ({ f: 200, w: 200, g: 100, pop: 0, cap: 0, hallLost: false }));
@@ -22,10 +23,25 @@ export class Game {
     this.hash = new Map();
   }
 
+  // ---------------- civilization-adjusted stats ----------------
+  /** Unit stats for a team, with that team's civilization bonuses/penalties applied. */
+  stat(team, type) {
+    const key = team + type; let d = this.statCache.get(key); if (d) return d;
+    const base = UD[type], civ = this.civ[team], m = civ.mods[base.cls] || {};
+    d = { ...base, type };
+    if (m.hp) d.hp = Math.round(base.hp * m.hp); if (m.dmg) d.dmg = base.dmg * m.dmg; if (m.spd) d.spd = base.spd * m.spd;
+    if (m.arm) d.arm = base.arm + m.arm; if (m.rng && base.ranged) d.rng = base.rng + m.rng;
+    const cm = (m.cost || 1) * (civ.unitCost?.[type] || 1);
+    if (base.cost && cm !== 1) d.cost = Object.fromEntries(Object.entries(base.cost).map(([k, v]) => [k, Math.round(v * cm)]));
+    this.statCache.set(key, d); return d;
+  }
+  /** What a building can train for this team (its civilization's unique unit included). */
+  trainsFor(b) { const list = [...(b.d.trains || [])], u = this.civ[b.team].unique; if (u && u.at === b.type) list.push(u.type); return list; }
+
   // ---------------- spawning ----------------
   spawnUnit(team, type, x, z) {
     const p = nearestWalkable(x, z, 10) || { x, z };
-    const d = UD[type], batch = this.figures.get(team, type);
+    const d = this.stat(team, type), batch = this.figures.get(team, type);
     const u = {
       id: nextId++, kind: 'unit', type, team, d, x: p.x, z: p.z, y: heightAt(p.x, p.z), yaw: team === 0 ? Math.PI * .75 : -Math.PI * .25,
       hp: d.hp, maxHp: d.hp, task: { type: 'idle' }, path: null, carry: null, cd: 0, swingT: 1, phase: Math.random() * 6, speedNow: 0,
@@ -48,7 +64,7 @@ export class Game {
     let y = 1e9; for (let k = 0; k <= s; k++) y = Math.min(y, heightAt(cx + k, cz), heightAt(cx + k, cz + s), heightAt(cx, cz + k), heightAt(cx + s, cz + k));
     const mesh = buildingMesh(type, team, this.Q.shadow > 0); mesh.position.set(x, y + .05, z);
     mesh.rotation.y = team === 0 ? 0 : Math.PI; this.scene.add(mesh);
-    const b = { id: nextId++, kind: 'bld', type, team, d, x, z, y, cx, cz, size: s, hp: built ? d.hp : 1, maxHp: d.hp, built, progress: built ? 1 : 0, queue: [], rally: null, mesh, alive: true, atkCd: 1, food: d.food || 0, farmer: null, selected: false };
+    const b = { id: nextId++, kind: 'bld', type, team, d, x, z, y, cx, cz, size: s, hp: built ? d.hp * (this.civ[team].bld || 1) : 1, maxHp: d.hp * (this.civ[team].bld || 1), built, progress: built ? 1 : 0, queue: [], rally: null, mesh, alive: true, atkCd: 1, food: (d.food || 0) * (this.civ[team].farm || 1), farmer: null, selected: false };
     for (let zz = cz; zz < cz + s; zz++) for (let xx = cx; xx < cx + s; xx++) { blocked[zz * N + xx] = d.walk ? 7 : 4; bldAt[zz * N + xx] = b; }
     // push units out of the footprint
     if (!d.walk) for (const u of this.units) if (u.alive && bldAt[(u.z | 0) * N + (u.x | 0)] === b) { const p = nearestWalkable(u.x, u.z, 6); if (p) { u.x = p.x; u.z = p.z; u.path = null; } }
@@ -128,7 +144,7 @@ export class Game {
     });
   }
   train(b, type) {
-    const d = UD[type]; if (!b.built || !b.d.trains?.includes(type)) return 'no';
+    const d = this.stat(b.team, type); if (!b.built || !this.trainsFor(b).includes(type)) return 'no';
     if (b.queue.length >= 5) return 'full';
     if (!this.afford(b.team, d.cost)) return 'cost';
     this.pay(b.team, d.cost); b.queue.push({ type, t: 0 }); return 'ok';
@@ -145,8 +161,11 @@ export class Game {
   // ---------------- damage ----------------
   damage(t, dmg, src) {
     if (!t.alive) return;
-    let m = 1; if (src?.d?.vsHorse && t.d.horse) m = 3; if (t.kind === 'bld' && src?.d?.ranged) m = .3;
-    const amt = Math.max(1, dmg * m - (t.d.arm || 0));
+    let m = 1; if (src?.d?.vsHorse && t.d.horse) m = 3;
+    if (t.kind === 'bld' && src?.d?.ranged) m = src.d.vsBld || .3;
+    if (t.kind === 'unit' && src?.d?.vsBld) m = .7; // catapults are clumsy against single soldiers
+    const arm = Math.max(0, (t.d.arm || 0) - (src?.d?.pierce || 0));
+    const amt = Math.max(1, dmg * m - arm);
     t.hp -= amt; t.hitT = this.time;
     if (t.kind === 'unit' && src && src.alive && !t.possessed) {
       const busy = t.task.type === 'attack' && t.task.t.alive && t.task.t.kind === 'unit';
@@ -190,21 +209,32 @@ export class Game {
 
   // ---------------- projectiles ----------------
   shoot(src, t, dmg, from) {
-    const mesh = new THREE.Mesh(arrowGeo, M.vc); this.scene.add(mesh);
-    const f = from || new THREE.Vector3(src.x, src.y + 1.5 * (src.scale || 1), src.z);
-    const d = Math.hypot(t.x - f.x, t.z - f.z);
-    this.shots.push({ mesh, f, t, tx: t.x, tz: t.z, ty: (t.kind === 'bld' ? t.y + 1.5 : t.y + 1.0), k: 0, dur: Math.max(.25, d / 22), dmg, src, arc: d * .12 });
+    const kind = src?.d?.stone ? 'stone' : src?.d?.bolt ? 'bolt' : 'arrow';
+    const mesh = new THREE.Mesh(kind === 'stone' ? stoneGeo : kind === 'bolt' ? boltGeo : arrowGeo, M.vc); mesh.castShadow = kind === 'stone'; this.scene.add(mesh);
+    const f = from || new THREE.Vector3(src.x, src.y + (src.d?.horse ? 2.4 : src.d?.ship ? 1.8 : 1.5) * (src.scale || 1), src.z);
+    const d = Math.hypot(t.x - f.x, t.z - f.z), speed = kind === 'stone' ? 13 : kind === 'bolt' ? 30 : 22;
+    this.shots.push({ mesh, f, t, kind, homing: kind !== 'stone', tx: t.x, tz: t.z, ty: (t.kind === 'bld' ? t.y + 1.5 : t.y + 1.0), k: 0, dur: Math.max(.25, d / speed), dmg, src, team: src.team, arc: d * (kind === 'stone' ? .35 : kind === 'bolt' ? .04 : .12) });
+  }
+  /** Catapult stone lands: hurts everything nearby (friendly fire excluded) and any building it hits. */
+  splash(s) {
+    const r = s.src?.d?.splash || 1.8, src = s.src && s.src.alive ? s.src : { d: UD.catapult, team: s.team, alive: false };
+    this.unitsNear(s.tx, s.tz, r + 1, u => { if (u.alive && u.team !== s.team && !u.d.ship) { const d = Math.hypot(u.x - s.tx, u.z - s.tz); if (d < r) this.damage(u, s.dmg * (1 - d / r * .5), src); } });
+    for (const b of this.blds) if (b.alive && b.team !== s.team && this.edgeDist({ x: s.tx, z: s.tz }, b) < .6) { this.damage(b, s.dmg, src); break; }
+    this.onSplash?.(s.tx, s.tz);
   }
   updateShots(dt) {
     const p = new THREE.Vector3(), q = new THREE.Vector3();
     for (let i = this.shots.length - 1; i >= 0; i--) {
       const s = this.shots[i]; s.k += dt / s.dur;
-      if (s.t.alive) { s.tx = s.t.x; s.tz = s.t.z; s.ty = s.t.kind === 'bld' ? s.t.y + 1.5 : s.t.y + 1.0; }
+      if (s.t.alive && s.homing) { s.tx = s.t.x; s.tz = s.t.z; s.ty = s.t.kind === 'bld' ? s.t.y + 1.5 : s.t.y + 1.0; }
       const k = Math.min(1, s.k), arc = Math.sin(k * Math.PI) * s.arc;
       p.set(s.f.x + (s.tx - s.f.x) * k, s.f.y + (s.ty - s.f.y) * k + arc, s.f.z + (s.tz - s.f.z) * k);
       const k2 = Math.min(1, k + .02); q.set(s.f.x + (s.tx - s.f.x) * k2, s.f.y + (s.ty - s.f.y) * k2 + Math.sin(k2 * Math.PI) * s.arc, s.f.z + (s.tz - s.f.z) * k2);
       s.mesh.position.copy(p); s.mesh.lookAt(q);
-      if (s.k >= 1) { if (s.t.alive) this.damage(s.t, s.dmg, s.src); s.mesh.removeFromParent(); this.shots.splice(i, 1); }
+      if (s.k >= 1) {
+        if (s.kind === 'stone') this.splash(s); else if (s.t.alive) this.damage(s.t, s.dmg, s.src);
+        s.mesh.removeFromParent(); this.shots.splice(i, 1);
+      }
     }
   }
 
@@ -235,6 +265,7 @@ export class Game {
   // ---------------- per-unit AI ----------------
   updateUnit(u, dt) {
     u.cd -= dt; u.swingT += dt; u.speedNow = 0; u.think -= dt;
+    if (u.d.regen && u.hp < u.maxHp) u.hp = Math.min(u.maxHp, u.hp + u.d.regen * dt);
     if (u.possessed) return;
     const t = u.task;
     switch (t.type) {
@@ -274,7 +305,7 @@ export class Game {
         if (u.carry && (u.carry.rt !== r.rt || u.carry.amt >= CARRY)) { this.setTask(u, { type: 'return', back: t }); break; }
         if (Math.hypot(u.x - r.x, u.z - r.z) <= r.r + .95) {
           u.path = null; this.face(u, Math.atan2(r.x - u.x, r.z - u.z), dt);
-          const got = takeRes(r, RATE[r.rt] * dt * this.gatherMul(u.team));
+          const got = takeRes(r, RATE[r.rt] * dt * this.gatherMul(u.team) * (this.civ[u.team].gather?.[r.rt] || 1));
           u.carry = u.carry || { rt: r.rt, amt: 0 }; u.carry.amt += got; u.work = true;
           if (u.swingT > .7) u.swingT = 0;
         } else this.goTo(u, r.x, r.z, r.r + .8, dt);
@@ -312,7 +343,7 @@ export class Game {
         }
         if (this.edgeDist(u, b) <= 1.0) {
           u.path = null; this.face(u, Math.atan2(b.x - u.x, b.z - u.z), dt); if (u.swingT > .6) u.swingT = 0;
-          const add = dt / b.d.time; b.progress = Math.min(1, b.progress + add); b.hp = Math.min(b.maxHp, b.hp + add * b.maxHp);
+          const add = dt / b.d.time * (this.civ[u.team].build || 1); b.progress = Math.min(1, b.progress + add); b.hp = Math.min(b.maxHp, b.hp + add * b.maxHp);
           if (b.progress >= 1) { b.built = true; this.recount(); if (b.team === 0) this.toast(`${b.d.name} complete.`); }
           this.setBuildVisual(b);
         } else this.goTo(u, b.x, b.z, b.size / 2 + .6, dt);
@@ -330,7 +361,7 @@ export class Game {
     }
     const q = b.queue[0];
     if (q) {
-      if (q.t < 1) q.t += dt / UD[q.type].time;
+      if (q.t < 1) q.t += dt / this.stat(b.team, q.type).time;
       if (q.t >= 1) {
         const T = this.T[b.team];
         if (T.pop >= T.cap) { if (b.team === 0 && this.time - (this.lastPopWarn || 0) > 8) { this.lastPopWarn = this.time; this.toast('Population limit reached — build more Houses.'); } }
