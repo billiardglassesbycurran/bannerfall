@@ -10,8 +10,9 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
 - After each change, tell them how to see it: the live URL and that they may need to wait ~1–2 minutes for
   GitHub Pages to update, then reload (or bump `?v=` on the URL to skip the phone's cache).
 
-- **Accounts & APIs (Tripo, GitHub, anything else): always tell the owner before using one and walk them through it**
-  (what's needed, why, what it costs, exact clicks). Never use an account or spend credits without their OK.
+- **Accounts & APIs:** free services (GitHub etc.) — just use them, no need to ask. Anything that **costs money or
+  credits** (e.g. Tripo API generations) — ask the owner first, saying what it's for and roughly what it costs.
+  If the owner must sign in, create a key or approve something themselves, walk them through it click by click.
 
 ## Platforms (both are first-class)
 - The owner tests on a **Samsung Galaxy S25 Ultra** (high-end); still keep Medium quality smooth on mid-range phones.
@@ -72,7 +73,7 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
   `docs/MODELS.md`. Raw downloads go in `assets/incoming/` (git-ignored). Budget: buildings ≤10k triangles, ships ≤7k,
   trees ≤700 (they're instanced hundreds of times). Units/horses still procedural (need rigged, animated models).
 - **Tripo API key** lives only in `~/.config/bannerfall/tripo_key` (owner sets it with `models.py tripo-setup`); never read
-  it into chat, print it, or commit it. API generations cost the owner money: confirm before each one.
+  it into chat, print it, or commit it. API generations cost the owner money: get their OK first.
 - Check the owner's Tripo plan licence before publishing a Tripo model; record custom models in `assets/CREDITS.md`.
 
 ## Testing before you push
