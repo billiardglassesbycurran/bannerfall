@@ -4,7 +4,7 @@ import { SIZE, BASES, WL, CLOUDS, buildDistant, buildTerrain, buildWater, buildS
 import { BD, DIFF, MODES, CIVS, CIV_LIST, UD, TECH, AGES } from './data.js';
 import { FX } from './effects.js';
 import { Sound } from './audio.js';
-import { Figures, buildingGeo } from './models.js';
+import { Figures, ghostObject } from './models.js';
 import { Game } from './game.js';
 import { AI } from './ai.js';
 import { RTSView } from './rts.js';
@@ -13,6 +13,7 @@ import { HUD } from './hud.js';
 import { initMaterials, U } from './geo.js';
 import { groundTextures } from './textures.js';
 import { loadAssets } from './assets.js';
+import { loadModels } from './gltfmodels.js';
 import { cloudTexture } from './textures.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -44,6 +45,7 @@ renderer.setPixelRatio(Math.min(devicePixelRatio || 1, Q.dpr));
 renderer.toneMapping = THREE.NeutralToneMapping; renderer.toneMappingExposure = .95;
 const A = await loadAssets(renderer.capabilities.getMaxAnisotropy()); // photo textures (falls back to painted ones)
 initMaterials(qLevel !== 'low', A);
+await loadModels(qLevel !== 'low'); // custom Tripo/Blender models from assets/models (if any)
 renderer.shadowMap.enabled = Q.shadow > 0; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.shadowMap.autoUpdate = false;
 
 const scene = new THREE.Scene();
@@ -142,14 +144,14 @@ let ghost = null;
 const ghostMats = [new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: .65, color: 0xb0ffb0, depthWrite: false }), new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: .65, color: 0xff7a6a, depthWrite: false })];
 app.startPlace = type => {
   app.setPending({ type: 'place', btype: type });
-  ghost = new THREE.Mesh(buildingGeo(type, 0, app.game.look(0)), ghostMats[0]); scene.add(ghost);
+  ghost = ghostObject(type, app.game.look(0), ghostMats[0]); scene.add(ghost);
   const p = rts.pickGround(innerWidth / 2, innerHeight * .42); if (p) moveGhost(p.x, p.z);
 };
 function moveGhost(x, z) {
   const p = app.pending; if (!p || p.type !== 'place' || !ghost) return;
   const s = BD[p.btype].size; p.cx = Math.round(x - s / 2); p.cz = Math.round(z - s / 2);
   ghost.position.set(p.cx + s / 2, BD[p.btype].dock ? WL + .02 : heightAt(p.cx + s / 2, p.cz + s / 2) + .05, p.cz + s / 2);
-  p.ok = app.game.canPlace(p.btype, p.cx, p.cz); ghost.material = ghostMats[p.ok ? 0 : 1];
+  p.ok = app.game.canPlace(p.btype, p.cx, p.cz); const gm = ghostMats[p.ok ? 0 : 1]; if (ghost.isMesh) ghost.material = gm; else ghost.traverse(o => { if (o.isMesh) o.material = gm; });
 }
 function confirmPlace(keep) {
   const p = app.pending; if (!p || p.type !== 'place') return;

@@ -76,8 +76,8 @@ export class RTSView {
   pickBuilding(sx, sy) {
     this.ray.setFromCamera(new THREE.Vector2(sx / innerWidth * 2 - 1, -(sy / innerHeight) * 2 + 1), this.cam);
     const meshes = this.a.game.blds.filter(b => b.alive).map(b => b.mesh);
-    const hit = this.ray.intersectObjects(meshes, false)[0];
-    return hit ? this.a.game.blds.find(b => b.mesh === hit.object) : null;
+    const hit = this.ray.intersectObjects(meshes, true)[0]; // custom models are groups of meshes
+    return hit ? this.a.game.blds.find(b => b.mesh === hit.object || b.mesh === hit.object.parent) : null;
   }
   /** What is under the screen point? Returns {ent, p} where ent is a unit, building, resource or null. */
   pick(sx, sy, touch) {

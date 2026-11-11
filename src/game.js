@@ -82,7 +82,7 @@ export class Game {
   }
   look(team) { const T = this.T[team]; return { age: T.age, fort: T.techs.has('fortify'), guard: T.techs.has('guardtower') }; }
   /** Buildings change style with each age / upgrade. */
-  refreshLooks(team) { for (const b of this.blds) if (b.alive && b.team === team && b.built) { b.mesh.geometry = buildingGeo(b.type, team, this.look(team)); } }
+  refreshLooks(team) { for (const b of this.blds) if (b.alive && b.team === team && b.built && b.mesh.isMesh) { b.mesh.geometry = buildingGeo(b.type, team, this.look(team)); } }
   /** Send the nearest available peasants (idle first) to gather a resource. Returns how many went. */
   sendPeasants(team, res, n = 1) {
     const peas = this.units.filter(u => u.alive && u.team === team && u.type === 'peasant' && !u.boarded && !u.possessed && !(u.task.type === 'gather' && u.task.res === res) && u.task.type !== 'build' && u.task.type !== 'repair');
@@ -504,7 +504,7 @@ export class Game {
           u.path = null; this.face(u, Math.atan2(b.x - u.x, b.z - u.z), dt); if (u.swingT > .6) { u.swingT = 0; this.onWork?.(u, 'knock'); }
           b.nbNow = (b.nbNow || 0) + 1; // every builder adds their share, so more builders finish faster
           const add = dt / b.d.time * (this.civ[u.team].build || 1); b.progress = Math.min(1, b.progress + add); b.hp = Math.min(b.maxHp, b.hp + add * b.maxHp);
-          if (b.progress >= 1) { b.built = true; b.mesh.geometry = buildingGeo(b.type, b.team, this.look(b.team)); this.onBuilt?.(b); this.recount(); if (b.team === 0) this.toast(`${b.d.name} complete.`); }
+          if (b.progress >= 1) { b.built = true; if (b.mesh.isMesh) b.mesh.geometry = buildingGeo(b.type, b.team, this.look(b.team)); this.onBuilt?.(b); this.recount(); if (b.team === 0) this.toast(`${b.d.name} complete.`); }
           this.setBuildVisual(b);
         } else if (this.goTo(u, b.x, b.z, b.size / 2 + (b.d.dock ? 1.8 : .6), dt)) u.near = b; // as close as we can get
         break;

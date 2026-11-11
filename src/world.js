@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { clamp, lerp, smooth, fbm, vnoise, hash2, mulberry32, segDist, TAU } from './util.js';
 import { Builder, P, M, U, bake, jitter, shadeAO } from './geo.js';
 import { tileFbm, cloudTexture } from './textures.js';
+import { GM } from './gltfmodels.js';
 export const CLOUDS = { value: null };
 
 export const SIZE = 128, N = SIZE, HN = SIZE + 1;
@@ -516,17 +517,21 @@ export function buildResources(scene, Q) {
   if (M.photo) {
     // photo-leaf trees: each species is a pair of instanced meshes (bark + leaves) that share placements
     const mk = (src, cap) => { const pair = [new THREE.InstancedMesh(src.bark, src.barkMat || M.bark, cap), new THREE.InstancedMesh(src.leaves, src.leafMat, cap)]; for (const m of pair) { m.count = 0; m.castShadow = shadows; m.receiveShadow = shadows; scene.add(m); } return pair; };
-    const kinds = [{ ...cardPine(1), leafMat: M.needles }, { ...cardPine(2), leafMat: M.needles }, { ...cardOak(3), leafMat: M.leaves }, { ...cardOak(4), leafMat: M.leaves }].map(k => mk(k, trees.length));
+    // a custom model (tools/models.py) replaces the built-in tree: one instanced mesh per material
+    const mkGM = (slot, cap) => GM[slot].parts.map(p => { const m = new THREE.InstancedMesh(p.geo, p.mat, cap); m.count = 0; m.castShadow = shadows; m.receiveShadow = shadows; scene.add(m); return m; });
+    const pineA = GM.tree_pine ? mkGM('tree_pine', trees.length) : null, oakA = GM.tree_oak ? mkGM('tree_oak', trees.length) : null;
+    const kinds = [pineA || mk({ ...cardPine(1), leafMat: M.needles }, trees.length), pineA || mk({ ...cardPine(2), leafMat: M.needles }, trees.length),
+      oakA || mk({ ...cardOak(3), leafMat: M.leaves }, trees.length), oakA || mk({ ...cardOak(4), leafMat: M.leaves }, trees.length)];
     for (const t of trees) {
       const h = hash2(t.x * 3.1, t.z * 1.7), oak = t.y < 4.5 && h < .45, pair = kinds[(oak ? 2 : 0) + (hash2(t.z, t.x * 2) < .5 ? 0 : 1)];
-      const i = pair[0].count++; pair[1].count++;
+      const i = pair[0].count; for (const m of pair) m.count = i + 1;
       const sc = .7 + hash2(t.z, t.x) * .45;
       _q.setFromAxisAngle(UP, h * 40); _m.compose(_v.set(t.x, t.y - .1, t.z), _q, _s.set(sc, sc * (.85 + h * .35), sc));
       _c.setHSL(.06 * (hash2(t.x, 5) - .5), .2 * hash2(t.z, 7), .85 + hash2(t.x, 9) * .3);
       for (const m of pair) { m.setMatrixAt(i, _m); m.setColorAt(i, _c); }
       t.inst = { meshes: pair, i };
     }
-    const bush = cardBush(), bpair = mk({ ...bush, barkMat: M.vc, leafMat: M.leaves }, berries.length);
+    const bpair = GM.bush ? mkGM('bush', berries.length) : mk({ ...cardBush(), barkMat: M.vc, leafMat: M.leaves }, berries.length);
     berries.forEach((b, i) => { _q.setFromAxisAngle(UP, i * 2.1); _m.compose(_v.set(b.x, b.y - .05, b.z), _q, _s.set(1, 1, 1)); for (const m of bpair) { m.setMatrixAt(i, _m); m.count = berries.length; } b.inst = { meshes: bpair, i }; });
   } else {
   // two shapes of each species so forests don't look copy-pasted

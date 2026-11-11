@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { Builder, P, M, TEXMAT } from './geo.js';
 import { UD } from './data.js';
 import { planksTexture, sailTexture, foamTexture } from './textures.js';
+import { GM, buildingParts } from './gltfmodels.js';
 
 export const TEAM = [0x2c50a8, 0xa62419];
 const C = {
@@ -416,6 +417,11 @@ function lateenSail() {
   g.computeVertexNormals(); return g;
 }
 function shipParts(team, kind) {
+  if (GM[kind]) { // custom ship model: sink it to a waterline about a third of its height, add a team pennant
+    const m = GM[kind], h = m.box.max.y - m.box.min.y, drop = -(h * .3) + (kind === 'fishboat' ? .12 : .28);
+    const fb = new Builder(); box(fb, TEAM[team], .3, h * .95 + drop, 0, .6, .3, .02); fb.add(P.cyl(.015, .015, .8, 4), C.wood, 0, h * .85 + drop, 0);
+    return [{ ...fb.split(), extra: m.parts.map(p => ({ geo: p.geo.clone().translate(0, drop, 0), mat: p.mat })), pivot: [0, 0, 0], anim: null }];
+  }
   const b = new Builder(), hull = new Builder(), sails = new Builder(), tc = TEAM[team];
   const addHull = (L, W, D, sheer, yOff, deckY) => { hull.add(hullGeo(L, W, D, sheer, yOff), 0xd8c8b0); hull.add(deckGeo(L, W, deckY), 0xc0a888);
     for (let i = 0; i < 24; i++) for (const s of [-1, 1]) { // gunwale rail
@@ -676,7 +682,22 @@ export function buildingGeo(kind, team, look = { age: 1 }) {
   }
   return b.build();
 }
+const BD_SIZE = { hall: 5, house: 2, farm: 3, store: 3, barracks: 4, range: 4, stable: 4, workshop: 4, smith: 3, tower: 2, dock: 3 };
+/** See-through placement preview (green/red) for a building. */
+export function ghostObject(kind, look, mat) {
+  const custom = buildingParts(kind, BD_SIZE[kind] || 3);
+  if (!custom) return new THREE.Mesh(buildingGeo(kind, 0, look), mat);
+  const g = new THREE.Group(); for (const p of custom) g.add(new THREE.Mesh(p.geo, mat)); g.userData.ghost = true; return g;
+}
 export function buildingMesh(kind, team, shadows, look) {
+  const custom = buildingParts(kind, BD_SIZE[kind] || 3);
+  if (custom) { // a prepared Tripo/Blender model, plus a team banner so you can tell whose it is
+    const g = new THREE.Group(); g.userData.glb = true;
+    for (const p of custom) { const m = new THREE.Mesh(p.geo, p.mat); m.castShadow = shadows; m.receiveShadow = true; g.add(m); }
+    const fb = new Builder(), s = (BD_SIZE[kind] || 3) / 2; flag(fb, TEAM[team], s - .2, 0, s - .2, 2.2 + s * .3);
+    const f = new THREE.Mesh(fb.build(), M.stone); f.castShadow = shadows; g.add(f);
+    return g;
+  }
   const m = new THREE.Mesh(buildingGeo(kind, team, look), M.stone); m.castShadow = shadows; m.receiveShadow = true; return m;
 
 }

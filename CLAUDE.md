@@ -61,7 +61,20 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
 - `src/hud.js` — resource bar, selection panel, command card, minimap, health bars, toasts.
 - `window.bannerfall` exposes app state for debugging; `#play=skirmish,1` in the URL skips the menu (mode, difficulty 0-2).
 
+## Tools on this Mac (art pipeline + tests)
+- **Blender 4.5 LTS** at `~/Applications/Blender.app`; **Playwright** (Python) + Chromium in `~/.local/bannerfall-tools`
+  (run scripts with `~/.local/bannerfall-tools/bin/python`). GitHub CLI at `~/.local/bin/gh`.
+- **Custom models**: `tools/models.py` (Tripo API → `tools/blender/prepare_model.py` → `assets/models/<slot>.glb` +
+  `manifest.json`); the game loads them via `src/gltfmodels.js` for buildings, ships, trees and bushes. Owner-facing guide:
+  `docs/MODELS.md`. Raw downloads go in `assets/incoming/` (git-ignored). Budget: buildings ≤10k triangles, ships ≤7k,
+  trees ≤700 (they're instanced hundreds of times). Units/horses still procedural (need rigged, animated models).
+- **Tripo API key** lives only in `~/.config/bannerfall/tripo_key` (owner sets it with `models.py tripo-setup`); never read
+  it into chat, print it, or commit it. API generations cost the owner money: confirm before each one.
+- Check the owner's Tripo plan licence before publishing a Tripo model; record custom models in `assets/CREDITS.md`.
+
 ## Testing before you push
+- Run `~/.local/bannerfall-tools/bin/python tools/test_game.py` (Playwright: title, all modes fast-forwarded, Commander,
+  phone touch layout with 44px button check). Screenshots go to `tools/test-output/`. Add `--live` to test GitHub Pages.
 - Run the local preview (`.claude/launch.json`) and check: no errors in the console or the red error box,
   select + move from above, Ride/Lead into 3rd person, toggle 1st person, return to command view.
 - Check a phone-sized landscape viewport (e.g. 740×360) with touch emulation as well as desktop.
