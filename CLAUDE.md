@@ -62,6 +62,9 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
 - `src/game.js` — simulation: spawning, orders, gathering, building, training, combat, projectiles, win/lose.
   Combat tactics live here too: `PACE` (global fight length), `counterMul` (unit counters), flanking, high ground,
   cavalry charge (`u.run`), braced spears, morale/rout (`shake`, `moraleTick`; Commander nearby inspires and rallies).
+- `src/fow.js` — fog of war: 128² vis/seen grid → DataTexture; darkening is patched into three's fog shader chunks and
+  the uniforms are injected via a `Material.prototype.onBeforeCompile` accessor (so it must be imported first in main.js).
+  Enemy units/buildings out of sight get `fowHidden`. Off in Battle mode; Settings toggle.
 - `src/battle.js` — Battle mode field: 3 capturable banners, reserves + reinforcement waves, army breaks if all banners held.
 - `src/path.js` — A* pathfinding on the grid (pass a walk function: `cellWalk` for land, `navCell` for ships). `src/ai.js` — enemy AI for Skirmish, Battle, Survival.
 - `src/rts.js` — aerial camera, picking, selection, touch/mouse orders. `src/pov.js` — 1st/3rd person: strike, Follow me,
@@ -112,6 +115,6 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
 2b. ✅ v0.3 Realistic look (PBR + sky reflections, textured terrain, new trees, wind), remodelled soldiers/horses,
    camera glide, Box select, control groups, edge scroll, 3rd-person target ring / lunge / hold-to-strike.
 3. Ages & upgrades (Feudal/Kingdom, blacksmith, from the prototype), walls, catapults.
-4. Fog of war, control groups, formations UI, sound and music.
+4. ✅ v0.13 Fog of war; ✅ v0.12 formations, morale, flanking, banners. Still: sound and music.
 5. Campaign missions and more maps (the prototype has Riverlands / Highland Pass / Forest Valley and 4 missions).
 6. 3rd-person polish: blocking, charge ability, mounted hero, camera avoiding trees.

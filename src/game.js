@@ -635,7 +635,7 @@ export class Game {
     this.time += dt;
     this.rebuildHash();
     if ((this.moraleT = (this.moraleT || 0) + dt) >= 1) { this.moraleT = 0; this.moraleTick(); }
-    this.field?.update(dt);
+    this.field?.update(dt); this.fow?.update(dt);
     for (const b of this.blds) b.nbNow = 0;
     for (const u of this.units) if (u.alive) { if (u.boarded) { u.x = u.boarded.x; u.z = u.boarded.z; continue; } this.updateUnit(u, dt); }
     // separation
@@ -676,7 +676,7 @@ export class Game {
         u.aimK = (u.aimK || 0) + ((engaged ? 1 : 0) - (u.aimK || 0)) * Math.min(1, dt * 6);
         u.drawK = clamp(1 - u.cd / u.d.cd, 0, 1);
       }
-      u.batch.set(u.slot, { x: u.x, y, z: u.z, yaw: u.yaw, scale: u.scale, s: Math.sin(u.phase) * .7 * k, swing: sw, tilt, hidden: u.id === hideId || !!u.boarded, aim: u.aimK || 0, draw: u.drawK || 0 });
+      u.batch.set(u.slot, { x: u.x, y, z: u.z, yaw: u.yaw, scale: u.scale, s: Math.sin(u.phase) * .7 * k, swing: sw, tilt, hidden: u.id === hideId || !!u.boarded || (u.fowHidden = u.team !== 0 && !!this.fow && !this.fow.see(u.x, u.z)), aim: u.aimK || 0, draw: u.drawK || 0 });
       if (u.d.ship) {
         if (!u.wake && u.alive) { u.wake = new THREE.Mesh(wakeGeo, wakeMaterial().clone()); this.scene.add(u.wake); }
         if (u.wake) {

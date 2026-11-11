@@ -180,10 +180,17 @@ export class HUD {
   drawMini() {
     const c = this.mctx, g = this.a.game, K = 2; c.drawImage(this.bg, 0, 0);
     for (const r of resources) if (r.alive && (r.rt === 'g' || r.fish)) { c.fillStyle = r.fish ? '#cfefff' : '#ffd84a'; c.beginPath(); c.arc(r.x * K, r.z * K, r.fish ? 2 : 3, 0, 6.3); c.fill(); }
-    for (const b of g.blds) if (b.alive) { c.fillStyle = b.team ? '#d8402a' : '#3f72ff'; c.strokeStyle = 'rgba(0,0,0,.8)'; c.lineWidth = 1; c.fillRect(b.cx * K, b.cz * K, b.size * K, b.size * K); c.strokeRect(b.cx * K + .5, b.cz * K + .5, b.size * K - 1, b.size * K - 1); }
-    for (const u of g.units) if (u.alive && !u.boarded) {
+    const F = g.fow?.on ? g.fow : null;
+    for (const b of g.blds) if (b.alive && (!F || !b.team || F.explored(b.x, b.z))) { c.fillStyle = b.team ? '#d8402a' : '#3f72ff'; c.strokeStyle = 'rgba(0,0,0,.8)'; c.lineWidth = 1; c.fillRect(b.cx * K, b.cz * K, b.size * K, b.size * K); c.strokeRect(b.cx * K + .5, b.cz * K + .5, b.size * K - 1, b.size * K - 1); }
+    for (const u of g.units) if (u.alive && !u.boarded && !u.fowHidden) {
       c.fillStyle = u.selected ? '#ffffff' : u.team ? '#ff5a40' : '#7fa8ff'; c.strokeStyle = 'rgba(0,0,0,.85)'; c.lineWidth = 1;
       const r = u.d.ship ? 3 : 1.8; c.beginPath(); c.arc(u.x * K, u.z * K, r, 0, 6.3); c.fill(); c.stroke();
+    }
+    if (F) { // fog of war on the minimap: unexplored black, out of sight dimmed
+      const img = this.fogImg || (this.fogImg = c.createImageData(N, N)), d = img.data;
+      for (let i = 0; i < N * N; i++) { d[i * 4 + 3] = F.vis[i] ? 0 : F.seen[i] ? 110 : 235; }
+      const fc = this.fogCan || (this.fogCan = Object.assign(document.createElement('canvas'), { width: N, height: N }));
+      fc.getContext('2d').putImageData(img, 0, 0); c.imageSmoothingEnabled = true; c.drawImage(fc, 0, 0, N * K, N * K);
     }
     // the part of the map you're looking at: a clean white box, rotated with the camera
     const rts = this.a.rts, cam = this.a.camera, ray = new THREE.Raycaster(), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -rts.focus.y), hit = new THREE.Vector3();
@@ -210,7 +217,7 @@ export class HUD {
     const scr = (x, y, z) => { v.set(x, y, z).project(cam); return v.z < 1 && v.x > -1.1 && v.x < 1.1 && v.y > -1.1 && v.y < 1.1 ? [(v.x * .5 + .5) * innerWidth, (-v.y * .5 + .5) * innerHeight] : null; };
     const zoomK = Math.max(.6, Math.min(1.2, 30 / this.a.rts.dist));
     for (const u of g.units) {
-      if (!u.alive || (!u.selected && u.hp >= u.maxHp)) continue;
+      if (!u.alive || u.fowHidden || (!u.selected && u.hp >= u.maxHp)) continue;
       const p = scr(u.x, u.y + (u.d.horse ? 3.0 : 2.1) * u.scale, u.z); if (!p) continue;
       const f = u.hp / u.maxHp; bar(p[0], p[1], 24 * zoomK * (u.d.hero ? 1.5 : 1), f, u.team ? '#e04a3a' : f > .5 ? '#5ad24a' : f > .25 ? '#e8c43a' : '#e0503a');
     }

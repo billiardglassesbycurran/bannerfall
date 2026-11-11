@@ -62,7 +62,7 @@ export class RTSView {
   pickUnit(sx, sy, rad, team) {
     const v = new THREE.Vector3(); let best = null, bd = rad * rad;
     for (const u of this.a.game.units) {
-      if (!u.alive || u.possessed || u.boarded || (team !== undefined && u.team !== team)) continue;
+      if (!u.alive || u.possessed || u.boarded || u.fowHidden || (team !== undefined && u.team !== team)) continue;
       const p = this.toScreen(u.x, u.y + .9 * u.scale * (u.d.horse ? 1.6 : 1), u.z, v); if (!p) continue;
       const d = (p[0] - sx) ** 2 + (p[1] - sy) ** 2 - (u.team === 0 ? 60 : 0); if (d < bd) { bd = d; best = u; }
     }
@@ -75,7 +75,7 @@ export class RTSView {
   }
   pickBuilding(sx, sy) {
     this.ray.setFromCamera(new THREE.Vector2(sx / innerWidth * 2 - 1, -(sy / innerHeight) * 2 + 1), this.cam);
-    const meshes = this.a.game.blds.filter(b => b.alive).map(b => b.mesh);
+    const meshes = this.a.game.blds.filter(b => b.alive && !b.fowHidden).map(b => b.mesh);
     const hit = this.ray.intersectObjects(meshes, true)[0]; // custom models are groups of meshes
     return hit ? this.a.game.blds.find(b => b.mesh === hit.object || b.mesh === hit.object.parent) : null;
   }
@@ -89,7 +89,7 @@ export class RTSView {
     let best = null, bd = 9;
     for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
       const x = cx + dx, z = cz + dz; if (x < 0 || z < 0 || x >= N || z >= N) continue;
-      const e = bldAt[z * N + x] || resCell[z * N + x]; if (!e) continue;
+      const e = bldAt[z * N + x] || resCell[z * N + x]; if (!e || e.fowHidden) continue;
       const d = dx * dx + dz * dz; if (d < bd) { bd = d; best = e; }
     }
     return { ent: best, p };

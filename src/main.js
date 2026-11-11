@@ -1,5 +1,6 @@
 // Bannerfall — entry point: renderer, lighting, menus, game modes, input routing and the main loop.
 import * as THREE from 'three';
+import { FOW, FogOfWar } from './fow.js'; // must load before any material is made
 import { SIZE, BASES, WL, CLOUDS, buildDistant, buildTerrain, buildWater, buildSky, buildResources, buildBridge, buildFish, updateFish, heightAt } from './world.js';
 import { BD, DIFF, MODES, CIVS, CIV_LIST, UD, TECH, AGES } from './data.js';
 import { FX } from './effects.js';
@@ -109,7 +110,7 @@ const app = {
 app.scene = scene; app.renderer = renderer;
 const fx = new FX(scene), sound = new Sound();
 // ---------------- player settings (saved on this device) ----------------
-const SET_DEFAULT = { look: 1, cam: 1, vol: .7, music: true, voice: true, big: false, auto: true };
+const SET_DEFAULT = { look: 1, cam: 1, vol: .7, music: true, voice: true, big: false, auto: true, fog: true };
 app.settings = { ...SET_DEFAULT }; try { Object.assign(app.settings, JSON.parse(localStorage.getItem('bf.settings') || '{}')); } catch { /* ignore */ }
 function applySettings() {
   document.body.classList.toggle('bigui', !!app.settings.big); sound.setVolume?.(app.settings.vol);
@@ -216,6 +217,7 @@ app.hint = () => {
 // ---------------- modes ----------------
 function setupGame(mode, diff, civ = 'franks', enemyCiv) {
   const tut = mode === 'tutorial'; if (tut) { mode = 'skirmish'; diff = 0; }
+  app.game?.fow?.dispose();
   if (app.game?.field) for (const f of app.game.field.flags) f.mesh.removeFromParent();
   app.tut = null; document.getElementById('tutor').classList.add('hide');
   if (!CIVS[civ]) civ = 'franks';
@@ -284,6 +286,7 @@ function setupGame(mode, diff, civ = 'franks', enemyCiv) {
   }
   g.recount();
   app.ai = new AI(g, 1);
+  g.fow = new FogOfWar(g, mode !== 'battle' && app.settings.fog !== false);
   if (tut) { g.tutorial = true; app.ai.nextAttack = 1e9; app.tut = new Tutorial(app); }
   rts.yaw = -Math.PI / 4;
   app.mode = 'rts'; app.select([]);
@@ -389,12 +392,12 @@ for (const b of document.querySelectorAll('[data-q]')) b.addEventListener('click
 onBtn('bTutSkip', () => app.tut?.skip());
 onBtn('bHelp', () => { $('help').classList.remove('hide'); });
 const openSettings = () => {
-  const S = app.settings; $('sLook').value = S.look; $('sCam').value = S.cam; $('sVol').value = S.vol; $('sMusic').checked = S.music; $('sVoice').checked = S.voice; $('sBig').checked = S.big; $('sAuto').checked = S.auto;
+  const S = app.settings; $('sLook').value = S.look; $('sCam').value = S.cam; $('sVol').value = S.vol; $('sMusic').checked = S.music; $('sVoice').checked = S.voice; $('sBig').checked = S.big; $('sAuto').checked = S.auto; $('sFog').checked = S.fog;
   $('settings').classList.remove('hide');
 };
 onBtn('bSettings', openSettings); onBtn('bSettings2', openSettings);
 onBtn('bSetBack', () => { $('settings').classList.add('hide'); });
-for (const [id, key, num] of [['sLook', 'look', 1], ['sCam', 'cam', 1], ['sVol', 'vol', 1], ['sMusic', 'music'], ['sVoice', 'voice'], ['sBig', 'big'], ['sAuto', 'auto']])
+for (const [id, key, num] of [['sLook', 'look', 1], ['sCam', 'cam', 1], ['sVol', 'vol', 1], ['sMusic', 'music'], ['sVoice', 'voice'], ['sBig', 'big'], ['sAuto', 'auto'], ['sFog', 'fog']])
   $(id).addEventListener('input', e => { app.settings[key] = num ? +e.target.value : e.target.checked; applySettings(); });
 applySettings();
 // auto-pause when the app goes to the background (phone call, switching apps)
@@ -489,6 +492,7 @@ renderer.setAnimationLoop(() => {
   hud.update(real);
   water.userData.reflect?.(renderer, scene, camera); // mirror image for the water (High quality)
   renderer.shadowMap.needsUpdate = true;
+  camera.updateMatrixWorld(); FOW.cam.value.copy(camera.matrixWorld);
   if (composer) composer.render(real); else renderer.render(scene, camera);
 });
 
