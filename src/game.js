@@ -717,6 +717,12 @@ export class Game {
       this.heroRespawn -= dt;
       if (this.heroRespawn <= 0) { const hall = this.blds.find(b => b.alive && b.team === 0 && b.type === 'hall'); if (hall) { this.hero = this.spawnUnit(0, 'hero', hall.x + 3.5, hall.z + 3.5); this.recount(); this.toast('Your Commander has returned.'); this.onHero?.(this.hero); } }
     }
+    // the enemy Commander returns too (45 s after falling), as long as their Town Hall stands
+    if (this.mode === 'skirmish') { // (online, this brings back the friend's Commander)
+      const eh = this.units.find(u => u.alive && u.team === 1 && u.d.hero);
+      if (eh) { this.eHeroSeen = true; this.eHeroT = 0; }
+      else if (this.eHeroSeen && (this.eHeroT = (this.eHeroT || 0) + dt) > 45) { const h = this.blds.find(b => b.alive && b.team === 1 && b.type === 'hall'); if (h) { this.spawnUnit(1, 'hero', h.x - 3.5, h.z - 3.5); this.recount(); if (this.time > 60) this.toast('The enemy Commander has returned.', 2.5); } this.eHeroT = 0; }
+    }
     // dead unit cleanup
     for (let i = this.units.length - 1; i >= 0; i--) { const u = this.units[i]; if (u.dead && (u.deathT += dt) > (u.d.ship ? 4 : 40)) { u.batch.release(u.slot); this.units.splice(i, 1); } } // the fallen stay on the field for a while
     this.blds = this.blds.filter(b => b.alive);

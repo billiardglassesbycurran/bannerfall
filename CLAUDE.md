@@ -74,6 +74,9 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
   `?loop` in the URL = two-tab test link (BroadcastChannel) used by test_game.py; the sandbox here blocks real WebRTC.
 - `src/battle.js` — Battle mode field: 3 capturable banners, reserves + reinforcement waves, army breaks if all banners held.
 - `src/path.js` — A* pathfinding on the grid (pass a walk function: `cellWalk` for land, `navCell` for ships). `src/ai.js` — enemy AI for Skirmish, Battle, Survival.
+  Skirmish AI (Knight/Warlord): counters the player's army (`counterW`), gathers at a rally point and attacks only when
+  strong enough (`power`), targets the weakest spot (`weakSpot`), retreats when losing, cavalry raids on peasants (`raid`),
+  scouting, towers by its gold, storehouses by wood/gold, rebalances workers; Warlord rings the bell. Squire stays simple.
 - `src/rts.js` — aerial camera, picking, selection, touch/mouse orders. `src/pov.js` — 1st/3rd person: strike, Follow me,
   Act button (G: board/steer/leave ships, enter/leave buildings — rooms from `interiorGeo` in models.js), Mount (M).
 - `src/hud.js` — resource bar, selection panel, command card, minimap, health bars, toasts.
