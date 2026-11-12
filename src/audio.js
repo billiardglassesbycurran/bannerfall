@@ -12,7 +12,49 @@ export class Sound {
     this.master = c.createGain(); this.master.gain.value = this.on ? (this.vol ?? .7) : 0;
     const comp = c.createDynamicsCompressor(); this.master.connect(comp); comp.connect(c.destination);
     const len = c.sampleRate; this.noise = c.createBuffer(1, len, c.sampleRate); const d = this.noise.getChannelData(0); for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
-    this.ambience();
+    this.ambience(); this.startMusic();
+  }
+  // ---------- music: generated live, calm in peace, drums and brass in battle ----------
+  setMusic(on) { this.musicOn = on; if (this.mus) this.mus.gain.value = on ? .55 : 0; }
+  startMusic() {
+    if (!this.ctx || this.mus) return; const c = this.ctx;
+    this.mus = c.createGain(); this.mus.gain.value = this.musicOn === false ? 0 : .55; this.mus.connect(this.master);
+    this.calm = c.createGain(); this.war = c.createGain(); this.calm.gain.value = 1; this.war.gain.value = 0; this.calm.connect(this.mus); this.war.connect(this.mus);
+    const rev = c.createDelay(); rev.delayTime.value = .23; const fb = c.createGain(); fb.gain.value = .28; const wet = c.createGain(); wet.gain.value = .25; // a little echo for space
+    this.calm.connect(rev); rev.connect(fb); fb.connect(rev); rev.connect(wet); wet.connect(this.mus);
+    this.next = c.currentTime + .2; this.step = 0; this.fight = 0; this.deg = 0;
+    const drone = (f, g) => { const o = c.createOscillator(), gn = c.createGain(), lp = c.createBiquadFilter(); o.type = 'sawtooth'; o.frequency.value = f; lp.type = 'lowpass'; lp.frequency.value = 260; gn.gain.value = g; o.connect(lp); lp.connect(gn); gn.connect(this.calm); o.start(); };
+    drone(73.4, .05); drone(110, .03);
+    setInterval(() => this.schedule(), 90);
+  }
+  /** 0 = peace .. 1 = battle; the music follows smoothly. */
+  setIntensity(k) { this.fight = k; if (!this.mus) return; const t = this.ctx.currentTime; this.calm.gain.setTargetAtTime(1 - k * .85, t, 1.5); this.war.gain.setTargetAtTime(k, t, 1.2); }
+  pluck(f, t, dur, out, vol = .14) { const c = this.ctx, o = c.createOscillator(), o2 = c.createOscillator(), g = c.createGain(), lp = c.createBiquadFilter(); o.type = 'triangle'; o2.type = 'sawtooth'; o.frequency.value = f; o2.frequency.value = f * 1.003; lp.type = 'lowpass'; lp.frequency.setValueAtTime(f * 6, t); lp.frequency.exponentialRampToValueAtTime(f * 1.5, t + dur); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + .006); g.gain.exponentialRampToValueAtTime(.0001, t + dur); const g2 = c.createGain(); g2.gain.value = .25; o.connect(lp); o2.connect(g2); g2.connect(lp); lp.connect(g); g.connect(out); o.start(t); o2.start(t); o.stop(t + dur + .05); o2.stop(t + dur + .05); }
+  drum(t, big, out) { this.tone('sine', big ? 110 : 190, t, big ? .5 : .18, big ? .35 : .12, out, big ? 45 : 90); this.burst(t, big ? .12 : .1, big ? .12 : .07, 'bandpass', big ? 300 : 1400, .8, out); }
+  schedule() {
+    const c = this.ctx; if (!c || c.state !== 'running' || !this.on) { if (c) this.next = c.currentTime + .1; return; }
+    const SC = [146.8, 164.8, 174.6, 196, 220, 246.9, 261.6, 293.7, 329.6, 349.2]; // D dorian, two octaves
+    const war = this.fight > .5, beat = 60 / (war ? 116 : 76) / 2; // eighth notes
+    while (this.next < c.currentTime + .35) {
+      const t = this.next, st = this.step++, bar = st % 16;
+      if (war) {
+        if (bar % 4 === 0) this.drum(t, true, this.war); else if (bar % 2 === 0 || Math.random() < .3) this.drum(t, false, this.war);
+        if (bar % 4 === 0) { const f = [73.4, 73.4, 65.4, 82.4][(st >> 4) % 4]; const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 700; lp.connect(this.war); this.tone('sawtooth', f * 2, t, .07, beat * 3.6, lp); this.tone('sawtooth', f * 3, t, .04, beat * 3.6, lp); }
+        if (bar % 2 === 0 && Math.random() < .7) { this.deg = Math.max(0, Math.min(7, this.deg + [-1, 1, 2, -2, 0][Math.random() * 5 | 0])); this.pluck(SC[this.deg] * 2, t, beat * 1.6, this.war, .09); }
+      } else {
+        const rest = Math.random() < (bar % 4 === 3 ? .7 : .25);
+        if (!rest) { this.deg = Math.max(0, Math.min(9, this.deg + [-1, 1, -2, 2, 0, 1, -1, 3][Math.random() * 8 | 0])); if (bar === 0) this.deg = [0, 4, 3, 2][(st >> 4) % 4]; this.pluck(SC[this.deg], t, beat * 3, this.calm); }
+        if (bar === 0 || bar === 8) this.pluck(SC[this.deg % 5] / 2, t, beat * 6, this.calm, .1);
+      }
+      this.next += beat;
+    }
+  }
+  // ---------- unit voices (the device's built-in speech) ----------
+  say(text, { pitch = 1, rate = 1.05, lang } = {}) {
+    if (!this.on || this.voiceOn === false || !window.speechSynthesis) return;
+    const now = performance.now(); if (now - (this.lastSay || 0) < 1100) return; this.lastSay = now;
+    try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.pitch = pitch; u.rate = rate; u.volume = Math.min(1, (this.vol ?? .7) * 1.3);
+      const vs = speechSynthesis.getVoices(), v = (lang && vs.find(v => v.lang?.startsWith(lang))) || vs.find(v => v.lang?.startsWith('en')); if (v) u.voice = v; speechSynthesis.speak(u); } catch { /* ignore */ }
   }
   /** Rain hiss, 0..1. */
   setRain(k) { if (!this.ctx) return; if (!this.rainG) { const s = this.ctx.createBufferSource(), hp = this.ctx.createBiquadFilter(); this.rainG = this.ctx.createGain(); s.buffer = this.noise; s.loop = true; hp.type = 'highpass'; hp.frequency.value = 1800; s.connect(hp); hp.connect(this.rainG); this.rainG.connect(this.master); this.rainG.gain.value = 0; s.start(); } this.rainG.gain.value = k * .09; }

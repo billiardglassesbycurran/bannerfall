@@ -120,6 +120,7 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
    camera glide, Box select, control groups, edge scroll, 3rd-person target ring / lunge / hold-to-strike.
 3. ✅ Ages & upgrades, catapults; ✅ v0.15 walls (drag a line) and gates (own team passes: blocked=8 + `game.walkFor`),
    Stone Walls tech; enemies `breach` walls that block their path.
-4. ✅ v0.13 Fog of war; ✅ v0.12 formations, morale, flanking, banners. Still: sound and music.
+4. ✅ v0.13 Fog of war; ✅ v0.12 formations, morale, flanking, banners; ✅ v0.18 generated music (calm/battle, `Sound.schedule`)
+   and unit voices (speechSynthesis, `speak()` in main.js).
 5. ✅ v0.14 Highland Pass, Forest Valley, Random maps. Still: campaign missions (the prototype has 4).
 6. 3rd-person polish: blocking, charge ability, mounted hero, camera avoiding trees.

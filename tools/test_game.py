@@ -45,7 +45,8 @@ def open_game(pw, base, hash_='', **ctx):
     page = context.new_page()
     errors = []
     page.on('pageerror', lambda e: errors.append(str(e)))
-    page.on('console', lambda m: errors.append(m.text) if m.type == 'error' and 'favicon' not in m.text else None)
+    page.on('console', lambda m: errors.append(m.text) if m.type == 'error' and 'favicon' not in m.text and 'Failed to load resource' not in m.text else None)
+    page.on('requestfailed', lambda r: errors.append(f'request failed: {r.url} ({r.failure})') if 'favicon' not in r.url else None)
     for attempt in range(2):  # the software renderer occasionally stalls a first load: reload once before failing
         page.goto(base + ('#' + hash_ if hash_ else '')) if attempt == 0 else page.reload()
         for _ in range(90):  # poll ourselves: the software renderer can starve Playwright's own waiting
@@ -116,7 +117,11 @@ def main():
         check(page.evaluate('!window.bannerfall.pov.room'), 'walking back out of the door leaves the building')
         page.evaluate("""() => { const a = window.bannerfall, g = a.game, h = g.hero, hall = g.blds[0], pov = a.pov;
           h.x = hall.x + hall.size / 2 + 1.2; h.z = hall.z; pov.yaw = -Math.PI / 2; pov.snap = true; }""")  # against a side wall
-        page.keyboard.down('KeyW'); page.wait_for_timeout(2800); page.keyboard.up('KeyW')
+        page.keyboard.down('KeyW')
+        for _ in range(30):  # the software renderer is slow: wait for it rather than a fixed time
+            page.wait_for_timeout(300)
+            if page.evaluate('!!window.bannerfall.pov.room'): break
+        page.keyboard.up('KeyW')
         check(page.evaluate('!!window.bannerfall.pov.room'), 'walking into a wall also goes inside')
         page.evaluate("() => window.bannerfall.pov.exitRoom(true)")
         page.click('#bMount'); page.wait_for_timeout(600)

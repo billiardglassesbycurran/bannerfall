@@ -116,6 +116,7 @@ const atmo = new Atmosphere({ scene, sun, hemi, renderer, base: { sun: sun.inten
 const SET_DEFAULT = { look: 1, cam: 1, vol: .7, music: true, voice: true, big: false, auto: true, fog: true, mapBot: false, mapOff: false, cycle: true };
 app.settings = { ...SET_DEFAULT }; try { Object.assign(app.settings, JSON.parse(localStorage.getItem('bf.settings') || '{}')); } catch { /* ignore */ }
 function applySettings() {
+  sound.setMusic?.(app.settings.music !== false); sound.voiceOn = app.settings.voice !== false;
   document.body.classList.toggle('bigui', !!app.settings.big); sound.setVolume?.(app.settings.vol);
   const mw = document.getElementById('miniw'); mw.classList.toggle('bottom', !!app.settings.mapBot); mw.classList.toggle('off', !!app.settings.mapOff); document.getElementById('bMap').classList.toggle('on', !app.settings.mapOff);
   try { localStorage.setItem('bf.settings', JSON.stringify(app.settings)); } catch { /* ignore */ }
@@ -140,13 +141,29 @@ app.select = (list, add = false) => {
   list = list.filter(Boolean);
   if (add) { const base = app.sel.filter(e => e.kind === 'unit' && e.team === 0 && e.alive); list = [...new Set([...base, ...list.filter(e => e.kind === 'unit' && e.team === 0)])]; }
   for (const e of app.sel) e.selected = false;
+  const fresh = list.find(e => e.kind === 'unit' && e.team === 0 && !e.selected);
   app.sel = list; for (const e of list) e.selected = true;
+  if (fresh && app.mode === 'rts') speak(fresh, 'select');
   hud.selT = 0; hud.cardT = 0; hud.sig = '';
 };
+// unit voices: short replies when you select or command them (uses the device's speech voices)
+const LINES = {
+  civ: { select: ['Yes?', 'Ready to work.', 'What is it?'], move: ['Right away.', 'On my way.'], gather: ['Back to work.', 'Aye.'], build: ['I will build it.', 'Hammer and nails!'], attack: ['If I must!', 'Must I?'] },
+  mil: { select: ['Yes, my lord?', 'Orders?', 'Ready.', 'Sir?'], move: ['At once!', 'Moving out.', 'As you command.'], attack: ['Attack!', 'For glory!', 'Charge them!', 'To arms!'], gather: ['Yes, my lord.'], build: ['Yes, my lord.'] },
+  hero: { select: ['I am ready.', 'The banner stands.'], move: ['Onward.', 'Ride on.'], attack: ['Follow me!', 'With me!'], gather: ['Onward.'], build: ['Onward.'] },
+};
+const ACCENT = { franks: 'fr', romans: 'it', norse: 'nb' };
+function speak(u, kind) {
+  if (!u || !app.settings.voice) return;
+  const set = u.d.hero ? LINES.hero : u.type === 'peasant' || u.d.ship ? LINES.civ : LINES.mil, list = set[kind] || set.select;
+  sound.say(list[Math.random() * list.length | 0], { pitch: u.d.hero ? .7 : u.type === 'peasant' ? 1.15 : .85, lang: ACCENT[app.game?.civKeys[0]] });
+}
+app.speak = speak;
 app.order = (ent, x, z) => {
   const units = app.sel.filter(e => e.kind === 'unit' && e.team === 0 && e.alive);
   if (!units.length) return;
   const r = app.game.command(units, ent, x, z);
+  speak(units.find(u => u.d.hero) || units[0], r === 'attack' ? 'attack' : r === 'gather' ? 'gather' : r === 'build' ? 'build' : 'move');
   showMarker(x, z, r === 'attack' ? 0xff6a4a : r === 'gather' || r === 'build' ? 0x9dff8a : 0xf3d78a);
 };
 app.setPending = p => {
@@ -273,6 +290,7 @@ function setupGame(mode, diff, civ = 'franks', enemyCiv) {
   };
   g.onAlert = (x, z) => { hud.ping(x, z); if (performance.now() - (app.lastHorn || 0) > 15000) { app.lastHorn = performance.now(); app.sfx('horn'); } };
   g.onHit = (t, src, amt) => {
+    if (t.kind === 'unit' && src?.kind === 'unit' && (t.team === 0 || src.team === 0)) app.lastFight = g.time;
     const melee = src?.d?.melee, y = t.kind === 'bld' ? t.y + 1.2 : t.y + 1.1;
     if (melee) { const metal = (t.d.arm || 0) >= 2; if (metal && Math.random() < .6) fx.sparks(t.x, y, t.z, 5); app.sfx(metal ? 'clang' : 'thud', t.x, t.z, .7); }
     else if (t.kind === 'bld') fx.dust(t.x, t.y + .5, t.z, 3, .8);
@@ -290,6 +308,7 @@ function setupGame(mode, diff, civ = 'franks', enemyCiv) {
   };
   g.onAbility = (u, k) => {
     fx.dust(u.x, u.y, u.z, k === 'charge' ? 10 : 18, k === 'charge' ? 1.5 : 4); app.sfx(k === 'cry' ? 'horn' : k === 'rally' ? 'fanfare' : 'thud', u.x, u.z, 1);
+    if (u.team === 0 && k === 'cry' && app.settings.voice) sound.say(`For the ${g.civ[0].name}!`, { pitch: .65, rate: 1.1 });
     if (u.team === 0) app.toast({ cry: 'War Cry! Your soldiers fight harder.', charge: 'Charge!', rally: 'Rally! Fleeing soldiers return to the fight.' }[k], 2);
   };
   g.onPromote = u => { if (u.team === 0) app.sfx('chime', u.x, u.z, .7); };
@@ -569,6 +588,7 @@ renderer.setAnimationLoop(() => {
   if (g) emitEffects(dt);
   fx.update(dt);
   const f = app.mode === 'pov' && pov.unit ? pov.unit : rts.focus; // keep the sharp-shadow area centred on the action
+  { const k = g && g.time - (app.lastFight ?? -99) < 9 ? 1 : 0; if (k !== app.musicK) { app.musicK = k; sound.setIntensity?.(k); } }
   atmo.update(dt, g?.cycle ? g.env : null, camera); SUN_DIR.copy(atmo.dir);
   sun.target.position.set(f.x, 0, f.z); sun.position.copy(sun.target.position).addScaledVector(SUN_DIR, 110);
   if (marker.visible) { markerT += real; marker.scale.setScalar(1 + markerT * 1.5); marker.material.opacity = 1 - markerT / .7; if (markerT > .7) marker.visible = false; }
