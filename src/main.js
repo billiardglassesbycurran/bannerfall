@@ -7,6 +7,7 @@ import { FX } from './effects.js';
 import { Tutorial } from './tutorial.js';
 import { Field } from './battle.js';
 import { Atmosphere, isNight } from './sky.js';
+import { Link, HostSync, GuestSync, newCode } from './net.js';
 import { MISSIONS, progress, saveProgress } from './campaign.js';
 import { saveGame, loadSave, applySave, saveInfo, clearSave } from './save.js';
 import { Sound } from './audio.js';
@@ -447,7 +448,7 @@ onBtn('bLook', () => $('end').classList.add('hide'));
 onBtn('bFs', goFullscreen);
 onBtn('bSound', () => { $('bSound').textContent = sound.toggle() ? 'Sound: on' : 'Sound: off'; });
 $('bSound').textContent = sound.on ? 'Sound: on' : 'Sound: off';
-function setPause(v) { app.paused = v; $('pause').classList.toggle('hide', !v); if (v) saveGame(app); }
+function setPause(v) { if (v && app.multi) { app.toast('Online games can\'t be paused.', 2); return; } app.paused = v; $('pause').classList.toggle('hide', !v); if (v) saveGame(app); }
 function goFullscreen() {
   const d = document;
   if (d.fullscreenElement) { d.exitFullscreen?.(); return; }
@@ -470,6 +471,7 @@ function refreshMenu() {
   $('modeDesc').textContent = MODES[app.cfg.mode].desc;
   for (const b of document.querySelectorAll('[data-map]')) b.classList.toggle('on', b.dataset.map === (app.cfg.map || 'riverlands'));
   $('mapDesc').textContent = MAP_LIST[app.cfg.map || 'riverlands'].desc;
+  const onl = app.cfg.mode === 'online'; $('online').classList.toggle('hide', !onl); $('onlineMsg').classList.toggle('hide', !onl); $('bStart').classList.toggle('hide', onl);
   const camp = app.cfg.mode === 'campaign'; $('missions').classList.toggle('hide', !camp); $('maps').classList.toggle('hide', camp); $('mapDesc').classList.toggle('hide', camp);
   if (camp) { const pr = progress(); app.cfg.mission = Math.min(app.cfg.mission ?? pr, pr, MISSIONS.length - 1); for (const b of document.querySelectorAll('[data-mis]')) { b.classList.toggle('on', +b.dataset.mis === app.cfg.mission); b.classList.toggle('locked', +b.dataset.mis > pr); } const m = MISSIONS[app.cfg.mission]; $('modeDesc').textContent = m.brief + ' Goals: ' + m.goals.map(x => x.t).join(' · ') + '.'; }
 }
@@ -513,6 +515,49 @@ onBtn('bStart', () => {
   setupGame(app.cfg.mode, app.cfg.diff, app.cfg.civ);
 });
 refreshMenu();
+
+// ---------------- online play (see net.js) ----------------
+const onlineMsg = html => { $('onlineMsg').innerHTML = html; $('onlineMsg').classList.remove('hide'); };
+function startOnline(role, link, civs) {
+  app.multi = { role, link };
+  setupGame('skirmish', 1, civs[0], civs[1]);
+  app.multi.sync = role === 'host' ? new HostSync(app, link) : new GuestSync(app, link);
+  app.toast(role === 'host' ? 'Your friend has joined. Destroy their Town Hall!' : 'Connected! Destroy your friend\'s Town Hall!', 4);
+  link.on('close', () => {
+    if (!app.multi || app.game?.over) return;
+    if (role === 'host') { app.toast('Your friend left. The computer takes over their side.', 5); app.multi = null; }
+    else { app.toast('Lost the connection to the host.', 5); app.game.over = 'lose'; showEnd('lose'); $('endS').textContent = 'The connection to the host was lost.'; }
+  });
+}
+onBtn('bHost', async () => {
+  const want = MAP_LIST[app.cfg.map] ? app.cfg.map : 'riverlands';
+  if (want !== MAP.id) { // maps are built at page load: switch to the chosen one first, then host
+    try { localStorage.setItem('bf.map', want); if (want === 'random') localStorage.setItem('bf.mapSeed', String(1 + Math.random() * 99998 | 0)); localStorage.setItem('bf.cfg', JSON.stringify(app.cfg)); } catch { /* ignore */ }
+    reloadTo('host'); return;
+  }
+  const link = new Link(), code = newCode(); onlineMsg('Setting up…');
+  try { await link.host(code); } catch (e) { onlineMsg(e.message); return; }
+  onlineMsg(`Your code: <b>${code}</b><br>Tell your friend to pick Online, type this code and press Join. Waiting…`);
+  link.on('hello', m => {
+    if (m.ver !== window.BF_VERSION) { link.send({ k: 'bad', msg: `Versions differ (host ${window.BF_VERSION}, you ${m.ver}). Both reload the game page.` }); return; }
+    link.guestCiv = CIVS[m.civ] ? m.civ : 'romans'; link.send({ k: 'map', map: MAP.id, seed: MAP.seed });
+  });
+  link.on('ready', () => { link.send({ k: 'start', civs: [link.guestCiv, app.cfg.civ] }); if (isTouch) goFullscreen(); startOnline('host', link, [app.cfg.civ, link.guestCiv]); });
+});
+async function joinGame(code) {
+  code = (code || '').trim().toUpperCase(); if (code.length < 5) { onlineMsg('Type the 5-letter code your friend sees.'); return; }
+  const link = new Link(); onlineMsg('Connecting…');
+  try { await link.join(code); } catch (e) { onlineMsg(e.message); return; }
+  link.on('bad', m => onlineMsg(m.msg));
+  link.on('map', m => {
+    if (m.map !== MAP.id || (m.map === 'random' && m.seed !== MAP.seed)) { try { localStorage.setItem('bf.map', m.map); localStorage.setItem('bf.mapSeed', String(m.seed)); } catch { /* ignore */ } link.close(); reloadTo('join=' + code); return; }
+    link.send({ k: 'ready' }); onlineMsg('Starting…');
+  });
+  link.on('start', m => { if (isTouch) goFullscreen(); startOnline('guest', link, m.civs); });
+  link.send({ k: 'hello', ver: window.BF_VERSION, civ: app.cfg.civ });
+}
+onBtn('bJoin', () => joinGame($('joinCode').value));
+$('joinCode').addEventListener('keydown', e => { if (e.key === 'Enter') joinGame(e.target.value); });
 
 // ---------------- input ----------------
 const view = () => (app.mode === 'pov' ? pov : app.mode === 'rts' ? rts : null);
@@ -578,7 +623,7 @@ let menuYaw = 0;
 renderer.setAnimationLoop(() => {
   const real = Math.min(clock.getDelta(), 1 / 20), dt = app.paused ? 0 : real, t = clock.elapsedTime;
   const g = app.game;
-  if (g) { g.update(dt); if (!app.tut || app.tut.done) app.ai.update(dt); else if ((app.tutAi = (app.tutAi || 0) + dt) > 1) { app.tutAi = 0; app.ai.update(1.01); app.ai.nextAttack = 1e9; } app.tut?.update(); }
+  if (g) { g.update(dt); app.multi?.sync?.update(dt); if (app.multi) { /* the other side is a person */ } else if (!app.tut || app.tut.done) app.ai.update(dt); else if ((app.tutAi = (app.tutAi || 0) + dt) > 1) { app.tutAi = 0; app.ai.update(1.01); app.ai.nextAttack = 1e9; } app.tut?.update(); }
   updateViewOffset();
   if (app.mode === 'pov') pov.update(dt);
   else if (app.mode === 'rts') rts.update(real);
@@ -623,6 +668,10 @@ setInterval(() => { if (app.game && !app.paused) saveGame(app); }, 30000); // au
 { const info = saveInfo(); if (info) { $('continueRow').classList.remove('hide'); const s = info.time | 0; $('contInfo').textContent = `${MODES[info.mode]?.name || ''} · ${CIVS[info.civs?.[0]]?.name || ''} · ${s / 60 | 0}:${String(s % 60).padStart(2, '0')}`; } }
 onBtn('bContinue', () => { const i = saveInfo(); try { if (i?.map) { localStorage.setItem('bf.map', i.map); localStorage.setItem('bf.mapSeed', String(i.seed || 1)); } } catch { /* ignore */ } reloadTo('resume'); });
 if (location.hash.startsWith('#play=')) app.cfg.map = MAP.id;
+if (location.hash === '#host' || location.hash.startsWith('#join=')) { // came back after loading the right map
+  const jc = location.hash.startsWith('#join=') ? location.hash.slice(6) : null; history.replaceState(null, '', location.pathname + location.search);
+  app.cfg.mode = 'online'; refreshMenu(); if (jc) { $('joinCode').value = jc; joinGame(jc); } else $('bHost').click();
+}
 const mh = /mission=(\d)(?:,(\w+))?/.exec(location.hash);
 if (mh && MISSIONS[+mh[1]]) { app.cfg = { ...app.cfg, mode: 'campaign', mission: +mh[1], civ: mh[2] || app.cfg.civ || 'franks' }; history.replaceState(null, '', location.pathname + location.search); startMission(+mh[1], app.cfg.civ); }
 const m = /play=(\w+),(\d)(?:,(\w+))?(?:,(\w+))?/.exec(location.hash);

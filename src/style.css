@@ -152,6 +152,8 @@ body.bigui #bottom, body.bigui #povact, body.bigui #povbar { zoom:1.12; }
   background:rgba(15,18,24,.8); border:1px solid rgba(243,215,138,.45); border-radius:8px; padding:5px 9px; font-size:11.5px; line-height:1.45; }
 #goals b { color:var(--gold2); display:block; font-size:12px; } #goals .ok { color:#8fe07a; } #goals .ok::before { content:'✓ '; } #goals div:not(.ok)::before { content:'○ '; }
 #missions .btn.locked { opacity:.45; }
+#joinCode { width:110px; min-height:44px; font-size:20px; letter-spacing:4px; text-align:center; text-transform:uppercase; border-radius:8px; border:1px solid var(--gold); background:#1a130c; color:var(--ink); }
+#onlineMsg { margin:2px 0; font-size:14px; text-align:center; color:var(--gold2); } #onlineMsg b { font-size:22px; letter-spacing:4px; }
 #battlebar { position:fixed; left:50%; transform:translateX(-50%); top:calc(40px + var(--st)); z-index:6; pointer-events:none; white-space:nowrap;
   background:rgba(15,18,24,.78); border:1px solid rgba(255,255,255,.18); border-radius:8px; padding:3px 10px; font-size:12px; }
 #battlebar b { font-size:15px; }

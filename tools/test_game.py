@@ -8,7 +8,7 @@ It opens the game in a real (headless) Chrome, checks for errors, plays every mo
 tests a phone-sized touch screen, rides the Commander, and saves screenshots to tools/test-output/.
 Exits with code 1 if anything fails.
 """
-import functools, http.server, json, pathlib, sys, threading, time
+import re, functools, http.server, json, pathlib, sys, threading, time
 from playwright.sync_api import sync_playwright
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -144,6 +144,30 @@ def main():
         check(r['aim'] > .8, f'archers raise their bows to aim when engaging {r}')
         check(not err_box(page) and not errors, 'features: no errors ' + (err_box(page) + ' '.join(errors))[:300])
         page.context.browser.close()
+
+        print('Online play (two tabs, same-computer test link)')
+        H, herr = open_game(p, base + 'index.html?loop=1', '', viewport={'width': 1000, 'height': 600})
+        G = H.context.new_page(); gerr = []; G.on('pageerror', lambda e: gerr.append(str(e))); G.goto(base + 'index.html?loop=1')
+        for _ in range(90):
+            if G.evaluate('!!window.bannerfall && !document.getElementById("loading")'): break
+            time.sleep(1.5)
+        H.evaluate("() => document.querySelector('[data-mode=online]').click()"); G.evaluate("() => document.querySelector('[data-mode=online]').click()")
+        H.click('#bHost'); code = None
+        for _ in range(40):
+            time.sleep(.5); mm = re.search(r'Your code: ([A-Z0-9]{5})', H.inner_text('#onlineMsg'))
+            if mm: code = mm.group(1); break
+        check(bool(code), f'host gets a join code {code}')
+        G.fill('#joinCode', code or ''); G.click('#bJoin')
+        for _ in range(60):
+            time.sleep(.5)
+            if G.evaluate('() => !!bannerfall.game && bannerfall.game.units.length > 0'): break
+        r = G.evaluate("() => { const g = bannerfall.game; return { mine: g.units.filter(u => u.team === 0).length, blds: g.blds.length } }")
+        check(r['mine'] >= 5 and r['blds'] >= 2, f'guest sees the battlefield {r}')
+        G.evaluate("() => { const a = bannerfall, g = a.game, p = g.units.find(u => u.team === 0 && u.type === 'peasant'); window._p = p.id; a.select([p]); const t = g.nearestRes(p.x, p.z, 'w', 40); a.order(t, t.x, t.z); }")
+        time.sleep(3); pid = G.evaluate('window._p')
+        check(H.evaluate(f"() => bannerfall.game.units.find(u => u.id === {pid})?.task.type") == 'gather', "guest's orders are carried out on the host")
+        check(not herr and not gerr, f'online: no errors {herr[:2]} {gerr[:2]}')
+        H.context.browser.close()
 
         print('Phone (touch, 740x360 landscape)')
         page, errors = open_game(p, base, 'play=skirmish,1,chinese,franks', viewport={'width': 740, 'height': 360}, has_touch=True, is_mobile=True, device_scale_factor=2)

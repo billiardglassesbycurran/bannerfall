@@ -116,6 +116,7 @@ export const DIFF = [
 export const MODES = {
   tutorial: { name: 'Tutorial', desc: 'New to Bannerfall? A guided first game: gather, build, train, fight, and ride into battle. The enemy waits until you are ready.' },
   campaign: { name: 'Campaign', desc: 'Four missions: muster an army, hold the ford, storm the highland pass, and face the Warlord.' },
+  online: { name: 'Online', desc: 'Play against a friend over the internet: one of you hosts and gets a code, the other joins with it. Skirmish rules.' },
   skirmish: { name: 'Skirmish', desc: 'Build a town, gather food, wood and gold, raise an army and burn down the enemy Town Hall.' },
   battle:   { name: 'Battle', desc: 'No building — two armies meet in the field. Command from above or ride in with your Commander.' },
   survival: { name: 'Survival', desc: 'Build up and hold your town against 10 ever-larger raiding waves.' },

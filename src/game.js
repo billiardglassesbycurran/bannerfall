@@ -481,7 +481,7 @@ export class Game {
       const k2 = Math.min(1, k + .02); q.set(s.f.x + (s.tx - s.f.x) * k2, s.f.y + (s.ty - s.f.y) * k2 + Math.sin(k2 * Math.PI) * s.arc, s.f.z + (s.tz - s.f.z) * k2);
       s.mesh.position.copy(p); s.mesh.lookAt(q);
       if (s.k >= 1) {
-        if (s.kind === 'stone') this.splash(s); else if (s.t.alive) this.damage(s.t, s.dmg, s.src);
+        if (s.visual) { if (s.kind === 'stone') this.onSplash?.(s.tx, s.tz); } else if (s.kind === 'stone') this.splash(s); else if (s.t.alive) this.damage(s.t, s.dmg, s.src);
         s.mesh.removeFromParent(); this.shots.splice(i, 1);
       }
     }
@@ -690,6 +690,7 @@ export class Game {
   }
 
   update(dt) {
+    if (this.puppet) return this.puppetUpdate(dt);
     if (this.over && this.over !== 'continue') { /* keep animating */ }
     this.time += dt;
     this.rebuildHash();
@@ -721,6 +722,15 @@ export class Game {
     this.blds = this.blds.filter(b => b.alive);
   }
 
+  /** Online guest: the host runs the real game; here we only animate what it sends (see net.js). */
+  puppetUpdate(dt) {
+    this.time += dt; this.rebuildHash(); this.fow?.update(dt); this.updateShots(dt);
+    if ((this.moraleT = (this.moraleT || 0) + dt) >= 1) { this.moraleT = 0; this.envNews(); }
+    for (const u of this.units) { u.swingT += dt; if (u.dead) u.deathT += dt; }
+    this.blds = this.blds.filter(b => b.alive);
+  }
+  /** An arrow/bolt/stone for show only (online guest): flies, but hurts nobody. */
+  shootVisual(src, t) { (this._shoot || this.shoot.bind(this))(src, t, 0); this.shots[this.shots.length - 1].visual = true; }
   /** Write every unit's pose into the instanced meshes. */
   syncVisuals(dt, hideId) {
     for (const u of this.units) {

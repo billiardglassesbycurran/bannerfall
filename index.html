@@ -21,13 +21,13 @@
 </script>
 <script>
   // ===== Game version: bump on every change you publish (see CLAUDE.md). =====
-  window.BF_VERSION = '0.18.0';
+  window.BF_VERSION = '0.19.0';
   // Every game file is loaded as file.js?v=VERSION so phones never mix old and new files from the browser cache.
   // (On localhost a timestamp is used instead, so edits show up immediately while developing.)
   (function () {
     var local = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
     var v = local ? Date.now() : window.BF_VERSION;
-    var mods = ['main', 'world', 'util', 'geo', 'data', 'models', 'game', 'path', 'ai', 'rts', 'pov', 'hud', 'textures', 'assets', 'effects', 'audio', 'gltfmodels', 'save', 'tutorial', 'battle', 'fow', 'campaign', 'sky'];
+    var mods = ['main', 'world', 'util', 'geo', 'data', 'models', 'game', 'path', 'ai', 'rts', 'pov', 'hud', 'textures', 'assets', 'effects', 'audio', 'gltfmodels', 'save', 'tutorial', 'battle', 'fow', 'campaign', 'sky', 'net'];
     var imports = {
       'three': 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js',
       'three/addons/': 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/'
@@ -109,6 +109,8 @@
   <div class="panel">
     <div class="row" id="modes"></div>
     <p id="modeDesc"></p>
+    <div class="row hide" id="online"><button class="btn" id="bHost">Host a game</button><input id="joinCode" maxlength="5" placeholder="CODE" autocomplete="off" autocapitalize="characters" spellcheck="false"><button class="btn" id="bJoin">Join</button></div>
+    <p id="onlineMsg" class="hide"></p>
     <div class="row hide" id="missions"><span class="lbl">Mission</span></div>
     <div class="row" id="maps"><span class="lbl">Map</span></div>
     <p id="mapDesc"></p>
@@ -123,6 +125,7 @@
 <div id="help" class="scr hide">
   <div class="panel text">
     <p><b>Goal (Skirmish):</b> peasants gather food (berry bushes, farms), wood (trees) and gold (mines) and carry it to your Town Hall or a Storehouse. Build Houses for more population, a Barracks for soldiers and a Stable for knights. Destroy the enemy Town Hall.</p>
+    <p><b>Online:</b> pick Online. One player presses <i>Host a game</i> and reads out the 5-letter code; the other types it and presses <i>Join</i>. Both need this same version (top-right). The host's map is used.</p>
     <p><b>Phone:</b> drag to pan, pinch to zoom, twist to rotate. Tap a unit to select it; double-tap for all of that type; hold then drag to box-select. With units selected, tap the ground to move, an enemy to attack, a tree/bush/mine to gather. The command panel (bottom right) builds and trains. Tap the minimap to jump.</p>
     <p><b>PC / Mac:</b> WASD/arrows pan, Q/E or the ⟲ ⟳ buttons rotate, Option/Alt-drag or right-drag rotates and tilts, wheel or pinch zooms, two-finger sideways swipe rotates, Home resets the view. Left-click select, drag to box, Shift adds, double-click selects a type. Right-click to order. Command panel keys: Z X C V B N M. I = idle peasant, Ctrl+A = army, Tab = play as the selected unit, H = play as your Commander, P = pause.</p>
     <p><b>Riding:</b> left thumb moves, right thumb looks, Strike attacks, Follow me makes nearby troops follow you. PC/Mac: drag the mouse to look around, W/S or ↑/↓ walk, A/D sidestep, ←/→ or Q/E turn, click or Space strikes, F follow, V switches 1st/3rd, walk through a door to go into a building (and out again); G boards a ship / steps off, M mounts or dismounts the Commander's horse, Tab returns; double-click for full mouse-look (Esc releases).</p>

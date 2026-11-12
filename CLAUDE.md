@@ -69,6 +69,9 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
 - `src/sky.js` — day/night (10-min day) and weather (clear/cloudy/rain/mist). Clock lives in `game.env` (`stepEnv`), visuals
   in `Atmosphere`; night/mist shrink sight (`game.sightMul`), rain weakens ranged. Settings toggle; tutorial stays sunny.
 - `src/campaign.js` — 4 missions (`MISSIONS`: setup/tick/goals/check), progress in localStorage `bf.campaign`, `#mission=N,civ`.
+- `src/net.js` — online 1v1 over WebRTC (PeerJS 1.5.4 from jsDelivr, loaded on demand). Host runs the game (`HostSync`:
+  10 Hz snapshots, team-swapped); guest is a puppet (`GuestSync`: `game.puppet`, game methods in `RPC` forwarded to the host).
+  `?loop` in the URL = two-tab test link (BroadcastChannel) used by test_game.py; the sandbox here blocks real WebRTC.
 - `src/battle.js` — Battle mode field: 3 capturable banners, reserves + reinforcement waves, army breaks if all banners held.
 - `src/path.js` — A* pathfinding on the grid (pass a walk function: `cellWalk` for land, `navCell` for ships). `src/ai.js` — enemy AI for Skirmish, Battle, Survival.
 - `src/rts.js` — aerial camera, picking, selection, touch/mouse orders. `src/pov.js` — 1st/3rd person: strike, Follow me,
