@@ -22,7 +22,7 @@ export const STEPS = [
     start: (g, a, s) => { const h = g.blds.find(b => b.team === 0 && b.type === 'hall'); s.raiders = [0, 1, 2].map(i => { const u = g.spawnUnit(1, 'sword', h.x + 15 + i, h.z - 14); u.hp = u.maxHp = 25; g.amove(u, h.x + 3, h.z - 3); return u; }); g.recount(); a.rts.lookAt(h.x + 8, h.z - 8); },
     glow: () => btnByText(/^Army/), done: (g, a, s) => s.raiders.every(u => !u.alive) },
   { say: () => 'Well fought! Now lead from the front: press "Play as Commander" to ride into battle in 3rd person.', glow: () => document.getElementById('bLead'), done: (g, a) => a.mode === 'pov' && a.pov.unit?.d.hero },
-  { say: a => a.isTouch ? 'Left thumb moves, right thumb looks, Strike attacks. Walk to your Town Hall door and press Enter to go inside, or press Command to go back up.' : 'W/S walk, drag the mouse to look, click to strike. Walk to the Town Hall door and press G to go inside, or press Command (Tab) to go back up.',
+  { say: a => a.isTouch ? 'Left thumb moves, right thumb looks, Strike attacks. Walk through your Town Hall door to go inside (walk back out the same way), or press Command to go back up.' : 'W/S walk, drag the mouse to look, click to strike. Walk through the Town Hall door to go inside (walk back out the same way), or press Command (Tab) to go back up.',
     done: (g, a, s) => (s.t = (s.t || 0) + 1) > 25 && (a.mode === 'rts' || a.pov.room) },
   { say: () => 'You\'re ready! Advance through the ages at the Town Hall, build an army, and burn down the enemy Town Hall in the north-east. Good luck, Commander!', done: (g, a, s) => (s.t = (s.t || 0) + 1) > 12, last: true },
 ];

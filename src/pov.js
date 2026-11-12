@@ -46,13 +46,12 @@ export class POVView {
   /** What the Act button (G) would do right now: { label, run } or null. */
   action() {
     const u = this.unit, g = this.g; if (!u || !u.alive) return null;
-    if (this.room) return { label: 'Leave', sub: ENTERABLE[this.room.b.type], run: () => this.exitRoom(true) };
+    if (this.room) return null; // walk out through the door to leave
     if (u.onShip) return { label: 'Go ashore', sub: this.landNear(u.onShip) ? 'step off' : 'sail closer', run: () => this.disembark() };
     if (u.d.ship) return null;
     let best = null, bd = 1e9;
     for (const s of g.units) if (s.alive && s.team === u.team && s.d.ship && !s.possessed) { const d = Math.hypot(s.x - u.x, s.z - u.z) - s.d.rad; if (d < 3.2 && d < bd) { bd = d; best = s; } }
     if (best) return { label: 'Board', sub: best.d.name.replace(' Ship', ''), run: () => this.board(best) };
-    for (const b of g.blds) if (b.alive && b.built && b.team === u.team && ENTERABLE[b.type] && g.edgeDist(u, b) < 1.8) return { label: 'Enter', sub: ENTERABLE[b.type], run: () => this.enterRoom(b) };
     return null;
   }
   landNear(sh) { const p = nearestWalkable(sh.x, sh.z, 6); return p && Math.hypot(p.x - sh.x, p.z - sh.z) < 6.5 ? p : null; }
@@ -66,6 +65,18 @@ export class POVView {
     const p = this.landNear(sh); if (!p) { if (!quiet) this.a.toast('Sail closer to the shore to step off.', 2); return false; }
     this.getOff(sh); u.x = p.x; u.z = p.z; this.snap = true; return true;
   }
+  /** Walk into one of your buildings to go inside: straight through the door, or by pushing against its walls. */
+  autoEnter(dx, dz, moved, dt) {
+    const u = this.unit, g = this.g; if (this.g.time < (this.noEnterT || 0)) return;
+    for (const b of g.blds) {
+      if (!b.alive || !b.built || b.team !== u.team || !ENTERABLE[b.type] || g.edgeDist(u, b) > 1.3) continue;
+      const tx = b.x - u.x, tz = b.z - u.z, tl = Math.hypot(tx, tz) || 1, toward = (dx * tx + dz * tz) / tl; if (toward < .35) continue;
+      const ry = b.mesh.rotation.y, s = b.size / 2, door = Math.hypot(u.x - (b.x + Math.sin(ry) * s), u.z - (b.z + Math.cos(ry) * s));
+      if (door < 1.6) { this.enterRoom(b); return; }
+      if (!moved || g.edgeDist(u, b) < .5) { this.pushT = (this.pushT || 0) + dt; if (this.pushT > .35) { this.pushT = 0; this.enterRoom(b); } return; }
+    }
+    this.pushT = 0;
+  }
   /** Step through the door into a lit, furnished room. */
   enterRoom(b) {
     const u = this.unit, it = interiorGeo(b.type, b.team), grp = new THREE.Group();
@@ -78,7 +89,7 @@ export class POVView {
   }
   exitRoom(walkOut) {
     const r = this.room; if (!r) return; const u = this.unit;
-    r.grp.removeFromParent(); r.b.mesh.visible = true; this.room = null; u.yOver = null;
+    r.grp.removeFromParent(); r.b.mesh.visible = true; this.room = null; u.yOver = null; this.noEnterT = this.g.time + 1.2;
     if (u && walkOut !== false) { const s = r.b.size / 2 + .9, wx = r.b.x + Math.sin(r.ry) * s, wz = r.b.z + Math.cos(r.ry) * s, p = nearestWalkable(wx, wz, 6) || { x: wx, z: wz }; u.x = p.x; u.z = p.z; u.yaw = r.ry; this.yaw = r.ry; this.snap = true; }
   }
   local() { const r = this.room, u = this.unit, dx = u.x - r.b.x, dz = u.z - r.b.z, c = Math.cos(r.ry), s = Math.sin(r.ry); return [dx * c - dz * s, dx * s + dz * c]; }
@@ -170,7 +181,8 @@ export class POVView {
     } else if (sp > 0 && u.alive) {
       mdx = fx * my + rx * mx; mdz = fz * my + rz * mx; const dl = Math.hypot(mdx, mdz) || 1;
       moved = this.g.step(u, mdx / dl * sp * dt, mdz / dl * sp * dt);
-    }
+      if (!u.onShip && !u.d.ship) this.autoEnter(mdx / dl, mdz / dl, moved, dt);
+    } else this.pushT = 0;
     if (u.onShip && !u.onShip.alive) this.getOff(u.onShip);
     u.speedNow = moved ? sp * (this.room ? .7 : 1) : 0;
     u.aimHold = !!(u.d.ranged && this.target);

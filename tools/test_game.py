@@ -106,15 +106,19 @@ def main():
         print('Walk into a building, mount up, board a ship, archers aim')
         page, errors = open_game(p, base, 'play=skirmish,1,franks,norse', **desk)
         page.click('#bLead'); page.wait_for_timeout(300)
-        r = page.evaluate("""() => { const a = window.bannerfall, g = a.game, h = g.hero, hall = g.blds[0], pov = a.pov;
-          h.x = hall.x; h.z = hall.z + hall.size / 2 + .8; pov.update(.05); const act = pov.action();
-          return { act: act && act.label }; }""")
-        check(r['act'] == 'Enter', f'Act button offers to enter the Town Hall {r}')
-        page.click('#bAct'); page.wait_for_timeout(600)
-        check(page.evaluate('!!window.bannerfall.pov.room'), 'Commander is inside the Town Hall')
+        page.evaluate("""() => { const a = window.bannerfall, g = a.game, h = g.hero, hall = g.blds[0], pov = a.pov;
+          h.x = hall.x; h.z = hall.z + hall.size / 2 + 1.6; pov.yaw = Math.PI; pov.snap = true; }""")  # at the door, facing it
+        page.keyboard.down('KeyW'); page.wait_for_timeout(1500); page.keyboard.up('KeyW')
+        check(page.evaluate('!!window.bannerfall.pov.room'), 'walking through the door takes the Commander inside (no button)')
         page.screenshot(path=str(OUT / 'inside-hall.png'))
-        page.click('#bAct'); page.wait_for_timeout(300)
-        check(page.evaluate('!window.bannerfall.pov.room'), 'Leave takes him back outside')
+        page.evaluate("() => { const pov = window.bannerfall.pov; pov.yaw = pov.room.ry; }")  # turn back to the door
+        page.keyboard.down('KeyW'); page.wait_for_timeout(4000); page.keyboard.up('KeyW')
+        check(page.evaluate('!window.bannerfall.pov.room'), 'walking back out of the door leaves the building')
+        page.evaluate("""() => { const a = window.bannerfall, g = a.game, h = g.hero, hall = g.blds[0], pov = a.pov;
+          h.x = hall.x + hall.size / 2 + 1.2; h.z = hall.z; pov.yaw = -Math.PI / 2; pov.snap = true; }""")  # against a side wall
+        page.keyboard.down('KeyW'); page.wait_for_timeout(2800); page.keyboard.up('KeyW')
+        check(page.evaluate('!!window.bannerfall.pov.room'), 'walking into a wall also goes inside')
+        page.evaluate("() => window.bannerfall.pov.exitRoom(true)")
         page.click('#bMount'); page.wait_for_timeout(600)
         check(page.evaluate("window.bannerfall.pov.unit.type") == 'herohorse', 'Commander mounts his horse')
         page.screenshot(path=str(OUT / 'mounted.png'))
