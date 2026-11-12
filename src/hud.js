@@ -7,9 +7,9 @@ import { N, SIZE, resources, minimapColors, heightAt, WL } from './world.js';
 const $ = id => document.getElementById(id);
 const HK = ['KeyZ', 'KeyX', 'KeyC', 'KeyV', 'KeyB', 'KeyN', 'KeyM', 'Comma', 'Period', 'Slash'];
 const HKL = ['Z', 'X', 'C', 'V', 'B', 'N', 'M', ',', '.', '/'];
-export const costHtml = c => !c ? '' : ['f', 'w', 'g'].filter(k => c[k]).map(k => `<span class="${k}">${c[k]}${k}</span>`).join(' ');
+export const costHtml = c => !c ? '' : ['f', 'w', 'g', 's'].filter(k => c[k]).map(k => `<span class="${k}">${c[k]}${k}</span>`).join(' ');
 const TASK = { patrol: 'Patrolling', garrison: 'Running to the Town Hall', repair: 'Repairing', board: 'Boarding ship', unload: 'Sailing to land troops', idle: 'Idle', move: 'Moving', amove: 'Attacking', attack: 'Fighting', follow: 'Following', build: 'Building', farm: 'Farming', return: 'Carrying to storage' };
-const RN = { f: 'food', w: 'wood', g: 'gold' };
+const RN = { f: 'food', w: 'wood', g: 'gold', s: 'stone' };
 
 export class HUD {
   constructor(app) {
@@ -47,7 +47,7 @@ export class HUD {
   update(dt) {
     const g = this.a.game; if (!g) return;
     const T = g.T[0];
-    $('rf').textContent = T.f | 0; $('rw').textContent = T.w | 0; $('rg').textContent = T.g | 0;
+    $('rf').textContent = T.f | 0; $('rw').textContent = T.w | 0; $('rg').textContent = T.g | 0; $('rs').textContent = (T.s || 0) | 0;
     $('rp').textContent = g.mode === 'battle' ? `${T.pop}` : `${T.pop}/${T.cap}`; $('rp').style.color = T.pop >= T.cap && g.mode !== 'battle' ? '#ff8a6a' : '';
     const s = g.time | 0; $('clock').textContent = `${s / 60 | 0}:${String(s % 60).padStart(2, '0')}`;
     $('info').textContent = this.a.infoText();
@@ -64,7 +64,8 @@ export class HUD {
     q.innerHTML = '';
     if (!sel.length) { name.textContent = this.a.game.mode === 'battle' ? 'Select your soldiers' : 'Nothing selected'; desc.innerHTML = this.a.hint(); return; }
     const e = sel[0];
-    if (e.kind === 'res') { name.textContent = e.fish ? 'Fish' : { f: 'Berry bush', w: 'Tree', g: 'Gold mine' }[e.rt]; desc.textContent = `${Math.ceil(e.amt)} ${RN[e.rt]} left. ` + (e.fish ? 'Fishing boats (from a Dock) can catch it.' : 'Send peasants to gather it.'); return; }
+    if (e.kind === 'res' && e.animal) { name.textContent = e.hp > 0 ? 'Deer' : 'Deer (hunted)'; desc.textContent = e.hp > 0 ? 'Send peasants to hunt it for meat (food). Deer run when hunted.' : `${Math.ceil(e.amt)} meat left. Peasants gather it fast.`; return; }
+    if (e.kind === 'res') { name.textContent = e.fish ? 'Fish' : { f: 'Berry bush', w: 'Tree', g: 'Gold mine', s: 'Stone quarry' }[e.rt]; desc.textContent = `${Math.ceil(e.amt)} ${RN[e.rt]} left. ` + (e.fish ? 'Fishing boats (from a Dock) can catch it.' : 'Send peasants to gather it.'); return; }
     if (e.kind === 'bld') {
       name.textContent = (e.team ? 'Enemy ' : '') + e.d.name;
       let t = `HP ${Math.ceil(e.hp)}/${e.maxHp}`;
@@ -83,7 +84,7 @@ export class HUD {
       name.textContent = (e.team ? 'Enemy ' : '') + (e.vet ? RANKS[e.vet] + ' ' : '') + e.d.name + (e.vet ? ' ' + '★'.repeat(e.vet) : '');
       let t = `HP ${Math.ceil(e.hp)}/${Math.round(e.maxHp)}` + (e.kills ? ` · ${e.kills} kill${e.kills > 1 ? 's' : ''}` : '');
       if (e.morale !== undefined && e.d.acq && !e.d.hero && !e.d.ship) t += e.routed ? ' · FLEEING!' : ` · Morale ${Math.round(e.morale)}%` + (e.inspired ? ' (inspired)' : '');
-      if (e.team === 0) { let task = TASK[e.task.type] || ''; if (e.task.type === 'gather') task = e.task.res.fish ? 'Fishing' : `Gathering ${RN[e.task.res.rt]}`; if (e.cargo) task += ` · carrying ${e.cargo.length}/${e.d.carry} troops`; t += ` · ${task}`; if (e.carry) t += ` (carrying ${e.carry.amt | 0} ${RN[e.carry.rt]})`; }
+      if (e.team === 0) { let task = TASK[e.task.type] || ''; if (e.task.type === 'gather') task = e.task.res.fish ? 'Fishing' : e.task.res.animal ? (e.task.res.hp > 0 ? 'Hunting' : 'Gathering meat') : `Gathering ${RN[e.task.res.rt]}`; if (e.cargo) task += ` · carrying ${e.cargo.length}/${e.d.carry} troops`; t += ` · ${task}`; if (e.carry) t += ` (carrying ${e.carry.amt | 0} ${RN[e.carry.rt]})`; }
       desc.textContent = t; return;
     }
     const counts = {}; for (const u of sel) counts[u.type] = (counts[u.type] || 0) + 1;
@@ -117,7 +118,7 @@ export class HUD {
       } else {
         if (peas.length && g.mode !== 'battle') {
           const go = rt => () => { let k = 0; for (const u of peas) { const r = rt === 'f' ? (g.blds.find(b => b.alive && b.built && b.team === 0 && b.type === 'farm' && (!b.farmer || !b.farmer.alive || b.farmer.task.b !== b)) || g.nearestRes(u.x, u.z, 'f', 60)) : g.nearestRes(u.x, u.z, rt, 70); if (r) { if (r.kind === 'bld') g.farm(u, r); else g.gather(u, r); k++; } } if (!k) a.toast('None nearby.', 1.5); };
-          btns.push({ label: 'Food', sub: 'gather', on: go('f') }, { label: 'Wood', sub: 'chop', on: go('w') }, { label: 'Gold', sub: 'mine', on: go('g') });
+          btns.push({ label: 'Food', sub: 'gather', on: go('f') }, { label: 'Wood', sub: 'chop', on: go('w') }, { label: 'Gold', sub: 'mine', on: go('g') }, { label: 'Stone', sub: 'quarry', on: go('s') });
           btns.push({ label: 'Build', sub: 'economy &#9654;', on: () => { this.page = 'eco'; } }, { label: 'Build', sub: 'military &#9654;', on: () => { this.page = 'mil'; } });
           btns.push({ label: 'Repair', sub: 'pick building', on: () => a.setPending({ type: 'repair' }) });
           if (peas.some(u => u.carry)) btns.push({ label: 'Return', sub: 'goods', on: () => { for (const u of peas) if (u.carry) g.setTask(u, { type: 'return' }); } });
@@ -181,7 +182,7 @@ export class HUD {
   ping(x, z) { this.pings.push({ x, z, t: performance.now() }); if (this.pings.length > 6) this.pings.shift(); }
   drawMini() {
     const c = this.mctx, g = this.a.game, K = 2; c.drawImage(this.bg, 0, 0);
-    for (const r of resources) if (r.alive && (r.rt === 'g' || r.fish)) { c.fillStyle = r.fish ? '#cfefff' : '#ffd84a'; c.beginPath(); c.arc(r.x * K, r.z * K, r.fish ? 2 : 3, 0, 6.3); c.fill(); }
+    for (const r of resources) if (r.alive && (r.rt === 'g' || r.rt === 's' || r.fish || r.animal)) { c.fillStyle = r.fish ? '#cfefff' : r.animal ? '#c08a50' : r.rt === 's' ? '#d8d4ca' : '#ffd84a'; c.beginPath(); c.arc(r.x * K, r.z * K, r.fish || r.animal ? 2 : 3, 0, 6.3); c.fill(); }
     const F = g.fow?.on ? g.fow : null;
     for (const b of g.blds) if (b.alive && (!F || !b.team || F.explored(b.x, b.z))) { c.fillStyle = b.team ? '#d8402a' : '#3f72ff'; c.strokeStyle = 'rgba(0,0,0,.8)'; c.lineWidth = 1; c.fillRect(b.cx * K, b.cz * K, b.size * K, b.size * K); c.strokeRect(b.cx * K + .5, b.cz * K + .5, b.size * K - 1, b.size * K - 1); }
     for (const u of g.units) if (u.alive && !u.boarded && !u.fowHidden) {

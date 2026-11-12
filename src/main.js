@@ -1,7 +1,7 @@
 // Bannerfall — entry point: renderer, lighting, menus, game modes, input routing and the main loop.
 import * as THREE from 'three';
 import { FOW, FogOfWar } from './fow.js'; // must load before any material is made
-import { MAP, MAP_LIST, SIZE, BASES, WL, CLOUDS, buildDistant, buildTerrain, buildWater, buildSky, buildResources, buildBridge, buildFish, updateFish, heightAt } from './world.js';
+import { MAP, MAP_LIST, SIZE, BASES, WL, syncAnimals, CLOUDS, buildDistant, buildTerrain, buildWater, buildSky, buildResources, buildBridge, buildFish, updateFish, heightAt } from './world.js';
 import { BD, DIFF, MODES, CIVS, CIV_LIST, UD, TECH, AGES } from './data.js';
 import { FX } from './effects.js';
 import { Tutorial } from './tutorial.js';
@@ -643,6 +643,7 @@ renderer.setAnimationLoop(() => {
   else if (app.mode === 'rts') rts.update(real);
   else { menuYaw += real * .05; rts.yaw = menuYaw; rts.dist = rts.distT = 75; rts.lookAt(64, 64); rts.update(real); }
   if (g) g.syncVisuals(dt, pov.first && pov.unit ? pov.unit.id : -1);
+  syncAnimals(t);
   water.userData.update(t); U.time.value = t; updateFish(t);
   if (g) emitEffects(dt);
   fx.update(dt);

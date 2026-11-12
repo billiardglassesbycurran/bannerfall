@@ -23,7 +23,7 @@ html, body { margin:0; height:100%; overflow:hidden; overscroll-behavior:none; b
 .btn .q { position:absolute; top:-6px; right:-6px; background:var(--red); border-radius:9px; font-size:11px; min-width:18px; height:18px; line-height:17px; text-align:center; border:1px solid #ffd; padding:0 3px; }
 .btn .hk { position:absolute; left:3px; top:1px; font:9px monospace; color:#ffd98a; opacity:.8; }
 .cost { font-size:9.5px; white-space:nowrap; }
-.cost .f { color:#ffd27a } .cost .w { color:#e0a874 } .cost .g { color:#ffe24a }
+.cost .f { color:#ffd27a } .cost .w { color:#e0a874 } .cost .g { color:#ffe24a } .cost .s { color:#d8d4ca }
 
 /* top bar */
 #top { position:fixed; top:0; left:0; right:0; height:36px; padding:0 8px; padding-left:calc(8px + var(--sl)); padding-right:calc(8px + var(--sr));
@@ -31,7 +31,7 @@ html, body { margin:0; height:100%; overflow:hidden; overscroll-behavior:none; b
 .res { display:flex; align-items:center; gap:4px; font-weight:bold; min-width:52px; }
 .ic { display:inline-block; width:14px; height:14px; border-radius:50%; border:1px solid #0006; }
 .ic.f { background:radial-gradient(#ff8a7a,#c0283a); } .ic.w { background:linear-gradient(#b0703a,#6a3a14); border-radius:3px; }
-.ic.g { background:radial-gradient(#fff2a0,#e0a820); } .ic.p { background:radial-gradient(#b8d0ff,#3a5ab0); border-radius:50% 50% 3px 3px; }
+.ic.g { background:radial-gradient(#fff2a0,#e0a820); } .ic.s { background:linear-gradient(135deg,#e2ded4,#8a867c); border-radius:3px; } .ic.p { background:radial-gradient(#b8d0ff,#3a5ab0); border-radius:50% 50% 3px 3px; }
 #clock { opacity:.85; font-family:monospace; }
 #info { color:var(--gold2); font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 #ver { margin-left:auto; opacity:.5; font-family:monospace; font-size:10px; }

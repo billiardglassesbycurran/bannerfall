@@ -79,23 +79,24 @@ export class AI {
     const short = saving && (T.f < (ageCost.f || 0) || T.g < (ageCost.g || 0));
     if (peas.length < (short ? Math.min(wantPeas, T.age === 0 ? 12 : 18) : wantPeas) && hall.queue.length < 2 && T.pop < T.cap) g.train(hall, 'peasant');
     // gatherer balance
-    const count = { f: 0, w: 0, g: 0 };
+    const count = { f: 0, w: 0, g: 0, s: 0 };
     for (const p of peas) { const tt = p.task; if (tt.type === 'gather') count[tt.res.rt]++; else if (tt.type === 'farm') count.f++; else if (tt.type === 'return' && tt.back?.res) count[tt.back.res.rt]++; }
     const building = t => g.blds.some(b => b.alive && b.team === this.team && b.type === t && !b.built);
     const nOf = t => g.blds.filter(b => b.alive && b.team === this.team && b.type === t).length;
     const hasBarracks = g.blds.some(b => b.alive && b.team === this.team && b.type === 'barracks');
-    const want = short ? (ageCost.g && T.g < ageCost.g ? { f: .5, w: .15, g: .35 } : { f: .6, w: .35, g: .05 }) : hasBarracks ? (T.age ? { f: .36, w: .42, g: .22 } : { f: .4, w: .48, g: .12 }) : { f: .5, w: .45, g: .05 };
+    const want0 = short ? (ageCost.g && T.g < ageCost.g ? { f: .5, w: .15, g: .35 } : { f: .6, w: .35, g: .05 }) : hasBarracks ? (T.age ? { f: .34, w: .38, g: .2, s: .08 } : { f: .4, w: .46, g: .1, s: .04 }) : { f: .5, w: .45, g: .05 };
+    const want = { s: 0, ...want0 }; // stone: for towers and stone upgrades
     // react to what's piling up and what's running out: shift workers from a rich resource to a scarce one
-    if (!short) { const st = { f: T.f, w: T.w, g: T.g }; for (const k of ['f', 'w', 'g']) { if (st[k] > 450) want[k] *= .4; if (st[k] < 80) want[k] *= 1.6; } const tot = want.f + want.w + want.g; for (const k of ['f', 'w', 'g']) want[k] /= tot; }
+    if (!short) { const st = { f: T.f, w: T.w, g: T.g, s: T.s || 0 }; for (const k of ['f', 'w', 'g', 's']) { if (st[k] > 450) want[k] *= .4; if (st[k] < 80 && want[k]) want[k] *= 1.6; } const tot = want.f + want.w + want.g + want.s; for (const k of ['f', 'w', 'g', 's']) want[k] /= tot; }
     if (!short && (this.shiftT = (this.shiftT || 0) + 1) % 20 === 0) {
-      const rich = ['f', 'w', 'g'].find(k => T[k] > 450), poor = ['w', 'f', 'g'].find(k => T[k] < 100 && k !== rich);
+      const rich = ['f', 'w', 'g', 's'].find(k => T[k] > 450), poor = ['w', 'f', 'g'].find(k => T[k] < 100 && k !== rich);
       if (rich && poor) for (const u of peas.filter(u => (u.task.type === 'gather' && u.task.res.rt === rich) || (rich === 'f' && u.task.type === 'farm')).slice(0, 3)) { if (u.task.type === 'farm' && u.task.b) u.task.b.farmer = null; g.setTask(u, { type: 'idle' }); }
     }
     if (short && (this.rebalT = (this.rebalT || 0) + 1) % 15 === 0) { const wood = peas.filter(u => u.task.type === 'gather' && u.task.res.rt === 'w'); for (const u of wood.slice(0, Math.ceil(wood.length / 3))) g.setTask(u, { type: 'idle' }); } // move some woodcutters to food
     for (const p of peas) {
       if (p.task.type !== 'idle') continue;
       const n = peas.length || 1; let rt = 'f', worst = 1e9;
-      for (const k of ['f', 'w', 'g']) { const v = count[k] / n - want[k]; if (v < worst) { worst = v; rt = k; } }
+      for (const k of ['f', 'w', 'g', 's']) { if (!want[k]) continue; const v = count[k] / n - want[k]; if (v < worst) { worst = v; rt = k; } }
       let r = g.nearestRes(hall.x, hall.z, rt, 34);
       if (rt === 'f' && !r) {
         const farm = g.blds.find(b => b.alive && b.built && b.team === this.team && b.type === 'farm' && (!b.farmer || !b.farmer.alive || b.farmer.task.b !== b));
@@ -111,8 +112,8 @@ export class AI {
     if (!hasBarracks && peas.length >= 7) this.tryBuild('barracks', hall);
     // storehouses next to the woods (and later the gold) so workers don't walk back to the Town Hall every trip
     const stores = g.blds.filter(b => b.alive && b.team === this.team && (b.type === 'store' || b.type === 'hall'));
-    for (const rt of ['w', 'g']) {
-      if (rt === 'g' && time < 360) continue;
+    for (const rt of ['w', 'g', 's']) {
+      if (rt !== 'w' && time < 360) continue;
       const r = g.nearestRes(hall.x, hall.z, rt, 70); if (!r || building('store')) continue;
       const near = stores.some(b => Math.hypot(b.x - r.x, b.z - r.z) < 11);
       if (!near && g.afford(this.team, BD.store.cost) && nOf('store') < 3) { const sp = this.findSpot('store', r, 2, 9); if (sp) { const ps = peas.filter(u => u.task.type === 'gather' && u.task.res.rt === rt).sort((a, b) => dist(a, r) - dist(b, r)).slice(0, 2); g.startBuilding(this.team, 'store', sp[0], sp[1], ps.length ? ps : peas.slice(0, 1)); } break; }

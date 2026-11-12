@@ -1,6 +1,6 @@
 // Aerial command view: camera, picking, selection, orders and building placement — mouse/keyboard and touch.
 import * as THREE from 'three';
-import { SIZE, N, heightAt, resCell } from './world.js';
+import { SIZE, N, heightAt, resCell, animals } from './world.js';
 import { bldAt } from './game.js';
 import { clamp, lerp } from './util.js';
 
@@ -85,6 +85,7 @@ export class RTSView {
     const u = this.pickUnit(sx, sy, touch ? 40 : 24); if (u) return { ent: u, p: p || new THREE.Vector3(u.x, u.y, u.z) };
     const b = this.pickBuilding(sx, sy); if (b) return { ent: b, p: p || new THREE.Vector3(b.x, b.y, b.z) };
     if (!p) return { ent: null, p: null };
+    { let best = null, bd = touch ? 2 : 1.3; for (const a of animals) if (a.alive) { const d = Math.hypot(a.x - p.x, a.z - p.z); if (d < bd) { bd = d; best = a; } } if (best) return { ent: best, p }; } // deer
     const cx = p.x | 0, cz = p.z | 0, r = touch ? 1 : 0;
     let best = null, bd = 9;
     for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
@@ -130,23 +131,21 @@ export class RTSView {
   tap(sx, sy, touch, btn, shift, ctrl) {
     const a = this.a;
     if (a.pending) { const p = this.pickGround(sx, sy); if (p) a.pendingAt(p.x, p.z, this.pick(sx, sy, touch).ent, shift); return; }
-    if (!touch) {
-      if (btn === 0) { if (!this.selectClick(sx, sy, false, shift, ctrl) && !shift) a.select([]); }
-      else if (btn === 2) this.orderAt(sx, sy, false);
-      return;
-    }
-    // touch: one tap does the "smart" thing
+    if (!touch && btn === 2) { this.orderAt(sx, sy, false); return; } // right-click: always an order
+    // a tap or left-click does the "smart" thing: with your troops selected, tap an enemy to attack it,
+    // the ground to march there, a tree/bush/deer/mine/quarry to gather it; tap your own units to select them
     const mine = a.sel.filter(e => e.kind === 'unit' && e.team === 0 && e.alive);
-    const { ent } = this.pick(sx, sy, true);
-    if (!mine.length) { if (!this.selectClick(sx, sy, true)) a.select([]); return; }
-    if (ent && ent.kind === 'unit' && ent.team === 0 && ent.d.carry && mine.some(u => !u.d.ship)) { this.orderAt(sx, sy, true); return; } // board the transport
-    if (ent && ent.kind === 'unit' && ent.team === 0) { this.selectClick(sx, sy, true); return; }
+    const { ent } = this.pick(sx, sy, touch);
+    if (!mine.length || shift || ctrl) { if (!this.selectClick(sx, sy, touch, shift, ctrl) && !shift) a.select([]); return; }
+    if (ent && ent.kind === 'unit' && ent.team === 0 && ent.d.carry && mine.some(u => !u.d.ship)) { this.orderAt(sx, sy, touch); return; } // board the transport
+    if (ent && ent.kind === 'unit' && ent.team === 0) { this.selectClick(sx, sy, touch); return; }
     if (ent && ent.kind === 'bld' && ent.team === 0) {
       const peas = mine.some(u => u.type === 'peasant');
-      if (peas && (!ent.built || ent.type === 'farm' || ent.d.drop)) { this.orderAt(sx, sy, true); return; }
-      this.selectClick(sx, sy, true); return;
+      if (peas && (!ent.built || ent.type === 'farm' || ent.d.drop || ent.hp < ent.maxHp || (ent.d.gate && mine.some(u => u.type !== 'peasant')))) { this.orderAt(sx, sy, touch); return; }
+      if (ent.d.gate || ent.d.wall) { this.orderAt(sx, sy, touch); return; } // march through your own gate
+      this.selectClick(sx, sy, touch); return;
     }
-    this.orderAt(sx, sy, true);
+    this.orderAt(sx, sy, touch);
   }
 
   // ---------- pointer events ----------

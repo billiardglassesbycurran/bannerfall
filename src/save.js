@@ -20,8 +20,8 @@ export function saveGame(app) {
   };
   const data = {
     v: 1, when: Date.now(), mode: g.mode, diff: g.diff, civs: g.civKeys, map: MAP.id, seed: MAP.seed, time: round(g.time), campaign: app.campaign?.id ?? null,
-    T: g.T.map(T => ({ f: T.f | 0, w: T.w | 0, g: T.g | 0, age: T.age, techs: [...T.techs], carry: T.carry, gm: T.gm, fish: T.fish, farm: T.farm, bldHp: T.bldHp, hallLost: T.hallLost })),
-    res: resources.map(r => [r.id, Math.round(r.alive ? r.amt : 0)]),
+    T: g.T.map(T => ({ f: T.f | 0, w: T.w | 0, g: T.g | 0, s: (T.s || 0) | 0, age: T.age, techs: [...T.techs], carry: T.carry, gm: T.gm, fish: T.fish, farm: T.farm, bldHp: T.bldHp, hallLost: T.hallLost })),
+    res: resources.map(r => r.animal ? [r.id, Math.round(r.alive ? r.amt : 0), round(r.x), round(r.z), r.hp] : [r.id, Math.round(r.alive ? r.amt : 0)]),
     blds: g.blds.filter(b => b.alive).map(b => ({ type: b.type, team: b.team, cx: b.cx, cz: b.cz, built: b.built, progress: round(b.progress), hp: Math.round(b.hp), food: Math.round(b.food || 0), queue: b.queue.map(q => ({ ...q, t: round(q.t) })), rally: b.rally ? { x: round(b.rally.x), z: round(b.rally.z) } : null })),
     units: g.units.filter(u => u.alive).map(u => ({ type: u.type, team: u.team, x: round(u.boarded ? u.boarded.x : u.x), z: round(u.boarded ? u.boarded.z : u.z), yaw: round(u.yaw), hp: Math.round(u.hp), stance: u.stance || null, carry: u.carry, task: task(u), hero: u === g.hero, vet: u.vet || 0, kills: u.kills || 0 })),
     ai: app.ai ? { nextAttack: app.ai.nextAttack, wave: app.ai.wave, nextWave: app.ai.nextWave, noDock: app.ai.noDock || false, engaged: app.ai.engaged || false } : null,
@@ -36,7 +36,7 @@ export function loadSave() { try { return JSON.parse(localStorage.getItem(KEY));
 export function applySave(app, d) {
   const g = app.game;
   // world resources
-  const amt = new Map(d.res); for (const r of resources) { const a = amt.get(r.id); if (a === undefined) continue; if (a <= 0) { if (r.alive) takeRes(r, r.amt + 1); } else r.amt = a; }
+  const amt = new Map(d.res.map(e => [e[0], e])); for (const r of resources) { const e = amt.get(r.id); if (e === undefined) continue; const a = e[1]; if (a <= 0) { if (r.alive) takeRes(r, r.amt + 1); } else r.amt = a; if (r.animal && e.length > 2) { r.x = r.tx = e[2]; r.z = r.tz = e[3]; r.hp = e[4]; } }
   // remove the starting setup the mode created, then rebuild everything from the save
   for (const u of [...g.units]) { u.batch.release(u.slot); } g.units.length = 0;
   for (const b of [...g.blds]) g.unplace(b); g.blds.length = 0;

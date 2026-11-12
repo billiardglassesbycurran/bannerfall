@@ -141,6 +141,22 @@ function addBerry(x, z) {
   const cx = x | 0, cz = z | 0; if (!cellFree0(cx, cz) || heightAt(cx + .5, cz + .5) < WL + .5) return false;
   addRes('f', cx + .5, cz + .5, 125, [cz * N + cx], .55); return true;
 }
+/** A stone quarry: a 3x3 heap of grey rock (rt 's'). */
+function addQuarry(x, z, amt) {
+  const cx = x | 0, cz = z | 0, cells = [];
+  for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) { if (!cellFree0(cx + dx, cz + dz)) return; cells.push((cz + dz) * N + cx + dx); }
+  const res = addRes('s', cx + .5, cz + .5, amt, cells, 1.5); for (const c of cells) blocked[c] = 3; return res;
+}
+/** A small herd of deer that wander near (x, z). Peasants hunt them for meat (food). */
+export const animals = [];
+function addHerd(x, z, n) {
+  for (let i = 0; i < n; i++) {
+    const a = i / n * TAU + rr(0, 1), d = rr(.8, 2.5), px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d;
+    if (!cellFree0(px | 0, pz | 0)) continue;
+    const res = { id: nextResId++, kind: 'res', rt: 'f', animal: true, x: px, z: pz, hx: x, hz: z, amt: 140, max: 140, r: .55, cells: [], alive: true, hp: 6, yaw: rr(0, TAU), wT: rr(0, 4), tx: px, tz: pz, fleeT: 0 };
+    resources.push(res); animals.push(res);
+  }
+}
 function addMine(x, z, amt) {
   const cx = x | 0, cz = z | 0, cells = [];
   for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) { if (!cellFree0(cx + dx, cz + dz)) return; cells.push((cz + dz) * N + cx + dx); }
@@ -153,6 +169,8 @@ mirror(addMine, 36, 112, 2500); mirror(addMine, 14, 90, 2000);
 for (const [x, z] of [[33, 96], [SIZE - 33, SIZE - 96]]) berryPatch(x, z, 7);
 mirror(addMine, 66, 44, 3000);
 for (const [x, z] of [[58, 92], [SIZE - 58, SIZE - 92]]) berryPatch(x, z, 6);
+// stone quarries: one by each town, more out in the field
+mirror(addQuarry, 44, 114, 1500); mirror(addQuarry, 12, 70, 1800); mirror(addQuarry, 72, 96, 2200);
 const groves = MAP.groves;
 if (MAP.hillGold) { mirror(addMine, 50, 28, 2500); mirror(addMine, 28, 50, 2000); } // extra gold up in the hills
 for (const [gx, gz, gr] of groves) for (let k = 0; k < gr * gr * 1.7; k++) {
@@ -166,7 +184,27 @@ if (MAP.river) for (const sv of [52, 92, 108, 148, 164, 204]) {
   const dxz = -Math.SQRT2 * Math.sin((sv - 128) * .045) * 6, x = (sv + dxz) / 2, z = (sv - dxz) / 2;
   resources.push({ id: nextResId++, kind: 'res', rt: 'f', fish: true, x, z, amt: 250, max: 250, r: 1.2, cells: [], alive: true });
 }
+// deer: a herd near each town, more roaming the wilds (mirrored so it's fair)
+mirror(addHerd, 40, 92, 4); mirror(addHerd, 16, 86, 3); mirror(addHerd, 50, 72, 4); mirror(addHerd, 30, 120, 3);
 for (const r of resources) r.y = r.fish ? WL : heightAt(r.x, r.z);
+/** Deer graze and wander; a hunted deer bolts away from the hunter. Dead deer lie still until eaten. */
+export function updateAnimals(dt, t) {
+  for (const a of animals) {
+    if (!a.alive || a.hp <= 0) continue;
+    const fleeing = a.fleeT > t, sp = fleeing ? 4.2 : .9;
+    if (!fleeing && (a.wT -= dt) <= 0) { a.wT = 3 + Math.random() * 6; const ang = Math.random() * TAU, d = Math.random() * 5; a.tx = a.hx + Math.cos(ang) * d; a.tz = a.hz + Math.sin(ang) * d; }
+    const dx = a.tx - a.x, dz = a.tz - a.z, l = Math.hypot(dx, dz);
+    if (l > .15 && (fleeing || a.wT < 2.5)) { const nx = a.x + dx / l * sp * dt, nz = a.z + dz / l * sp * dt; if (cellWalk(nx | 0, nz | 0)) { a.x = nx; a.z = nz; a.moving = true; } else { a.tx = a.x; a.tz = a.z; a.moving = false; } a.yaw = Math.atan2(dx, dz); }
+    else a.moving = false;
+    a.y = heightAt(a.x, a.z);
+  }
+}
+/** Hit a deer (hunting). Returns true when it falls. */
+export function hurtAnimal(a, dmg, from, t) {
+  if (a.hp <= 0) return false; a.hp -= dmg;
+  if (a.hp <= 0) { a.hp = 0; a.moving = false; return true; }
+  const dx = a.x - from.x, dz = a.z - from.z, l = Math.hypot(dx, dz) || 1; a.tx = a.x + dx / l * 7; a.tz = a.z + dz / l * 7; a.fleeT = t + 2.2; return false;
+}
 
 // ---------------- terrain mesh ----------------
 // Each vertex gets blend weights for 4 ground textures (grass, dirt, rock, sand) plus a colour tint.
@@ -468,6 +506,12 @@ function bushGeo() {
   for (let i = 0; i < 18; i++) { const a = r() * TAU, y = .2 + r() * .4; b.add(P.ball(.045, 6, 4), r() < .7 ? 0xb01e30 : 0x5a1a50, Math.cos(a) * .48, y, Math.sin(a) * .44); }
   return b.build();
 }
+function quarryGeo(seed) { // big pale blocks of building stone, some already cut square
+  const b = new Builder(), r = mulberry32(seed + 7);
+  for (let i = 0; i < 9; i++) { const a = r() * TAU, d = r() * 1.15, s = .4 + r() * .5; b.addBaked(shadeAO(bake(jitter(P.ico(s, 1), s * .18, seed + i), i % 2 ? 0xa8a49a : 0x8e8a82, Math.cos(a) * d, .12, Math.sin(a) * d, r() * 3, r() * 3, 0, 1, .75 + r() * .3, 1), -.3, 1, .55)); }
+  for (let i = 0; i < 5; i++) { const a = r() * TAU, d = .5 + r() * .9; b.add(P.box, 0xc8c2b4, Math.cos(a) * d, .6 + r() * .3, Math.sin(a) * d, 0, r() * 3, 0, .4, .3, .3); }
+  return b.split();
+}
 function mineGeo(seed) {
   const b = new Builder(), r = mulberry32(seed);
   for (let i = 0; i < 8; i++) { const a = r() * TAU, d = r() * 1.1, s = .45 + r() * .45; b.addBaked(shadeAO(bake(jitter(P.ico(s, 1), s * .2, seed + i), 0x777169, Math.cos(a) * d, .15, Math.sin(a) * d, r() * 3, r() * 3, 0, 1, .7 + r() * .4, 1), -.3, 1, .55)); }
@@ -558,7 +602,37 @@ function cardBush() {
 }
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _v = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color(), UP = new THREE.Vector3(0, 1, 0);
+// ---------------- deer ----------------
+function deerGeo() {
+  const b = new Builder(), fur = 0x8a5a34, pale = 0xd8c6a4, dark = 0x3a2a1c;
+  b.add(P.ball(1, 10, 8), fur, 0, .78, 0, 0, 0, 0, .3, .32, .62);            // body
+  b.add(P.ball(1, 8, 6), pale, 0, .66, .05, 0, 0, 0, .24, .2, .5);           // pale belly
+  b.add(P.cyl(.08, .11, .5, 6), fur, 0, 1.02, .45, -.75, 0, 0);              // neck
+  b.add(P.ball(1, 8, 6), fur, 0, 1.24, .62, .3, 0, 0, .11, .12, .2);         // head
+  b.add(P.ball(1, 6, 4), dark, 0, 1.2, .8, 0, 0, 0, .04, .04, .04);          // nose
+  for (const s of [-1, 1]) {
+    b.add(P.cone(.05, .16, 4), fur, s * .09, 1.38, .58, 0, 0, s * .7);        // ears
+    b.add(P.cyl(.012, .018, .3, 4), 0xc8b090, s * .06, 1.48, .58, -.2, 0, s * .4); // antlers
+    b.add(P.cyl(.012, .015, .14, 4), 0xc8b090, s * .12, 1.56, .64, .6, 0, s * .9);
+    for (const z of [-.42, .4]) b.add(P.cyl(.035, .03, .62, 5), dark, s * .14, .32, z); // legs
+  }
+  b.add(P.ball(1, 6, 4), 0xf4eee0, 0, .9, -.6, 0, 0, 0, .07, .09, .05);       // white tail
+  return b.build();
+}
+let deerMesh = null; const _dq = new THREE.Quaternion(), _de = new THREE.Euler(), _dv = new THREE.Vector3(), _ds = new THREE.Vector3(1, 1, 1), _dm = new THREE.Matrix4();
+/** Write the deer into their instanced mesh (walking bob; fallen deer lie on their side). */
+export function syncAnimals(t) {
+  if (!deerMesh) return;
+  animals.forEach((a, i) => {
+    if (!a.alive) { _dm.makeScale(0, 0, 0); deerMesh.setMatrixAt(i, _dm); return; }
+    const dead = a.hp <= 0, bob = a.moving ? Math.abs(Math.sin(t * 9 + i)) * .05 : 0;
+    _dq.setFromEuler(_de.set(dead ? 0 : (a.moving ? 0 : Math.sin(t * .7 + i) * .05), a.yaw, dead ? Math.PI / 2 * .95 : 0, 'YXZ'));
+    _dm.compose(_dv.set(a.x, (a.y ?? heightAt(a.x, a.z)) + bob + (dead ? .32 : 0), a.z), _dq, _ds); deerMesh.setMatrixAt(i, _dm);
+  });
+  deerMesh.instanceMatrix.needsUpdate = true;
+}
 export function buildResources(scene, Q) {
+  if (animals.length) { deerMesh = new THREE.InstancedMesh(deerGeo(), M.vc, animals.length); deerMesh.castShadow = Q.shadow > 0; deerMesh.frustumCulled = false; scene.add(deerMesh); animals.forEach((a, i) => { a.inst = { mesh: deerMesh, i }; }); syncAnimals(0); }
   const shadows = Q.shadow > 0;
   const trees = resources.filter(r => r.rt === 'w'), berries = resources.filter(r => r.rt === 'f' && !r.fish);
   if (M.photo) {
@@ -595,9 +669,9 @@ export function buildResources(scene, Q) {
     berries.forEach((b, i) => { _q.setFromAxisAngle(UP, i * 2.1); _m.compose(_v.set(b.x, b.y - .05, b.z), _q, _s.set(1, 1, 1)); bushes.setMatrixAt(i, _m); b.inst = { mesh: bushes, i }; });
     for (const m of [...kinds, bushes]) { m.castShadow = shadows; m.receiveShadow = shadows; scene.add(m); }
   }
-  for (const g of resources.filter(r => r.rt === 'g')) {
-    const { c, m } = mineGeo(g.id), grp = new THREE.Group();
-    grp.add(new THREE.Mesh(c, M.stone), new THREE.Mesh(m, M.metal));
+  for (const g of resources.filter(r => r.rt === 'g' || r.rt === 's')) {
+    const { c, m } = g.rt === 's' ? quarryGeo(g.id) : mineGeo(g.id), grp = new THREE.Group();
+    grp.add(new THREE.Mesh(c, M.stone)); if (m) grp.add(new THREE.Mesh(m, M.stone));
     grp.children.forEach(o => { o.castShadow = shadows; o.receiveShadow = true; });
     grp.position.set(g.x, heightAt(g.x, g.z), g.z); scene.add(grp); g.mesh = grp;
   }
@@ -633,6 +707,6 @@ export function takeRes(res, amt) {
     if (res.inst) { _m.makeScale(0, 0, 0); for (const m of res.inst.meshes || [res.inst.mesh]) { m.setMatrixAt(res.inst.i, _m); m.instanceMatrix.needsUpdate = true; } }
     if (res.mesh) res.mesh.removeFromParent();
     res.onDeplete?.();
-  } else if (res.rt === 'g' && res.mesh) res.mesh.scale.setScalar(.6 + .4 * res.amt / res.max);
+  } else if ((res.rt === 'g' || res.rt === 's') && res.mesh) res.mesh.scale.setScalar(.6 + .4 * res.amt / res.max);
   return got;
 }

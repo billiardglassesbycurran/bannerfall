@@ -36,7 +36,7 @@ export const BD = {
   smith:    { age: 1, name: 'Blacksmith', hp: 650, size: 3, cost: { w: 120 }, time: 22, arm: 2, desc: 'Researches better weapons and armour' },
   wall:     { name: 'Wall', hp: 420, size: 1, cost: { w: 4 }, time: 3, arm: 6, wall: 1, desc: 'Blocks enemies. Tap the start, then the end, to build a whole line' },
   gate:     { name: 'Gate', hp: 700, size: 1, cost: { w: 25 }, time: 8, arm: 6, wall: 1, gate: 1, desc: 'Your troops pass, enemies can\'t. Place it on your own wall' },
-  tower:    { age: 1, name: 'Watchtower', hp: 600, size: 2, cost: { w: 100, g: 50 }, time: 20, atk: { dmg: 11, rng: 11, cd: 1.4 }, arm: 4, desc: 'Shoots arrows at enemies' },
+  tower:    { age: 1, name: 'Watchtower', hp: 600, size: 2, cost: { w: 50, s: 100 }, time: 20, atk: { dmg: 11, rng: 11, cd: 1.4 }, arm: 4, desc: 'Shoots arrows at enemies' },
   dock:     { name: 'Dock', hp: 900, size: 3, cost: { w: 150 }, time: 22, trains: ['fishboat', 'transport', 'warship'], drop: 1, dock: 1, arm: 2, desc: 'Build on the shore. Builds ships, stores fish' },
 };
 export const BUILD_LIST = ['house', 'farm', 'store', 'barracks', 'range', 'stable', 'workshop', 'smith', 'tower', 'dock'];
@@ -52,9 +52,9 @@ export const TECH = {
   watch:     { name: 'Town Watch', at: 'hall', cost: { f: 60 }, time: 15, age: 0, eff: { cls: { civ: { hpAdd: 15 } } }, desc: 'Peasants +15 hit points' },
   wheelbarrow: { name: 'Wheelbarrow', at: 'hall', cost: { f: 150, w: 60 }, time: 25, age: 1, eff: { gatherAll: 1.15, carry: 4 }, desc: 'Peasants gather 15% faster and carry more' },
   handcart:  { name: 'Handcart', at: 'hall', req: 'wheelbarrow', cost: { f: 300, w: 150 }, time: 35, age: 2, eff: { gatherAll: 1.15, carry: 4 }, desc: 'Peasants gather another 15% faster and carry more' },
-  masonry:   { name: 'Masonry', at: 'hall', cost: { w: 150, g: 100 }, time: 30, age: 1, eff: { bldHp: 1.25 }, desc: 'All buildings +25% hit points' },
-  stonewalls: { name: 'Stone Walls', at: 'smith', cost: { w: 200, g: 120 }, time: 35, age: 1, eff: { wallUp: 1 }, desc: 'Walls and gates become stone: ×2.5 hit points' },
-  fortify:   { name: 'Fortified Hall', at: 'hall', cost: { w: 250, g: 150 }, time: 40, age: 2, eff: { hallUp: 1 }, desc: 'Town Hall: +50% hit points, stronger arrows, stone keep' },
+  masonry:   { name: 'Masonry', at: 'hall', cost: { w: 100, s: 150 }, time: 30, age: 1, eff: { bldHp: 1.25 }, desc: 'All buildings +25% hit points' },
+  stonewalls: { name: 'Stone Walls', at: 'smith', cost: { w: 100, s: 200 }, time: 35, age: 1, eff: { wallUp: 1 }, desc: 'Walls and gates become stone: ×2.5 hit points' },
+  fortify:   { name: 'Fortified Hall', at: 'hall', cost: { w: 150, s: 250, g: 100 }, time: 40, age: 2, eff: { hallUp: 1 }, desc: 'Town Hall: +50% hit points, stronger arrows, stone keep' },
   axe:       { name: 'Double-Bit Axe', at: 'store', cost: { f: 100, w: 50 }, time: 20, age: 1, eff: { gather: { w: 1.2 } }, desc: 'Wood chopping +20%' },
   goldmining:{ name: 'Gold Mining', at: 'store', cost: { f: 100, w: 75 }, time: 20, age: 1, eff: { gather: { g: 1.2 } }, desc: 'Gold mining +20%' },
   plough:    { name: 'Heavy Plough', at: 'store', cost: { f: 125, w: 75 }, time: 25, age: 1, eff: { farm: 1.4, gather: { f: 1.1 } }, desc: 'Farms hold +40% food, food gathering +10%' },
@@ -71,7 +71,7 @@ export const TECH = {
   marksmen:  { name: 'Marksmen', at: 'range', cost: { w: 120, g: 90 }, time: 30, age: 2, eff: { unit: { archer: { hp: 1.2, dmg: 1 }, crossbow: { hp: 1.2, dmg: 2 } } }, desc: 'Archers and crossbowmen +20% hit points and attack' },
   chivalry:  { name: 'Chivalry', at: 'stable', cost: { f: 200, g: 150 }, time: 40, age: 2, eff: { unit: { knight: { hp: 1.2 }, lightcav: { hp: 1.25, dmg: 2 } } }, desc: 'Knights and light cavalry tougher and stronger' },
   elite:     { name: 'Elite Guard', at: 'unique', cost: { f: 300, g: 250 }, time: 45, age: 2, eff: { elite: 1 }, desc: 'Your unique unit +25% hit points and attack' },
-  guardtower:{ name: 'Guard Towers', at: 'tower', cost: { w: 150, g: 120 }, time: 35, age: 2, eff: { towerUp: 1 }, desc: 'Watchtowers become stone Guard Towers: +60% hit points, +4 attack, +2 range' },
+  guardtower:{ name: 'Guard Towers', at: 'tower', cost: { s: 150, g: 80 }, time: 35, age: 2, eff: { towerUp: 1 }, desc: 'Watchtowers become stone Guard Towers: +60% hit points, +4 attack, +2 range' },
 };
 export const RES = { f: 'Food', w: 'Wood', g: 'Gold' };
 

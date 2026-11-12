@@ -2,7 +2,7 @@
 // Devices connect directly over WebRTC using PeerJS (free public matchmaking server, loaded only when needed).
 // The host sends the guest a picture of the battlefield ten times a second; the guest's orders travel back
 // and are carried out on the host. On the guest's screen the teams are swapped, so they always play as "team 0".
-import { resources, takeRes } from './world.js';
+import { resources, takeRes, animals } from './world.js';
 
 const PEERJS = 'https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js';
 const CODE_CH = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -112,7 +112,8 @@ export class HostSync {
       u.task.type, u.task.res?.id ?? (u.task.b?.id ?? 0), u.carry ? [u.carry.rt, Math.round(u.carry.amt)] : 0, u.cargo?.length || 0]);
     const b = g.blds.filter(b => b.alive).map(b => [b.id, b.type, sw(b.team), b.cx, b.cz, b.built ? 1 : 0, +b.progress.toFixed(3), Math.round(b.hp), Math.round(b.maxHp), b.queue.map(q => [q.type || '', q.tech || '', +q.t.toFixed(2)]), b.cargo?.length || 0]);
     const r = []; for (const x of resources) { const a = x.alive ? Math.round(x.amt) : 0; if (this.resSent.get(x.id) !== a) { this.resSent.set(x.id, a); r.push([x.id, a]); } }
-    this.l.send({ k: 'snap', t: +g.time.toFixed(2), env: g.env, T, u, b, r, fx: this.fx.splice(0), over: g.over ? (g.over === 'win' ? 'lose' : 'win') : null });
+    const an = animals.filter(a => a.alive).map(a => [a.id, +a.x.toFixed(2), +a.z.toFixed(2), +a.yaw.toFixed(2), a.hp, a.moving ? 1 : 0]);
+    this.l.send({ k: 'snap', t: +g.time.toFixed(2), env: g.env, T, u, b, r, an, fx: this.fx.splice(0), over: g.over ? (g.over === 'win' ? 'lose' : 'win') : null });
   }
 }
 
@@ -148,6 +149,7 @@ export class GuestSync {
     m.T.forEach((T, i) => Object.assign(g.T[i], { ...T, techs: new Set(T.techs) }));
     if (m.T[0].age !== this.age0) { this.age0 = m.T[0].age; g.refreshLooks(0); } if (m.T[1].age !== this.age1) { this.age1 = m.T[1].age; g.refreshLooks(1); }
     // resources
+    for (const [id, x, z, yaw, hp, mv] of m.an || []) { const a = animals.find(a => a.id === id); if (a) Object.assign(a, { x, z, yaw, hp, moving: !!mv, y: undefined }); }
     for (const [id, a] of m.r) { const r = resources.find(r => r.id === id); if (!r) continue; if (a <= 0 && r.alive) takeRes(r, r.amt + 1); else r.amt = a; }
     // buildings
     const seenB = new Set();

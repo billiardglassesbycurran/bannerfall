@@ -51,7 +51,7 @@ export const MISSIONS = [
       { t: 'Keep your Town Hall standing', done: g => !!hall(g, 0) },
     ],
     setup(g) {
-      Object.assign(g.T[0], { f: 400, w: 700, g: 350 }); clearTeam(g, 1); ageTo(g, 0, 1);
+      Object.assign(g.T[0], { f: 400, w: 700, g: 350, s: 400 }); clearTeam(g, 1); ageTo(g, 0, 1);
       const h = hall(g, 0); put(g, 0, 'barracks', h.x + 9, h.z - 6);
       for (let i = 0; i < 3; i++) g.spawnUnit(0, 'sword', h.x + 9 + i, h.z - 10);
       g.ms = { next: 50, wave: 0 };
@@ -80,7 +80,7 @@ export const MISSIONS = [
       { t: 'Destroy the Warlord\'s Town Hall', done: g => !hall(g, 1) },
     ],
     setup(g, app) {
-      Object.assign(g.T[0], { f: 600, w: 700, g: 550 }); ageTo(g, 0, 2); ageTo(g, 1, 2);
+      Object.assign(g.T[0], { f: 600, w: 700, g: 550, s: 300 }); ageTo(g, 0, 2); ageTo(g, 1, 2);
       const h = hall(g, 0), eh = hall(g, 1);
       for (const [ty, dx, dz] of [['barracks', 9, -5], ['smith', 1, -10], ['workshop', 10, 4]]) put(g, 0, ty, h.x + dx, h.z + dz);
       put(g, 1, 'barracks', eh.x - 8, eh.z + 3);
