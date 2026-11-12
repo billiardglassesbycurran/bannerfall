@@ -6,6 +6,7 @@ import { BD, DIFF, MODES, CIVS, CIV_LIST, UD, TECH, AGES } from './data.js';
 import { FX } from './effects.js';
 import { Tutorial } from './tutorial.js';
 import { Field } from './battle.js';
+import { MISSIONS, progress, saveProgress } from './campaign.js';
 import { saveGame, loadSave, applySave, saveInfo, clearSave } from './save.js';
 import { Sound } from './audio.js';
 import { Figures, ghostObject } from './models.js';
@@ -252,6 +253,8 @@ app.hint = () => {
 // ---------------- modes ----------------
 function setupGame(mode, diff, civ = 'franks', enemyCiv) {
   const tut = mode === 'tutorial'; if (tut) { mode = 'skirmish'; diff = 0; }
+  const mis = mode === 'campaign' ? MISSIONS[app.missionId || 0] : null; if (mis) { mode = 'skirmish'; diff = mis.diff; }
+  app.campaign = null;
   app.game?.fow?.dispose();
   if (app.game?.field) for (const f of app.game.field.flags) f.mesh.removeFromParent();
   app.tut = null; document.getElementById('tutor').classList.add('hide');
@@ -282,6 +285,11 @@ function setupGame(mode, diff, civ = 'franks', enemyCiv) {
     if (team === 0) { if (t.toAge) { app.toast(`Your people enter the ${AGES[t.toAge]}! New buildings, units and upgrades unlocked.`, 5); app.sfx('fanfare'); for (const b of g.blds) if (b.alive && b.team === 0) fx.dust(b.x, b.y, b.z, 6, b.size * .5); } else { app.toast(`${t.name} researched.`, 2.5); app.sfx('chime'); } }
     else if (t.toAge) app.toast(`The enemy has reached the ${AGES[t.toAge]}.`, 3);
   };
+  g.onAbility = (u, k) => {
+    fx.dust(u.x, u.y, u.z, k === 'charge' ? 10 : 18, k === 'charge' ? 1.5 : 4); app.sfx(k === 'cry' ? 'horn' : k === 'rally' ? 'fanfare' : 'thud', u.x, u.z, 1);
+    if (u.team === 0) app.toast({ cry: 'War Cry! Your soldiers fight harder.', charge: 'Charge!', rally: 'Rally! Fleeing soldiers return to the fight.' }[k], 2);
+  };
+  g.onPromote = u => { if (u.team === 0) app.sfx('chime', u.x, u.z, .7); };
   g.onCharge = (u, e) => { fx.dust(e.x, e.y, e.z, 8, .8); app.sfx('thud', e.x, e.z, 1); };
   g.onCapture = (f, side) => app.sfx(side === 0 ? 'fanfare' : 'horn');
   g.onHero = h => { if (app.mode === 'rts') rts.lookAt(h.x, h.z); };
@@ -323,21 +331,30 @@ function setupGame(mode, diff, civ = 'franks', enemyCiv) {
   app.ai = new AI(g, 1);
   g.fow = new FogOfWar(g, mode !== 'battle' && app.settings.fog !== false);
   if (tut) { g.tutorial = true; app.ai.nextAttack = 1e9; app.tut = new Tutorial(app); }
+  if (mis) { app.campaign = { id: app.missionId || 0, noSave: true }; g.mission = mis; mis.setup(g, app); g.recount(); setTimeout(() => app.toast(`${mis.name}: ${mis.goals[0].t}`, 5), 600); }
   rts.yaw = -Math.PI / 4;
   app.mode = 'rts'; app.select([]);
   $('title').classList.add('hide'); $('hud').classList.remove('hide');
-  if (!tut) app.toast(MODES[mode].name + ': ' + (mode === 'skirmish' ? 'destroy the enemy Town Hall!' : mode === 'battle' ? 'defeat the enemy army!' : 'survive 10 waves!'), 5);
+  if (!tut && !mis) app.toast(MODES[mode].name + ': ' + (mode === 'skirmish' ? 'destroy the enemy Town Hall!' : mode === 'battle' ? 'defeat the enemy army!' : 'survive 10 waves!'), 5);
 }
 function showEnd(res) {
   clearSave();
   if (app.mode === 'pov') exitPOV();
-  $('endT').textContent = res === 'win' ? 'VICTORY' : 'DEFEAT';
+  const cm = app.campaign; if (cm && res === 'win') saveProgress(cm.id + 1);
+  $('bNext').classList.toggle('hide', !(cm && res === 'win' && cm.id < MISSIONS.length - 1));
+  $('endT').textContent = res === 'win' ? (cm ? 'MISSION COMPLETE' : 'VICTORY') : 'DEFEAT';
+  if (cm && res === 'win' && cm.id === MISSIONS.length - 1) { $('endS').textContent = 'The Warlord is beaten and the valley is free. Campaign complete!'; $('end').classList.remove('hide'); return; }
   const s = app.game.time | 0;
   $('endS').textContent = (res === 'win' ? 'The day is yours, Commander.' : 'Your banner has fallen.') + ` (${s / 60 | 0}m ${s % 60}s)`;
   $('end').classList.remove('hide');
 }
 const reloadTo = hash => { location.hash = hash; location.reload(); };
-const playHash = () => `play=${app.game.mode},${app.game.diff},${app.game.civKeys[0]},${app.game.civKeys[1]}`;
+const playHash = () => app.campaign ? `mission=${app.campaign.id},${app.game.civKeys[0]}` : `play=${app.game.mode},${app.game.diff},${app.game.civKeys[0]},${app.game.civKeys[1]}`;
+function startMission(i, civ) {
+  const m = MISSIONS[i]; if (!m) return;
+  if (m.map !== MAP.id) { try { localStorage.setItem('bf.map', m.map); } catch { /* ignore */ } reloadTo(`mission=${i},${civ}`); return; }
+  app.missionId = i; setupGame('campaign', m.diff, civ);
+}
 
 // ---------------- 1st/3rd person ----------------
 function enterPOV(unit) {
@@ -382,6 +399,11 @@ onBtn('bView', () => pov.setFirst(!pov.first));
 $('bStrike').addEventListener('pointerdown', e => { e.stopPropagation(); pov.holding = true; pov.strike(); });
 for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) $('bStrike').addEventListener(ev, () => { pov.holding = false; });
 onBtn('bFollow', () => pov.toggleFollow());
+for (const [id, k] of [['bCry', 'cry'], ['bCharge', 'charge'], ['bRally', 'rally']]) onBtn(id, () => { if (pov.unit && !app.game.useAbility(pov.unit, k)) app.toast(`Recharging: ${Math.ceil(app.game.abilityLeft(pov.unit, k))}s`, 1.2); });
+setInterval(() => { // ability buttons in 3rd person: only for the Commander, greyed out while recharging
+  const u = app.mode === 'pov' && pov.unit?.d.hero ? pov.unit : null; $('povabil').classList.toggle('hide', !u); if (!u) return;
+  for (const [id, k, key] of [['bCry', 'cry', 'R'], ['bCharge', 'charge', 'C'], ['bRally', 'rally', 'T']]) { const left = Math.ceil(app.game.abilityLeft(u, k)), b = $(id); b.classList.toggle('cool', left > 0); b.querySelector('small').textContent = left ? left + 's' : (isTouch ? 'ready' : key); }
+}, 250);
 onBtn('bAct', () => pov.act());
 onBtn('bMount', () => pov.toggleMount());
 onBtn('bPause', () => setPause(true));
@@ -391,6 +413,12 @@ onBtn('bResume', () => setPause(false));
 onBtn('bRestart', () => reloadTo(playHash()));
 onBtn('bQuit', () => reloadTo(''));
 onBtn('bAgain', () => reloadTo(playHash()));
+onBtn('bNext', () => reloadTo(`mission=${app.campaign.id + 1},${app.game.civKeys[0]}`));
+setInterval(() => { // campaign goals, top-right
+  const g = app.game, m = g?.mission, el = $('goals'); el.classList.toggle('hide', !m || app.mode !== 'rts'); if (!m) return;
+  const fmt = s => `${s / 60 | 0}:${String(s % 60 | 0).padStart(2, '0')}`;
+  el.innerHTML = `<b>${m.name}</b>` + m.goals.map(x => `<div class="${x.done(g) ? 'ok' : ''}">${x.t}${x.timer ? ' (' + fmt(x.timer(g)) + ')' : ''}</div>`).join('');
+}, 500);
 onBtn('bMenu', () => reloadTo(''));
 onBtn('bLook', () => $('end').classList.add('hide'));
 onBtn('bFs', goFullscreen);
@@ -419,8 +447,11 @@ function refreshMenu() {
   $('modeDesc').textContent = MODES[app.cfg.mode].desc;
   for (const b of document.querySelectorAll('[data-map]')) b.classList.toggle('on', b.dataset.map === (app.cfg.map || 'riverlands'));
   $('mapDesc').textContent = MAP_LIST[app.cfg.map || 'riverlands'].desc;
+  const camp = app.cfg.mode === 'campaign'; $('missions').classList.toggle('hide', !camp); $('maps').classList.toggle('hide', camp); $('mapDesc').classList.toggle('hide', camp);
+  if (camp) { const pr = progress(); app.cfg.mission = Math.min(app.cfg.mission ?? pr, pr, MISSIONS.length - 1); for (const b of document.querySelectorAll('[data-mis]')) { b.classList.toggle('on', +b.dataset.mis === app.cfg.mission); b.classList.toggle('locked', +b.dataset.mis > pr); } const m = MISSIONS[app.cfg.mission]; $('modeDesc').textContent = m.brief + ' Goals: ' + m.goals.map(x => x.t).join(' · ') + '.'; }
 }
 try { const s = JSON.parse(localStorage.getItem('bf.cfg') || 'null'); if (s && MODES[s.mode]) app.cfg = s; } catch { /* ignore */ }
+MISSIONS.forEach((m, i) => { const b = document.createElement('button'); b.className = 'btn'; b.dataset.mis = i; b.textContent = m.name.split('. ')[0]; b.title = m.name; $('missions').appendChild(b); b.addEventListener('click', () => { if (i > progress()) { app.toast?.('Finish the previous mission first.', 2); return; } app.cfg.mission = i; refreshMenu(); }); });
 for (const [k, m] of Object.entries(MAP_LIST)) { const b = document.createElement('button'); b.className = 'btn'; b.dataset.map = k; b.textContent = m.name; $('maps').appendChild(b); b.addEventListener('click', () => { app.cfg.map = k; refreshMenu(); }); }
 for (const b of document.querySelectorAll('[data-mode]')) b.addEventListener('click', () => { app.cfg.mode = b.dataset.mode; refreshMenu(); });
 for (const b of document.querySelectorAll('[data-d]')) b.addEventListener('click', () => { app.cfg.diff = +b.dataset.d; refreshMenu(); });
@@ -450,6 +481,7 @@ onBtn('bHelpBack', () => { $('help').classList.add('hide'); });
 onBtn('bStart', () => {
   try { localStorage.setItem('bf.cfg', JSON.stringify(app.cfg)); } catch { /* ignore */ }
   if (isTouch) goFullscreen();
+  if (app.cfg.mode === 'campaign') { startMission(app.cfg.mission || 0, app.cfg.civ); return; }
   const want = MAP_LIST[app.cfg.map] ? app.cfg.map : 'riverlands';
   if (want === 'random' || want !== MAP.id) { // maps are built when the page loads: reload into the chosen one
     try { localStorage.setItem('bf.map', want); if (want === 'random') localStorage.setItem('bf.mapSeed', String(1 + Math.random() * 99998 | 0)); } catch { /* ignore */ }
@@ -497,6 +529,7 @@ addEventListener('keydown', e => {
     if (e.code === 'KeyF') pov.toggleFollow();
     if (e.code === 'KeyG') pov.act();
     if (e.code === 'KeyM') pov.toggleMount();
+    if (pov.unit?.d.hero) { const k = { KeyR: 'cry', KeyC: 'charge', KeyT: 'rally' }[e.code]; if (k) $({ cry: 'bCry', charge: 'bCharge', rally: 'bRally' }[k]).click(); }
     if (e.code === 'Space') { e.preventDefault(); pov.holding = true; pov.strike(); }
   }
 });
@@ -565,6 +598,8 @@ setInterval(() => { if (app.game && !app.paused) saveGame(app); }, 30000); // au
 { const info = saveInfo(); if (info) { $('continueRow').classList.remove('hide'); const s = info.time | 0; $('contInfo').textContent = `${MODES[info.mode]?.name || ''} · ${CIVS[info.civs?.[0]]?.name || ''} · ${s / 60 | 0}:${String(s % 60).padStart(2, '0')}`; } }
 onBtn('bContinue', () => { const i = saveInfo(); try { if (i?.map) { localStorage.setItem('bf.map', i.map); localStorage.setItem('bf.mapSeed', String(i.seed || 1)); } } catch { /* ignore */ } reloadTo('resume'); });
 if (location.hash.startsWith('#play=')) app.cfg.map = MAP.id;
+const mh = /mission=(\d)(?:,(\w+))?/.exec(location.hash);
+if (mh && MISSIONS[+mh[1]]) { app.cfg = { ...app.cfg, mode: 'campaign', mission: +mh[1], civ: mh[2] || app.cfg.civ || 'franks' }; history.replaceState(null, '', location.pathname + location.search); startMission(+mh[1], app.cfg.civ); }
 const m = /play=(\w+),(\d)(?:,(\w+))?(?:,(\w+))?/.exec(location.hash);
 if (location.hash === '#resume' && loadSave()) { const d = loadSave(); app.cfg = { mode: d.mode, diff: d.diff, civ: d.civs[0], map: MAP.id }; setupGame(d.mode, d.diff, d.civs[0], d.civs[1]); applySave(app, d); app.toast('Welcome back! Your game has been restored.', 3); history.replaceState(null, '', location.pathname + location.search); }
 else if (m && MODES[m[1]]) { app.cfg = { mode: m[1], diff: +m[2], civ: m[3] || 'franks' }; setupGame(m[1], +m[2], m[3], m[4]); }

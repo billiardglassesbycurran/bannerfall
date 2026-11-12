@@ -21,13 +21,13 @@
 </script>
 <script>
   // ===== Game version: bump on every change you publish (see CLAUDE.md). =====
-  window.BF_VERSION = '0.15.0';
+  window.BF_VERSION = '0.16.0';
   // Every game file is loaded as file.js?v=VERSION so phones never mix old and new files from the browser cache.
   // (On localhost a timestamp is used instead, so edits show up immediately while developing.)
   (function () {
     var local = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
     var v = local ? Date.now() : window.BF_VERSION;
-    var mods = ['main', 'world', 'util', 'geo', 'data', 'models', 'game', 'path', 'ai', 'rts', 'pov', 'hud', 'textures', 'assets', 'effects', 'audio', 'gltfmodels', 'save', 'tutorial', 'battle', 'fow'];
+    var mods = ['main', 'world', 'util', 'geo', 'data', 'models', 'game', 'path', 'ai', 'rts', 'pov', 'hud', 'textures', 'assets', 'effects', 'audio', 'gltfmodels', 'save', 'tutorial', 'battle', 'fow', 'campaign'];
     var imports = {
       'three': 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js',
       'three/addons/': 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/'
@@ -86,6 +86,9 @@
     <button class="btn" id="bView">1st<small>person</small></button>
     <button class="btn hide" id="bMount">Mount<small>horse</small></button>
   </div>
+  <div id="povabil" class="hide">
+    <button class="btn" id="bCry">War Cry<small>R</small></button><button class="btn" id="bCharge">Charge<small>C</small></button><button class="btn" id="bRally">Rally<small>T</small></button>
+  </div>
   <div id="povact">
     <button class="btn big hide" id="bAct">Enter<small>building</small></button>
     <button class="btn big" id="bFollow">Follow<small>me!</small></button>
@@ -95,6 +98,7 @@
 </div>
 
 <div id="battlebar" class="hide"></div>
+<div id="goals" class="hide"></div>
 <div id="toasts"></div>
 <div id="tutor" class="hide"><div class="tn"></div><div class="tt"></div><button class="btn sm" id="bTutSkip">Skip tutorial</button></div>
 
@@ -105,6 +109,7 @@
   <div class="panel">
     <div class="row" id="modes"></div>
     <p id="modeDesc"></p>
+    <div class="row hide" id="missions"><span class="lbl">Mission</span></div>
     <div class="row" id="maps"><span class="lbl">Map</span></div>
     <p id="mapDesc"></p>
     <div class="row" id="civs"><span class="lbl">Your people</span></div>
@@ -146,7 +151,7 @@
 </div>
 <div id="end" class="scr hide">
   <h1 id="endT">VICTORY</h1><h2 id="endS"></h2>
-  <div class="row"><button class="btn" id="bAgain">Play again</button><button class="btn" id="bMenu">Main menu</button><button class="btn" id="bLook">Look around</button></div>
+  <div class="row"><button class="btn hide" id="bNext">Next mission &#9654;</button><button class="btn" id="bAgain">Play again</button><button class="btn" id="bMenu">Main menu</button><button class="btn" id="bLook">Look around</button></div>
 </div>
 
 <div id="err" class="hide"></div>

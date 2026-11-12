@@ -45,7 +45,7 @@ export function applySave(app, d) {
   const blds = d.blds.map(s => { const b = g.placeBuilding(s.team, s.type, s.cx, s.cz, s.built); Object.assign(b, { progress: s.progress, hp: s.hp, food: s.food, queue: s.queue, rally: s.rally }); g.setBuildVisual(b); return b; });
   const byId = new Map(resources.map(r => [r.id, r]));
   for (const s of d.units) {
-    const u = g.spawnUnit(s.team, s.type, s.x, s.z); Object.assign(u, { yaw: s.yaw, hp: Math.min(s.hp, u.maxHp), stance: s.stance, carry: s.carry, vet: s.vet, kills: s.kills });
+    const u = g.spawnUnit(s.team, s.type, s.x, s.z); if (s.vet) u.maxHp *= 1 + .1 * s.vet; Object.assign(u, { yaw: s.yaw, hp: Math.min(s.hp, u.maxHp), stance: s.stance, carry: s.carry, vet: s.vet, kills: s.kills });
     if (s.hero) g.hero = u;
     const t = s.task;
     if (t.type === 'gather' && byId.get(t.res)?.alive) g.gather(u, byId.get(t.res));

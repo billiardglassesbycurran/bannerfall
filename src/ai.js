@@ -14,11 +14,27 @@ export class AI {
   update(dt) {
     if (this.g.over) return;
     this.t += dt; if (this.t < 1) return; this.t = 0;
+    this.heroTactics();
+    if (this.g.mission?.aiOff) { // campaign missions that script the enemy: troops only defend themselves and charge what they see
+      for (const u of this.my(u => u.task.type === 'idle' && u.d.acq && !u.routed)) { let t = null, bd = 22; for (const f of this.g.units) if (f.alive && f.team !== this.team) { const d = dist(f, u); if (d < bd) { bd = d; t = f; } } if (t) this.g.amove(u, t.x, t.z); }
+      return;
+    }
     if (this.g.mode === 'skirmish') this.skirmish();
     else if (this.g.mode === 'battle') this.battle();
     else this.survival();
   }
 
+  // ---------- the enemy Commander uses War Cry, Charge and Rally too ----------
+  heroTactics() {
+    const g = this.g; if (g.diff === 0) return; // Easy: no abilities
+    for (const h of this.my(u => u.d.hero)) {
+      let foes = 0, near = 1e9, routed = 0;
+      g.unitsNear(h.x, h.z, 16, o => { if (!o.alive) return; const d = dist(o, h); if (o.team !== this.team && o.d.acq) { if (d < 12) foes++; near = Math.min(near, d); } else if (o.team === this.team && o.routed) routed++; });
+      if (routed >= 3) g.useAbility(h, 'rally');
+      if (foes >= 4) g.useAbility(h, 'cry');
+      if (near > 6 && near < 14 && h.task.type === 'attack') g.useAbility(h, 'charge');
+    }
+  }
   // ---------- helpers ----------
   findSpot(type, near, rMin = 6, rMax = 24) {
     const s = BD[type].size, g = this.g;

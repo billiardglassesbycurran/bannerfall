@@ -1,6 +1,7 @@
 // HUD: resource bar, selection panel, command card, minimap, health bars, toasts.
 import * as THREE from 'three';
 import { UD, BD, BUILD_ECO, BUILD_MIL, TECH, AGES } from './data.js';
+import { ABIL, RANKS } from './game.js';
 import { N, SIZE, resources, minimapColors, heightAt, WL } from './world.js';
 
 const $ = id => document.getElementById(id);
@@ -79,8 +80,8 @@ export class HUD {
       return;
     }
     if (sel.length === 1) {
-      name.textContent = (e.team ? 'Enemy ' : '') + e.d.name;
-      let t = `HP ${Math.ceil(e.hp)}/${e.maxHp}`;
+      name.textContent = (e.team ? 'Enemy ' : '') + (e.vet ? RANKS[e.vet] + ' ' : '') + e.d.name + (e.vet ? ' ' + '★'.repeat(e.vet) : '');
+      let t = `HP ${Math.ceil(e.hp)}/${Math.round(e.maxHp)}` + (e.kills ? ` · ${e.kills} kill${e.kills > 1 ? 's' : ''}` : '');
       if (e.morale !== undefined && e.d.acq && !e.d.hero && !e.d.ship) t += e.routed ? ' · FLEEING!' : ` · Morale ${Math.round(e.morale)}%` + (e.inspired ? ' (inspired)' : '');
       if (e.team === 0) { let task = TASK[e.task.type] || ''; if (e.task.type === 'gather') task = e.task.res.fish ? 'Fishing' : `Gathering ${RN[e.task.res.rt]}`; if (e.cargo) task += ` · carrying ${e.cargo.length}/${e.d.carry} troops`; t += ` · ${task}`; if (e.carry) t += ` (carrying ${e.carry.amt | 0} ${RN[e.carry.rt]})`; }
       desc.textContent = t; return;
@@ -127,6 +128,7 @@ export class HUD {
           const st = (mil[0] || ships[0]).stance || 'aggressive', next = { aggressive: 'defensive', defensive: 'hold', hold: 'aggressive' }[st];
           btns.push({ label: { aggressive: 'Aggressive', defensive: 'Defensive', hold: 'Hold' }[st], sub: 'stance &#8635;', on: () => { for (const u of [...mil, ...ships]) u.stance = next; a.toast(`Stance: ${next === 'hold' ? 'hold ground (no chasing)' : next === 'defensive' ? 'defensive (chase a little, then return)' : 'aggressive (chase enemies)'}.`, 2); } });
           const hero = mil.find(u => u.d.hero); if (hero) btns.push({ label: hero.d.horse ? 'Dismount' : 'Mount', sub: 'horse', on: () => g.setMount(hero, !hero.d.horse) });
+          if (hero) for (const [k, ab] of Object.entries(ABIL)) { const left = Math.ceil(g.abilityLeft(hero, k)); btns.push({ label: ab.name, sub: left ? left + 's' : 'ready', dis: left > 0, why: `${ab.name} is recharging (${left}s).`, tip: ab.desc, on: () => g.useAbility(hero, k) }); }
           if (g.hero?.alive && mil.length && !mil.includes(g.hero)) btns.push({ label: 'Follow', sub: 'commander', on: () => { mil.forEach((u, i) => { const row = Math.floor(i / 6) + 1, col = (i % 6) - 2.5; g.setTask(u, { type: 'follow', leader: g.hero, off: { a: Math.atan2(col * 1.2, row * 1.4), d: Math.hypot(col * 1.2, row * 1.4) } }); }); } });
         }
         const tr = ships.find(u => u.d.carry);
@@ -234,6 +236,7 @@ export class HUD {
     for (const u of g.units) {
       if (!u.alive || u.fowHidden || (!u.selected && u.hp >= u.maxHp)) continue;
       const p = scr(u.x, u.y + (u.d.horse ? 3.0 : 2.1) * u.scale, u.z); if (!p) continue;
+      if (u.vet) { c.font = `${Math.round(10 * zoomK + 2)}px sans-serif`; c.textAlign = 'center'; c.fillStyle = '#ffd34a'; c.fillText('★'.repeat(u.vet), p[0], p[1] - 3); }
       const f = u.hp / u.maxHp; bar(p[0], p[1], 24 * zoomK * (u.d.hero ? 1.5 : 1), f, u.team ? '#e04a3a' : f > .5 ? '#5ad24a' : f > .25 ? '#e8c43a' : '#e0503a');
     }
     for (const b of g.blds) {

@@ -152,7 +152,7 @@ export class POVView {
     const len = Math.hypot(mx, my); if (len > 1) { mx /= len; my /= len; }
     const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw), rx = -fz, rz = fx;
     const sprint = keys.ShiftLeft || keys.ShiftRight || Math.hypot(this.stick.x, this.stick.y) > .95;
-    const sp = u.d.spd * (sprint ? 1.45 : 1) * Math.min(1, Math.hypot(mx, my));
+    const sp = u.d.spd * (sprint ? 1.45 : 1) * (u.chargeT > this.a.game.time ? 1.6 : 1) * Math.min(1, Math.hypot(mx, my));
     let moved = false, mdx = 0, mdz = 0;
     if (u.onShip && u.onShip.alive) { // steering a ship from its deck
       const sh = u.onShip, L = SHIP_LEN[sh.type] || 4, turn = -mx * dt * .9 * (my < 0 ? -1 : 1), v = sh.d.spd * (my > 0 ? my : my * .4);
