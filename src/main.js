@@ -358,7 +358,7 @@ function setupGame(mode, diff, civ = 'franks', enemyCiv) {
   if (mis) { app.campaign = { id: app.missionId || 0, noSave: true }; g.mission = mis; mis.setup(g, app); g.recount(); setTimeout(() => app.toast(`${mis.name}: ${mis.goals[0].t}`, 5), 600); }
   rts.yaw = -Math.PI / 4;
   app.mode = 'rts'; app.select([]);
-  $('title').classList.add('hide'); $('hud').classList.remove('hide');
+  $('title').classList.add('hide'); $('home').classList.add('hide'); $('hud').classList.remove('hide');
   if (!tut && !mis) app.toast(MODES[mode].name + ': ' + (mode === 'skirmish' ? 'destroy the enemy Town Hall!' : mode === 'battle' ? 'defeat the enemy army!' : 'survive 10 waves!'), 5);
 }
 function showEnd(res) {
@@ -487,6 +487,20 @@ for (const b of document.querySelectorAll('[data-q]')) b.addEventListener('click
 });
 onBtn('bTutSkip', () => app.tut?.skip());
 onBtn('bHelp', () => { $('help').classList.remove('hide'); });
+// ---------------- main menu → setup ----------------
+const showHome = () => { $('title').classList.add('hide'); $('home').classList.remove('hide'); };
+function showSetup(mode) {
+  if (mode) app.cfg.mode = mode;
+  $('setupT').textContent = { campaign: 'Campaign', online: 'Online' }[app.cfg.mode] || 'New game';
+  $('modes').classList.toggle('hide', ['campaign', 'online', 'tutorial'].includes(app.cfg.mode));
+  for (const b of document.querySelectorAll('[data-mode]')) b.classList.toggle('hide', !['skirmish', 'battle', 'survival'].includes(b.dataset.mode));
+  refreshMenu(); $('home').classList.add('hide'); $('title').classList.remove('hide');
+}
+onBtn('hPlay', () => showSetup(['skirmish', 'battle', 'survival'].includes(app.cfg.mode) ? app.cfg.mode : 'skirmish'));
+onBtn('hCamp', () => showSetup('campaign'));
+onBtn('hOnline', () => showSetup('online'));
+onBtn('hTut', () => { app.cfg.mode = 'tutorial'; try { localStorage.setItem('bf.tutSeen', '1'); } catch { /* ignore */ } if (isTouch) goFullscreen(); setupGame('tutorial', 0, app.cfg.civ); });
+onBtn('bBack', showHome);
 const openSettings = () => {
   const S = app.settings; $('sLook').value = S.look; $('sCam').value = S.cam; $('sVol').value = S.vol; $('sMusic').checked = S.music; $('sVoice').checked = S.voice; $('sBig').checked = S.big; $('sAuto').checked = S.auto; $('sFog').checked = S.fog; $('sMapBot').checked = S.mapBot; $('sCycle').checked = S.cycle;
   $('settings').classList.remove('hide');
@@ -665,17 +679,18 @@ function emitEffects(dt) {
 $('ver').textContent = 'v' + VERSION;
 $('loading').remove();
 setInterval(() => { if (app.game && !app.paused) saveGame(app); }, 30000); // autosave
-{ const info = saveInfo(); if (info) { $('continueRow').classList.remove('hide'); const s = info.time | 0; $('contInfo').textContent = `${MODES[info.mode]?.name || ''} · ${CIVS[info.civs?.[0]]?.name || ''} · ${s / 60 | 0}:${String(s % 60).padStart(2, '0')}`; } }
+{ try { if (!localStorage.getItem('bf.tutSeen') && !saveInfo()) $('hTut').classList.add('first'); } catch { /* ignore */ } const pr = progress(); $('campInfo').textContent = pr >= MISSIONS.length ? 'all 4 missions won!' : `mission ${pr + 1} of ${MISSIONS.length}`; }
+{ const info = saveInfo(); if (info) { $('bContinue').classList.remove('hide'); const s = info.time | 0; $('contInfo').textContent = `${MODES[info.mode]?.name || ''} · ${CIVS[info.civs?.[0]]?.name || ''} · ${s / 60 | 0}:${String(s % 60).padStart(2, '0')}`; } }
 onBtn('bContinue', () => { const i = saveInfo(); try { if (i?.map) { localStorage.setItem('bf.map', i.map); localStorage.setItem('bf.mapSeed', String(i.seed || 1)); } } catch { /* ignore */ } reloadTo('resume'); });
 if (location.hash.startsWith('#play=')) app.cfg.map = MAP.id;
 if (location.hash === '#host' || location.hash.startsWith('#join=')) { // came back after loading the right map
   const jc = location.hash.startsWith('#join=') ? location.hash.slice(6) : null; history.replaceState(null, '', location.pathname + location.search);
-  app.cfg.mode = 'online'; refreshMenu(); if (jc) { $('joinCode').value = jc; joinGame(jc); } else $('bHost').click();
+  app.bootSetup = true; showSetup('online'); if (jc) { $('joinCode').value = jc; joinGame(jc); } else $('bHost').click();
 }
 const mh = /mission=(\d)(?:,(\w+))?/.exec(location.hash);
 if (mh && MISSIONS[+mh[1]]) { app.cfg = { ...app.cfg, mode: 'campaign', mission: +mh[1], civ: mh[2] || app.cfg.civ || 'franks' }; history.replaceState(null, '', location.pathname + location.search); startMission(+mh[1], app.cfg.civ); }
 const m = /play=(\w+),(\d)(?:,(\w+))?(?:,(\w+))?/.exec(location.hash);
 if (location.hash === '#resume' && loadSave()) { const d = loadSave(); app.cfg = { mode: d.mode, diff: d.diff, civ: d.civs[0], map: MAP.id }; setupGame(d.mode, d.diff, d.civs[0], d.civs[1]); applySave(app, d); app.toast('Welcome back! Your game has been restored.', 3); history.replaceState(null, '', location.pathname + location.search); }
 else if (m && MODES[m[1]]) { app.cfg = { mode: m[1], diff: +m[2], civ: m[3] || 'franks' }; setupGame(m[1], +m[2], m[3], m[4]); }
-else $('title').classList.remove('hide');
+else if (!app.bootSetup) showHome();
 window.bannerfall = app; // handy for debugging in the browser console

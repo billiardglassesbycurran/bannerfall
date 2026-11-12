@@ -21,7 +21,7 @@
 </script>
 <script>
   // ===== Game version: bump on every change you publish (see CLAUDE.md). =====
-  window.BF_VERSION = '0.19.0';
+  window.BF_VERSION = '0.20.0';
   // Every game file is loaded as file.js?v=VERSION so phones never mix old and new files from the browser cache.
   // (On localhost a timestamp is used instead, so edits show up immediately while developing.)
   (function () {
@@ -103,9 +103,19 @@
 <div id="tutor" class="hide"><div class="tn"></div><div class="tt"></div><button class="btn sm" id="bTutSkip">Skip tutorial</button></div>
 
 <!-- ============ screens ============ -->
+<div id="home" class="scr hide">
+  <div class="homebrand"><h1>BANNERFALL</h1><h2>Command the field from above. Then ride into it.</h2></div>
+  <div class="homemenu">
+    <button class="btn go mbtn hide" id="bContinue">&#9654; Continue<small id="contInfo"></small></button>
+    <button class="btn mbtn" id="hPlay">&#9876; Play<small>Skirmish · Battle · Survival</small></button>
+    <button class="btn mbtn" id="hCamp">&#127984; Campaign<small id="campInfo">4 missions</small></button>
+    <button class="btn mbtn" id="hOnline">&#127760; Online<small>play a friend</small></button>
+    <button class="btn mbtn" id="hTut">&#128214; Tutorial<small>new? start here</small></button>
+    <div class="homeicons"><button class="btn icon" id="bSettings" title="Settings">&#9881;<small>Settings</small></button><button class="btn icon" id="bHelp" title="How to play">?<small>Help</small></button><button class="btn icon hide" id="bInstall" title="Install app">&#128242;<small>Install</small></button></div>
+  </div>
+</div>
 <div id="title" class="scr hide">
-  <h1>BANNERFALL</h1>
-  <h2>Command the field from above. Then ride into it.</h2>
+  <h3 id="setupT">Skirmish</h3>
   <div class="panel">
     <div class="row" id="modes"></div>
     <p id="modeDesc"></p>
@@ -117,9 +127,7 @@
     <div class="row" id="civs"><span class="lbl">Your people</span></div>
     <div id="civInfo"></div>
     <div class="row"><span class="lbl">Enemy</span><button class="btn sb" data-d="0">Squire<small>easy</small></button><button class="btn sb" data-d="1">Knight<small>normal</small></button><button class="btn sb" data-d="2">Warlord<small>hard</small></button></div>
-    <div class="row"><span class="lbl">Graphics</span><button class="btn sb" data-q="low">Low</button><button class="btn sb" data-q="med">Medium</button><button class="btn sb" data-q="high">High</button></div>
-    <div class="row"><button class="btn" id="bHelp">How to play</button><button class="btn" id="bSettings">Settings</button><button class="btn hide" id="bInstall">&#128242; Install app</button><button class="btn go" id="bStart">&#9876; Begin</button></div>
-    <div class="row hide" id="continueRow"><button class="btn go" id="bContinue">&#9654; Continue<small id="contInfo"></small></button></div>
+    <div class="row setupgo"><button class="btn" id="bBack">&#8592; Back</button><button class="btn go" id="bStart">&#9876; Begin</button></div>
   </div>
 </div>
 <div id="help" class="scr hide">
@@ -140,6 +148,7 @@
 <div id="settings" class="scr hide">
   <div class="panel text">
     <h3 style="margin:0;text-align:center;color:var(--gold2)">Settings</h3>
+    <div class="row qrow"><span class="lbl">Graphics</span><button class="btn sb" data-q="low">Low</button><button class="btn sb" data-q="med">Medium</button><button class="btn sb" data-q="high">High</button></div>
     <label class="set">Look sensitivity (3rd person) <input type="range" id="sLook" min="0.4" max="2" step="0.1"></label>
     <label class="set">Camera speed (view from above) <input type="range" id="sCam" min="0.4" max="2" step="0.1"></label>
     <label class="set">Volume <input type="range" id="sVol" min="0" max="1" step="0.05"></label>

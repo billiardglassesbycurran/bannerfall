@@ -78,8 +78,14 @@ def main():
 
         print('Title menu')
         page, errors = open_game(p, base, **desk)
-        check(page.is_visible('#title'), 'title menu is shown')
+        check(page.is_visible('#home'), 'main menu is shown')
+        page.screenshot(path=str(OUT / 'menu.png'))
+        page.click('#hPlay'); page.wait_for_timeout(300)
+        check(page.is_visible('#title') and not page.is_visible('#home'), 'Play opens the game setup')
         check(page.locator('#civs .btn').count() >= 5, 'five civilizations to pick from')
+        page.click('#bBack'); page.wait_for_timeout(200)
+        check(page.is_visible('#home'), 'Back returns to the main menu')
+        page.click('#hPlay'); page.wait_for_timeout(200)
         check(not err_box(page) and not errors, 'no errors on load ' + (err_box(page) + ' '.join(errors))[:300])
         page.screenshot(path=str(OUT / 'title.png'))
         page.context.browser.close()
@@ -151,7 +157,7 @@ def main():
         for _ in range(90):
             if G.evaluate('!!window.bannerfall && !document.getElementById("loading")'): break
             time.sleep(1.5)
-        H.evaluate("() => document.querySelector('[data-mode=online]').click()"); G.evaluate("() => document.querySelector('[data-mode=online]').click()")
+        H.click('#hOnline'); G.click('#hOnline')
         H.click('#bHost'); code = None
         for _ in range(40):
             time.sleep(.5); mm = re.search(r'Your code: ([A-Z0-9]{5})', H.inner_text('#onlineMsg'))
