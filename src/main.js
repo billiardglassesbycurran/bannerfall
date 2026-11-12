@@ -6,6 +6,7 @@ import { BD, DIFF, MODES, CIVS, CIV_LIST, UD, TECH, AGES } from './data.js';
 import { FX } from './effects.js';
 import { Tutorial } from './tutorial.js';
 import { Field } from './battle.js';
+import { Atmosphere, isNight } from './sky.js';
 import { MISSIONS, progress, saveProgress } from './campaign.js';
 import { saveGame, loadSave, applySave, saveInfo, clearSave } from './save.js';
 import { Sound } from './audio.js';
@@ -62,7 +63,7 @@ if (qLevel !== 'low') {
   const pmrem = new THREE.PMREMGenerator(renderer), envScene = new THREE.Scene(); envScene.add(buildSky());
   scene.environment = pmrem.fromScene(envScene, .04, .1, 1000).texture; scene.environmentIntensity = .75; pmrem.dispose();
 }
-scene.add(new THREE.HemisphereLight(0xd6e6ff, 0x5a4a30, qLevel === 'low' ? 1.2 : .45));
+const hemi = new THREE.HemisphereLight(0xd6e6ff, 0x5a4a30, qLevel === 'low' ? 1.2 : .45); scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffecd0, qLevel === 'low' ? 2.8 : 3.3);
 const SUN_DIR = new THREE.Vector3(-.5, .62, .35).normalize();
 sun.castShadow = Q.shadow > 0;
@@ -110,8 +111,9 @@ const app = {
 };
 app.scene = scene; app.renderer = renderer;
 const fx = new FX(scene), sound = new Sound();
+const atmo = new Atmosphere({ scene, sun, hemi, renderer, base: { sun: sun.intensity, hemi: hemi.intensity }, low: qLevel === 'low', sound });
 // ---------------- player settings (saved on this device) ----------------
-const SET_DEFAULT = { look: 1, cam: 1, vol: .7, music: true, voice: true, big: false, auto: true, fog: true, mapBot: false, mapOff: false };
+const SET_DEFAULT = { look: 1, cam: 1, vol: .7, music: true, voice: true, big: false, auto: true, fog: true, mapBot: false, mapOff: false, cycle: true };
 app.settings = { ...SET_DEFAULT }; try { Object.assign(app.settings, JSON.parse(localStorage.getItem('bf.settings') || '{}')); } catch { /* ignore */ }
 function applySettings() {
   document.body.classList.toggle('bigui', !!app.settings.big); sound.setVolume?.(app.settings.vol);
@@ -241,9 +243,10 @@ app.resClick = res => {
 app.infoText = () => {
   const g = app.game; if (!g) return '';
   if (g.mode === 'survival') { const ai = app.ai; return ai.wave >= 10 ? 'Final wave!' : `Wave ${ai.wave}/10 · next in ${Math.max(0, Math.ceil(ai.nextWave - g.time))}s`; }
-  if (g.mode === 'battle') { const n = t => g.units.filter(u => u.alive && u.team === t).length; return `${g.civ[0].name} ${n(0)} · ${g.civ[1].name} ${n(1)}`; }
-  return `${AGES[g.T[0].age]} · ${g.civ[0].name} vs ${g.civ[1].name} (${DIFF[g.diff].name})`;
+  if (g.mode === 'battle') { const n = t => g.units.filter(u => u.alive && u.team === t).length; return `${g.civ[0].name} ${n(0)} · ${g.civ[1].name} ${n(1)}` + envIcon(g); }
+  return `${AGES[g.T[0].age]} · ${g.civ[0].name} vs ${g.civ[1].name} (${DIFF[g.diff].name})` + envIcon(g);
 };
+const envIcon = g => !g.cycle ? '' : ' · ' + (isNight(g.env) ? '🌙 Night' : '☀ Day') + ({ rain: ' · 🌧 Rain', mist: ' · 🌫 Mist', cloudy: ' · ☁' }[g.env.weather] || '');
 app.hint = () => {
   const g = app.game;
   if (g.mode === 'battle') return isTouch ? 'Tap <b>Army</b>, then tap an enemy or the ground. Or <b>Lead</b> to fight as your Commander.' : 'Ctrl+A selects your army; right-click enemies to attack. H to lead as your Commander.';
@@ -329,6 +332,7 @@ function setupGame(mode, diff, civ = 'franks', enemyCiv) {
   }
   g.recount();
   app.ai = new AI(g, 1);
+  g.cycle = app.settings.cycle !== false && !tut; // the tutorial stays sunny
   g.fow = new FogOfWar(g, mode !== 'battle' && app.settings.fog !== false);
   if (tut) { g.tutorial = true; app.ai.nextAttack = 1e9; app.tut = new Tutorial(app); }
   if (mis) { app.campaign = { id: app.missionId || 0, noSave: true }; g.mission = mis; mis.setup(g, app); g.recount(); setTimeout(() => app.toast(`${mis.name}: ${mis.goals[0].t}`, 5), 600); }
@@ -463,12 +467,12 @@ for (const b of document.querySelectorAll('[data-q]')) b.addEventListener('click
 onBtn('bTutSkip', () => app.tut?.skip());
 onBtn('bHelp', () => { $('help').classList.remove('hide'); });
 const openSettings = () => {
-  const S = app.settings; $('sLook').value = S.look; $('sCam').value = S.cam; $('sVol').value = S.vol; $('sMusic').checked = S.music; $('sVoice').checked = S.voice; $('sBig').checked = S.big; $('sAuto').checked = S.auto; $('sFog').checked = S.fog; $('sMapBot').checked = S.mapBot;
+  const S = app.settings; $('sLook').value = S.look; $('sCam').value = S.cam; $('sVol').value = S.vol; $('sMusic').checked = S.music; $('sVoice').checked = S.voice; $('sBig').checked = S.big; $('sAuto').checked = S.auto; $('sFog').checked = S.fog; $('sMapBot').checked = S.mapBot; $('sCycle').checked = S.cycle;
   $('settings').classList.remove('hide');
 };
 onBtn('bSettings', openSettings); onBtn('bSettings2', openSettings);
 onBtn('bSetBack', () => { $('settings').classList.add('hide'); });
-for (const [id, key, num] of [['sLook', 'look', 1], ['sCam', 'cam', 1], ['sVol', 'vol', 1], ['sMusic', 'music'], ['sVoice', 'voice'], ['sBig', 'big'], ['sAuto', 'auto'], ['sFog', 'fog'], ['sMapBot', 'mapBot']])
+for (const [id, key, num] of [['sLook', 'look', 1], ['sCam', 'cam', 1], ['sVol', 'vol', 1], ['sMusic', 'music'], ['sVoice', 'voice'], ['sBig', 'big'], ['sAuto', 'auto'], ['sFog', 'fog'], ['sMapBot', 'mapBot'], ['sCycle', 'cycle']])
   $(id).addEventListener('input', e => { app.settings[key] = num ? +e.target.value : e.target.checked; applySettings(); });
 applySettings();
 // auto-pause when the app goes to the background (phone call, switching apps)
@@ -565,6 +569,7 @@ renderer.setAnimationLoop(() => {
   if (g) emitEffects(dt);
   fx.update(dt);
   const f = app.mode === 'pov' && pov.unit ? pov.unit : rts.focus; // keep the sharp-shadow area centred on the action
+  atmo.update(dt, g?.cycle ? g.env : null, camera); SUN_DIR.copy(atmo.dir);
   sun.target.position.set(f.x, 0, f.z); sun.position.copy(sun.target.position).addScaledVector(SUN_DIR, 110);
   if (marker.visible) { markerT += real; marker.scale.setScalar(1 + markerT * 1.5); marker.material.opacity = 1 - markerT / .7; if (markerT > .7) marker.visible = false; }
   hud.update(real);

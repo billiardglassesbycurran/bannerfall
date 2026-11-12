@@ -344,23 +344,23 @@ export function buildWater(Q) {
 }
 
 // ---------------- sky ----------------
-export const SKY = { top: { value: new THREE.Color(0x3d78c4) }, mid: { value: new THREE.Color(0x9cc3e6) }, bot: { value: new THREE.Color(0xdfe6e3) }, sun: { value: new THREE.Vector3(-.5, .62, .35).normalize() }, tCloud: CLOUDS, uTime: U.time };
+export const SKY = { top: { value: new THREE.Color(0x3d78c4) }, mid: { value: new THREE.Color(0x9cc3e6) }, bot: { value: new THREE.Color(0xdfe6e3) }, sun: { value: new THREE.Vector3(-.5, .62, .35).normalize() }, glow: { value: new THREE.Color(1, .9, .7) }, dim: { value: 1 }, tCloud: CLOUDS, uTime: U.time };
 export function buildSky() {
   const mat = new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false,
     uniforms: SKY,
     vertexShader: 'varying vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); gl_Position.z = gl_Position.w; }',
-    fragmentShader: `uniform vec3 top, mid, bot, sun; uniform sampler2D tCloud; uniform float uTime; varying vec3 vD;
+    fragmentShader: `uniform vec3 top, mid, bot, sun, glow; uniform float dim; uniform sampler2D tCloud; uniform float uTime; varying vec3 vD;
       void main(){ vec3 d = normalize(vD); float y = d.y; vec3 c = y > 0.0 ? mix(mid, top, pow(clamp(y*1.6,0.0,1.0), .8)) : bot;
         c = mix(bot, c, smoothstep(-0.02, 0.18, y));
-        float s = max(dot(d, sun), 0.0); c += vec3(1.0,.9,.7) * (pow(s, 600.0) * 2.0 + pow(s, 12.0) * .25);
+        float s = max(dot(d, sun), 0.0); c += glow * (pow(s, 600.0) * 2.0 + pow(s, 12.0) * .25);
         // drifting clouds projected on a high dome, lit from the sun side
         if (y > 0.0) {
           vec2 uv = d.xz / (y + 0.12) * 0.32 + vec2(uTime * 0.0035, uTime * 0.0018);
           float n = texture2D(tCloud, uv).r * 0.65 + texture2D(tCloud, uv * 2.7 + 0.3).r * 0.35;
           float cl = smoothstep(0.48, 0.78, n) * smoothstep(0.0, 0.25, y);
           vec3 cc = mix(vec3(0.62, 0.66, 0.72), vec3(1.05, 1.02, 0.98), smoothstep(0.5, 0.95, n) * 0.6 + pow(s, 4.0) * 0.4);
-          c = mix(c, cc, cl * 0.9);
+          c = mix(c, cc * dim, cl * 0.9);
         }
         gl_FragColor = vec4(c, 1.0); }`,
   });

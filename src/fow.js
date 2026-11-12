@@ -49,8 +49,9 @@ export class FogOfWar {
   }
   refresh() {
     const g = this.g; this.vis.fill(0);
-    for (const u of g.units) if (u.alive && u.team === 0) this.stamp(u.x, u.z, sightOf(u));
-    for (const b of g.blds) if (b.alive && b.team === 0) this.stamp(b.x, b.z, sightOf(b));
+    const k = g.sightMul?.() ?? 1;
+    for (const u of g.units) if (u.alive && u.team === 0) this.stamp(u.x, u.z, sightOf(u) * k);
+    for (const b of g.blds) if (b.alive && b.team === 0) this.stamp(b.x, b.z, sightOf(b) * Math.max(.85, k));
     const raw = this.raw || (this.raw = new Float32Array(S * S)), tmp = this.tmp || (this.tmp = new Float32Array(S * S));
     for (let i = 0; i < S * S; i++) raw[i] = this.vis[i] ? 255 : this.seen[i] ? 115 : 0;
     // soften the edges (3x3 blur) so sight circles look round rather than blocky

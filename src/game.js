@@ -5,6 +5,7 @@ import { N, SIZE, WL, heightAt, groundY, blocked, resCell, cellWalk, navCell, na
 import { findPath, nearestWalkable } from './path.js';
 import { buildingMesh, buildingGeo, arrowGeo, boltGeo, stoneGeo, ringGeo, wakeMaterial, SHIP_LEN, scaffoldGeo } from './models.js';
 import { M } from './geo.js';
+import { stepEnv, isNight } from './sky.js';
 import { angDiff, clamp, dist } from './util.js';
 
 const CARRY = 10, RATE = { f: .9, w: .75, g: .65 };
@@ -33,6 +34,7 @@ function counterMul(a, t) {
 export class Game {
   constructor({ scene, figures, Q, mode, diff, civs = ['franks', 'franks'] }) {
     this.landWalk = [];
+    this.env = { tod: 50, weather: 'clear', wT: 150, cloud: 0, rain: 0, mist: 0 }; this.cycle = true;
     this.civKeys = civs; this.civ = civs.map(k => CIVS[k]); this.statCache = new Map();
     Object.assign(this, { scene, figures, Q, mode, diff }); this.diffD = DIFF[diff] || DIFF[1];
     this.units = []; this.blds = []; this.shots = [];
@@ -145,6 +147,7 @@ export class Game {
   spawnUnit(team, type, x, z) {
     const p = nearestWalkable(x, z, UD[type].ship ? 14 : 10, UD[type].ship ? navCell : cellWalk) || { x, z };
     const d = this.stat(team, type), batch = this.figures.get(team, type);
+    if (!batch.free.length && batch.used >= batch.cap) { const old = this.units.find(o => o.dead && o.batch === batch); if (old) { batch.release(old.slot); this.units.splice(this.units.indexOf(old), 1); } } // make room: clear the oldest body
     const u = {
       id: nextId++, kind: 'unit', type, team, d, x: p.x, z: p.z, y: heightAt(p.x, p.z), yaw: team === 0 ? Math.PI * .75 : -Math.PI * .25,
       hp: d.hp, maxHp: d.hp, task: { type: 'idle' }, path: null, carry: null, cd: 0, swingT: 1, phase: Math.random() * 6, speedNow: 0,
@@ -328,6 +331,15 @@ export class Game {
     if (!best) return false;
     this.attack(u, best, u.task.type === 'attack' || u.task.type === 'amove' ? u.task : null); return true;
   }
+  /** How far troops see right now: less at night and in mist. */
+  sightMul() { if (!this.cycle) return 1; return (isNight(this.env) ? .7 : 1) * (1 - .25 * this.env.mist); }
+  envNews() {
+    if (!this.cycle) return;
+    const n = isNight(this.env), w = this.env.weather;
+    if (this.wasNight !== undefined && n !== this.wasNight) this.toast(n ? 'Night falls. Your troops can\'t see as far.' : 'Dawn breaks.', 3);
+    if (this.wasW !== undefined && w !== this.wasW) { const m = { rain: 'Rain is coming: bows and crossbows are weaker in the wet.', mist: 'Mist rolls in: it\'s hard to see far.', clear: 'The sky clears.' }[w]; if (m) this.toast(m, 3); }
+    this.wasNight = n; this.wasW = w;
+  }
   // ---------------- morale ----------------
   /** Lower a soldier's morale; at zero they break and flee. Commanders, peasants, ships and siege never rout. */
   shake(u, amt) {
@@ -370,6 +382,7 @@ export class Game {
         if (df > 2.2) { m *= 1.5; rear = true; } else if (df > 1.25) m *= 1.2;
       }
       const dh = (src.y || 0) - (t.y || 0); if (dh > 1.2) m *= 1.25; else if (dh < -1.2) m *= .85; // high ground
+      if (src.d.ranged && this.env.rain > .5) m *= .85; // wet bowstrings
       if (t.routed) m *= 1.3; if (src.inspired) m *= 1.12; if (src.cryT > this.time) m *= 1.25; if (src.vet) m *= 1 + .1 * src.vet; if (t.braced && src.d.horse && !src.d.ranged) m *= .6;
     }
     const arm = Math.max(0, (t.d.arm || 0) - (src?.d?.pierce || 0));
@@ -680,7 +693,8 @@ export class Game {
     if (this.over && this.over !== 'continue') { /* keep animating */ }
     this.time += dt;
     this.rebuildHash();
-    if ((this.moraleT = (this.moraleT || 0) + dt) >= 1) { this.moraleT = 0; this.moraleTick(); }
+    if ((this.moraleT = (this.moraleT || 0) + dt) >= 1) { this.moraleT = 0; this.moraleTick(); this.envNews(); }
+    if (this.cycle) stepEnv(this.env, dt);
     this.field?.update(dt); this.fow?.update(dt); if (this.mission && !this.over) { this.mission.tick?.(this, dt); if ((this.misT = (this.misT || 0) + dt) > 1) { this.misT = 0; this.checkEnd(); } }
     for (const b of this.blds) b.nbNow = 0;
     for (const u of this.units) if (u.alive) { if (u.boarded) { u.x = u.boarded.x; u.z = u.boarded.z; continue; } this.updateUnit(u, dt); }
@@ -703,7 +717,7 @@ export class Game {
       if (this.heroRespawn <= 0) { const hall = this.blds.find(b => b.alive && b.team === 0 && b.type === 'hall'); if (hall) { this.hero = this.spawnUnit(0, 'hero', hall.x + 3.5, hall.z + 3.5); this.recount(); this.toast('Your Commander has returned.'); this.onHero?.(this.hero); } }
     }
     // dead unit cleanup
-    for (let i = this.units.length - 1; i >= 0; i--) { const u = this.units[i]; if (u.dead && (u.deathT += dt) > 3) { u.batch.release(u.slot); this.units.splice(i, 1); } }
+    for (let i = this.units.length - 1; i >= 0; i--) { const u = this.units[i]; if (u.dead && (u.deathT += dt) > (u.d.ship ? 4 : 40)) { u.batch.release(u.slot); this.units.splice(i, 1); } } // the fallen stay on the field for a while
     this.blds = this.blds.filter(b => b.alive);
   }
 
@@ -715,7 +729,7 @@ export class Game {
       const sw = u.swingT < .35 ? u.swingT / .35 : 0;
       let tilt = 0, y = u.y;
       if (u.d.ship) { tilt = Math.sin(this.time * 1.1 + u.id) * .035; y += Math.sin(this.time * 1.6 + u.id) * .04 - (u.type === 'fishboat' ? .12 : .28); if (u.dead) { tilt += u.deathT * .2; y -= u.deathT * .7; } } // rocking / sinking
-      else if (u.dead) { tilt = -Math.min(1, u.deathT * 2.5) * Math.PI / 2 * .95; y -= Math.max(0, u.deathT - 1.5) * .6; }
+      else if (u.dead) { tilt = -Math.min(1, u.deathT * 2.5) * Math.PI / 2 * .95; y -= .12 * Math.min(1, u.deathT) + Math.max(0, u.deathT - 37) * .6; }
       if (u.yOver != null) y = u.yOver; // standing on a ship's deck or a building floor
       if (u.d.ranged && !u.d.ship) { // archers raise the bow while engaging and draw in time with their shots
         const t = u.task, engaged = u.aimHold || (t.type === 'attack' && t.t.alive && this.reachDist(u, t.t) <= u.d.rng + .5);

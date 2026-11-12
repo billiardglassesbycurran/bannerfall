@@ -66,6 +66,9 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
 - `src/fow.js` — fog of war: 128² vis/seen grid → DataTexture; darkening is patched into three's fog shader chunks and
   the uniforms are injected via a `Material.prototype.onBeforeCompile` accessor (so it must be imported first in main.js).
   Enemy units/buildings out of sight get `fowHidden`. Off in Battle mode; Settings toggle.
+- `src/sky.js` — day/night (10-min day) and weather (clear/cloudy/rain/mist). Clock lives in `game.env` (`stepEnv`), visuals
+  in `Atmosphere`; night/mist shrink sight (`game.sightMul`), rain weakens ranged. Settings toggle; tutorial stays sunny.
+- `src/campaign.js` — 4 missions (`MISSIONS`: setup/tick/goals/check), progress in localStorage `bf.campaign`, `#mission=N,civ`.
 - `src/battle.js` — Battle mode field: 3 capturable banners, reserves + reinforcement waves, army breaks if all banners held.
 - `src/path.js` — A* pathfinding on the grid (pass a walk function: `cellWalk` for land, `navCell` for ships). `src/ai.js` — enemy AI for Skirmish, Battle, Survival.
 - `src/rts.js` — aerial camera, picking, selection, touch/mouse orders. `src/pov.js` — 1st/3rd person: strike, Follow me,
