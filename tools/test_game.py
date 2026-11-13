@@ -90,7 +90,7 @@ def main():
         page.screenshot(path=str(OUT / 'title.png'))
         page.context.browser.close()
 
-        for mode in ['skirmish', 'battle', 'survival']:
+        for mode in ['skirmish', 'castle', 'battle', 'survival']:
             print(f'Mode: {mode}')
             page, errors = open_game(p, base, f'play={mode},1,romans,norse', **desk)
             check(page.is_visible('#top') and page.is_visible('#bottom'), f'{mode}: game HUD visible')

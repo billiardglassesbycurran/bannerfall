@@ -36,10 +36,10 @@ SWEEP = r"""async () => {
     return names;
   };
   Object.assign(g.T[0], { f: 99999, w: 99999, g: 99999 });
-  await step('advance to Kingdom Age', () => { g.applyTech(0, 'feudal'); g.applyTech(0, 'kingdom'); });
+  await step('advance to Castle Age', () => { g.applyTech(0, 'feudal'); g.applyTech(0, 'kingdom'); g.applyTech(0, 'castleage'); g.T[0].s = 99999; });
   const h = g.blds[0], placed = {};
   const place = t => { for (let r = 6; r < 30; r++) for (let k = 0; k < 24; k++) { const cx = Math.round(h.x + Math.cos(k / 24 * 6.28 + r) * r - 2), cz = Math.round(h.z + Math.sin(k / 24 * 6.28 + r) * r - 2); if (g.canPlace(t, cx, cz)) return g.placeBuilding(0, t, cx, cz, true); } };
-  for (const t of ['house', 'farm', 'store', 'barracks', 'range', 'stable', 'workshop', 'smith', 'tower', 'wall', 'gate']) await step('place ' + t, () => { placed[t] = place(t); if (!placed[t]) throw new Error('no room for ' + t); });
+  for (const t of ['house', 'farm', 'store', 'barracks', 'range', 'stable', 'workshop', 'smith', 'tower', 'wall', 'gate', 'castle']) await step('place ' + t, () => { placed[t] = place(t); if (!placed[t]) throw new Error('no room for ' + t); });
   await step('place dock', () => { for (let cz = 4; cz < 124 && !placed.dock; cz++) for (let cx = 4; cx < 124 && !placed.dock; cx++) if (g.canPlace('dock', cx, cz)) placed.dock = g.placeBuilding(0, 'dock', cx, cz, true); });
   g.recount();
   const report = { buildings: {}, units: {} };

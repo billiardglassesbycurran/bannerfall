@@ -147,7 +147,7 @@ export class GuestSync {
     const g = this.a.game; if (!g) return;
     g.time = m.t; Object.assign(g.env, m.env);
     m.T.forEach((T, i) => Object.assign(g.T[i], { ...T, techs: new Set(T.techs) }));
-    if (m.T[0].age !== this.age0) { this.age0 = m.T[0].age; g.refreshLooks(0); } if (m.T[1].age !== this.age1) { this.age1 = m.T[1].age; g.refreshLooks(1); }
+    if (m.T[0].age !== this.age0) { this.age0 = m.T[0].age; g.refreshLooks(0); g.figures.setAge(0, m.T[0].age); } if (m.T[1].age !== this.age1) { this.age1 = m.T[1].age; g.refreshLooks(1); g.figures.setAge(1, m.T[1].age); }
     // resources
     for (const [id, x, z, yaw, hp, mv] of m.an || []) { const a = animals.find(a => a.id === id); if (a) Object.assign(a, { x, z, yaw, hp, moving: !!mv, y: undefined }); }
     for (const [id, a] of m.r) { const r = resources.find(r => r.id === id); if (!r) continue; if (a <= 0 && r.alive) takeRes(r, r.amt + 1); else r.amt = a; }

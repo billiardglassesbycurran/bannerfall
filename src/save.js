@@ -40,7 +40,7 @@ export function applySave(app, d) {
   // remove the starting setup the mode created, then rebuild everything from the save
   for (const u of [...g.units]) { u.batch.release(u.slot); } g.units.length = 0;
   for (const b of [...g.blds]) g.unplace(b); g.blds.length = 0;
-  d.T.forEach((T, i) => Object.assign(g.T[i], { ...T, techs: new Set(T.techs) }));
+  d.T.forEach((T, i) => { Object.assign(g.T[i], { ...T, techs: new Set(T.techs) }); g.figures?.setAge?.(i, g.T[i].age); });
   g.statCache.clear(); g.time = d.time;
   const blds = d.blds.map(s => { const b = g.placeBuilding(s.team, s.type, s.cx, s.cz, s.built); Object.assign(b, { progress: s.progress, hp: s.hp, food: s.food, queue: s.queue, rally: s.rally }); g.setBuildVisual(b); return b; });
   const byId = new Map(resources.map(r => [r.id, r]));

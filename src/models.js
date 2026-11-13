@@ -505,18 +505,20 @@ const _root = new THREE.Matrix4(), _pm = new THREE.Matrix4(), _rx = new THREE.Ma
 class FigureBatch {
   constructor(scene, team, kind, cap, shadows, style) {
     this.mounted = !!UD[kind].horse; this.archer = !!UD[kind].ranged && !UD[kind].ship && !UD[kind].stone; this.xbow = !!UD[kind].bolt;
-    this.meshes = [];
+    this.meshes = []; this.metal = [];
     this.parts = figureParts(team, kind, style).map(p => {
       const ms = [];
       for (const [geo, mat] of [[p.c, M.cloth], [p.m, M.metal], ...(p.extra || []).map(e => [e.geo, e.mat])]) {
         if (!geo) continue;
-        const m = new THREE.InstancedMesh(geo, mat, cap); m.count = 0; m.frustumCulled = false; m.castShadow = shadows;
+        const m = new THREE.InstancedMesh(geo, mat, cap); m.count = 0; m.frustumCulled = false; m.castShadow = shadows; if (mat === M.metal) this.metal.push(m);
         m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); scene.add(m); ms.push(m); this.meshes.push(m);
       }
       return { ...p, ms };
     });
     this.cap = cap; this.used = 0; this.free = [];
   }
+  /** Tint the weapons and armour (Stone Age bone-and-flint, Bronze, Iron, polished Castle Age steel). */
+  setTint(hex) { this.tint = new THREE.Color(hex); for (const m of this.metal) { for (let i = 0; i < this.cap; i++) m.setColorAt(i, this.tint); m.instanceColor.needsUpdate = true; } }
   alloc() { const i = this.free.length ? this.free.pop() : this.used++; if (i >= this.cap) throw new Error('too many units'); for (const m of this.meshes) m.count = Math.max(m.count, i + 1); return i; }
   release(i) { for (const m of this.meshes) { m.setMatrixAt(i, ZERO); m.instanceMatrix.needsUpdate = true; } this.free.push(i); }
   /** pose: {x,y,z,yaw,scale,hidden,tilt, s (walk swing -0.7..0.7), swing (attack 0..1)} */
@@ -564,11 +566,14 @@ export function figureGroup(team, kind, style = 'franks') {
   });
   return root;
 }
+export const AGE_TINT = [0x9a8a74, 0xe0a466, 0xffffff, 0xf2f6ff];
 export class Figures {
-  constructor(scene, shadows) { this.scene = scene; this.shadows = shadows; this.batches = new Map(); this.styles = ['franks', 'franks']; }
+  constructor(scene, shadows) { this.scene = scene; this.shadows = shadows; this.batches = new Map(); this.styles = ['franks', 'franks']; this.ages = [2, 2]; }
+  /** Each age changes how soldiers' metal gear looks. */
+  setAge(team, age) { this.ages[team] = age; for (const [k, b] of this.batches) if (k.startsWith(String(team))) b.setTint(AGE_TINT[age] ?? 0xffffff); }
   get(team, kind) {
     const k = team + kind; let b = this.batches.get(k);
-    if (!b) { b = new FigureBatch(this.scene, team, kind, kind === 'hero' || kind === 'herohorse' ? 4 : UD[kind].ship || kind === 'catapult' ? 40 : 200, this.shadows, this.styles[team]); this.batches.set(k, b); }
+    if (!b) { b = new FigureBatch(this.scene, team, kind, kind === 'hero' || kind === 'herohorse' ? 4 : UD[kind].ship || kind === 'catapult' ? 40 : 200, this.shadows, this.styles[team]); this.batches.set(k, b); b.setTint(AGE_TINT[this.ages[team]] ?? 0xffffff); }
     return b;
   }
   flush() { for (const b of this.batches.values()) b.flush(); }
@@ -595,8 +600,8 @@ function crenel(b, cx, y, cz, w, d, col = C.stone) {
   for (let i = 0; i < m; i++) for (const s of [-1, 1]) box(b, col, cx + s * w / 2, y, cz - d / 2 + (i + .5) * d / m, .22, .32, d / m * .55);
 }
 /**
- * Building models. look = { age: 0|1|2, fort, guard }: buildings grow from timber-and-thatch (Hamlet Age) to stone and
- * tile (Feudal) to grander, bannered halls (Kingdom); Fortified Hall and Guard Towers are visible upgrades.
+ * Building models. look = { age: 0|1|2, fort, guard }: buildings grow from timber-and-thatch (Stone Age) to stone and
+ * tile (Bronze) to grander, bannered halls (Iron and Castle Age); Fortified Hall and Guard Towers are visible upgrades.
  */
 /**
  * One cell of wall. conn: which neighbours (1 E, 2 S, 4 W, 8 N) it joins, so lines and corners connect.
@@ -731,6 +736,26 @@ export function buildingGeo(kind, team, look = { age: 1 }) {
     box(b, C.wood, .9, 1.4, .9, .12, 2.0, .12); box(b, C.wood, .6, 2.35, .9, .8, .1, .1); b.add(P.cyl(.01, .01, .7, 4), C.linen, .25, 2.0, .9);
     b.add(P.cyl(.22, .25, .5, 10), C.wood, .9, .65, -1.0); b.add(P.cyl(.22, .25, .5, 10), C.wood, 1.25, .65, -.6);
     flag(b, tc, -1.4, .4, 1.4, 2.2);
+  } else if (kind === 'castle') {
+    base(6, .45, C.dstone);
+    // curtain walls with battlements
+    for (const [x, z, w, d] of [[0, -2.55, 5, .55], [0, 2.55, 5, .55], [-2.55, 0, .55, 5], [2.55, 0, .55, 5]]) { box(b, C.stone, x, 1.25, z, w, 2.5, d); }
+    crenel(b, 0, 2.65, 0, 5.4, 5.4);
+    // four round corner towers with pointed roofs and flags
+    for (const [x, z] of [[-2.5, -2.5], [2.5, -2.5], [-2.5, 2.5], [2.5, 2.5]]) {
+      b.add(P.cyl(.8, .9, 3.8, 12), C.stone, x, 1.9, z); b.add(P.cyl(.92, .92, .3, 12), C.dstone, x, 3.85, z);
+      b.add(P.cone(1.0, 1.5, 12), C.tile, x, 4.75, z); flag(b, tc, x, 5.4, z, 1.1);
+      for (let i = 0; i < 3; i++) box(b, 0x2a2018, x + (x > 0 ? .02 : -.02), 1.3 + i * .9, z + (z > 0 ? .85 : -.85), .14, .38, .05); // arrow slits
+    }
+    // gatehouse on the front (+z): two square towers, arch and a team-coloured portcullis banner
+    for (const sx of [-1, 1]) { box(b, C.stone, sx * 1.0, 1.75, 2.75, 1.0, 3.5, 1.0); crenel(b, sx * 1.0, 3.6, 2.75, 1.0, 1.0); }
+    box(b, 0x231a12, 0, .95, 3.06, 1.1, 1.9, .1); box(b, C.stone, 0, 2.3, 2.8, 1.2, .5, .7); box(b, tc, 0, 2.05, 3.17, .7, .9, .03);
+    // the keep in the middle
+    box(b, C.stone, 0, 2.4, -.2, 2.6, 4.8, 2.6); crenel(b, 0, 4.95, -.2, 2.6, 2.6);
+    box(b, C.stone, .95, 3.0, -1.15, .8, 6.0, .8); crenel(b, .95, 6.1, -1.15, .8, .8); flag(b, tc, .95, 6.2, -1.15, 1.8);
+    for (const sx of [-1, 1]) { box(b, tc, sx * .7, 3.2, 1.12, .5, 1.6, .03); box(b, C.gold, sx * .7, 3.6, 1.14, .16, .16, .02); }
+    for (let i = 0; i < 2; i++) for (const sx of [-1, 1]) box(b, 0x2a2018, sx * .6, 2.2 + i * 1.3, 1.12, .3, .5, .04); // windows
+    b.add(P.cyl(.08, .1, .6, 6), C.wood, 0, 2.95, 2.8); // gate winch post
   } else if (kind === 'tower') {
     base(1.9, .3);
     const g = look.guard, H = g ? 5.2 : 4.0, W = g ? 1.6 : 1.4;
@@ -743,7 +768,7 @@ export function buildingGeo(kind, team, look = { age: 1 }) {
   }
   return b.build();
 }
-const BD_SIZE = { wall: 1, gate: 1, hall: 5, house: 2, farm: 3, store: 3, barracks: 4, range: 4, stable: 4, workshop: 4, smith: 3, tower: 2, dock: 3 };
+const BD_SIZE = { wall: 1, gate: 1, castle: 6, hall: 5, house: 2, farm: 3, store: 3, barracks: 4, range: 4, stable: 4, workshop: 4, smith: 3, tower: 2, dock: 3 };
 /** See-through placement preview (green/red) for a building. */
 export function ghostObject(kind, look, mat) {
   const custom = buildingParts(kind, BD_SIZE[kind] || 3);
@@ -770,14 +795,14 @@ export const arrowGeo = new Builder().add(P.box, 0x8a6a3a, 0, 0, 0, 0, 0, 0, .02
 export const ringGeo = new THREE.RingGeometry(.45, .56, 28).rotateX(-Math.PI / 2);
 
 // ---------------- building interiors (you can walk inside in 1st/3rd person) ----------------
-export const ENTERABLE = { hall: 'Town Hall', house: 'House', barracks: 'Barracks', range: 'Archery Range', stable: 'Stable', smith: 'Blacksmith', store: 'Storehouse', workshop: 'Siege Workshop', tower: 'Watchtower' };
+export const ENTERABLE = { castle: 'Castle', hall: 'Town Hall', house: 'House', barracks: 'Barracks', range: 'Archery Range', stable: 'Stable', smith: 'Blacksmith', store: 'Storehouse', workshop: 'Siege Workshop', tower: 'Watchtower' };
 /**
  * Room for a building, in its local space: floor at y=0, door in the +z wall.
  * Returns { geo, W, D, H, lights: [[x,y,z]], fires: [[x,y,z]] }.
  */
 export function interiorGeo(kind, team) {
-  const S = BD_SIZE[kind] || 3, W = S - .3, D = S - .3, H = kind === 'hall' ? 3.4 : kind === 'tower' ? 3.6 : 2.6, tc = TEAM[team], b = new Builder(), lights = [], fires = [];
-  const stoneRoom = kind === 'hall' || kind === 'barracks' || kind === 'smith' || kind === 'tower', wallC = stoneRoom ? C.stone : C.plaster;
+  const S = kind === 'castle' ? 4.2 : BD_SIZE[kind] || 3, W = S - .3, D = S - .3, H = kind === 'hall' || kind === 'castle' ? 3.6 : kind === 'tower' ? 3.6 : 2.6, tc = TEAM[team], b = new Builder(), lights = [], fires = [];
+  const stoneRoom = kind === 'hall' || kind === 'castle' || kind === 'barracks' || kind === 'smith' || kind === 'tower', wallC = stoneRoom ? C.stone : C.plaster;
   b.add(P.box, kind === 'stable' || kind === 'workshop' || kind === 'smith' ? C.dirt : C.wood, 0, -.05, 0, 0, 0, 0, W + .3, .1, D + .3); // floor
   box(b, wallC, 0, H / 2, -D / 2, W, H, .15); for (const sx of [-1, 1]) box(b, wallC, sx * W / 2, H / 2, 0, .15, H, D);
   for (const sx of [-1, 1]) box(b, wallC, sx * (W / 4 + .3), H / 2, D / 2, W / 2 - .6, H, .15); box(b, wallC, 0, H - (H - 2.1) / 2, D / 2, 1.2, H - 2.1, .15); // front wall + doorway

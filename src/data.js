@@ -36,19 +36,21 @@ export const BD = {
   smith:    { age: 1, name: 'Blacksmith', hp: 650, size: 3, cost: { w: 120 }, time: 22, arm: 2, desc: 'Researches better weapons and armour' },
   wall:     { name: 'Wall', hp: 420, size: 1, cost: { w: 4 }, time: 3, arm: 6, wall: 1, desc: 'Blocks enemies. Tap the start, then the end, to build a whole line' },
   gate:     { name: 'Gate', hp: 700, size: 1, cost: { w: 25 }, time: 8, arm: 6, wall: 1, gate: 1, desc: 'Your troops pass, enemies can\'t. Place it on your own wall' },
+  castle:   { age: 3, name: 'Castle', hp: 5000, size: 6, cost: { w: 400, s: 650, g: 300 }, time: 90, trains: ['knight', 'crossbow'], pop: 15, drop: 0, atk: { dmg: 18, rng: 13, cd: .9 }, arm: 8, one: 1, desc: 'The mightiest building: 5000 hit points, rains arrows, trains your unique unit, knights and crossbowmen. One per side' },
   tower:    { age: 1, name: 'Watchtower', hp: 600, size: 2, cost: { w: 50, s: 100 }, time: 20, atk: { dmg: 11, rng: 11, cd: 1.4 }, arm: 4, desc: 'Shoots arrows at enemies' },
   dock:     { name: 'Dock', hp: 900, size: 3, cost: { w: 150 }, time: 22, trains: ['fishboat', 'transport', 'warship'], drop: 1, dock: 1, arm: 2, desc: 'Build on the shore. Builds ships, stores fish' },
 };
 export const BUILD_LIST = ['house', 'farm', 'store', 'barracks', 'range', 'stable', 'workshop', 'smith', 'tower', 'dock'];
 export const BUILD_ECO = ['house', 'farm', 'store', 'dock', 'smith', 'tower', 'wall', 'gate'];
-export const BUILD_MIL = ['barracks', 'range', 'stable', 'workshop', 'tower', 'wall', 'gate'];
+export const BUILD_MIL = ['barracks', 'range', 'stable', 'workshop', 'tower', 'wall', 'gate', 'castle'];
 
 // ---------------- ages & technologies ----------------
-export const AGES = ['Hamlet Age', 'Feudal Age', 'Kingdom Age'];
+export const AGES = ['Stone Age', 'Bronze Age', 'Iron Age', 'Castle Age'];
 // at: building that researches it · age: age needed · req: tech needed first · eff: what it does (applied in game.js)
 export const TECH = {
-  feudal:    { name: 'Feudal Age', at: 'hall', cost: { f: 400 }, time: 40, age: 0, toAge: 1, desc: 'Advance! Unlocks Archery Range, Stable, Blacksmith, Watchtower, warships and new upgrades' },
-  kingdom:   { name: 'Kingdom Age', at: 'hall', cost: { f: 700, g: 250 }, time: 55, age: 1, toAge: 2, desc: 'Advance! Unlocks Siege Workshop, knights, crossbows, horse archers, your unique unit, top upgrades' },
+  feudal:    { name: 'Bronze Age', at: 'hall', cost: { f: 400 }, time: 40, age: 0, toAge: 1, desc: 'Advance! Bronze weapons and armour. Unlocks Archery Range, Stable, Blacksmith, Watchtower, warships and new upgrades' },
+  castleage: { name: 'Castle Age', at: 'hall', req: 'kingdom', cost: { f: 1000, g: 600, s: 300 }, time: 70, age: 2, toAge: 3, desc: 'Advance! Polished steel, and the mighty Castle. Unlocks the Castle and the last, strongest upgrades' },
+  kingdom:   { name: 'Iron Age', at: 'hall', cost: { f: 700, g: 250 }, time: 55, age: 1, toAge: 2, desc: 'Advance! Iron weapons and armour. Unlocks Siege Workshop, knights, crossbows, horse archers, your unique unit, top upgrades' },
   watch:     { name: 'Town Watch', at: 'hall', cost: { f: 60 }, time: 15, age: 0, eff: { cls: { civ: { hpAdd: 15 } } }, desc: 'Peasants +15 hit points' },
   wheelbarrow: { name: 'Wheelbarrow', at: 'hall', cost: { f: 150, w: 60 }, time: 25, age: 1, eff: { gatherAll: 1.15, carry: 4 }, desc: 'Peasants gather 15% faster and carry more' },
   handcart:  { name: 'Handcart', at: 'hall', req: 'wheelbarrow', cost: { f: 300, w: 150 }, time: 35, age: 2, eff: { gatherAll: 1.15, carry: 4 }, desc: 'Peasants gather another 15% faster and carry more' },
@@ -71,6 +73,10 @@ export const TECH = {
   marksmen:  { name: 'Marksmen', at: 'range', cost: { w: 120, g: 90 }, time: 30, age: 2, eff: { unit: { archer: { hp: 1.2, dmg: 1 }, crossbow: { hp: 1.2, dmg: 2 } } }, desc: 'Archers and crossbowmen +20% hit points and attack' },
   chivalry:  { name: 'Chivalry', at: 'stable', cost: { f: 200, g: 150 }, time: 40, age: 2, eff: { unit: { knight: { hp: 1.2 }, lightcav: { hp: 1.25, dmg: 2 } } }, desc: 'Knights and light cavalry tougher and stronger' },
   elite:     { name: 'Elite Guard', at: 'unique', cost: { f: 300, g: 250 }, time: 45, age: 2, eff: { elite: 1 }, desc: 'Your unique unit +25% hit points and attack' },
+  champions: { name: 'Champions', at: 'barracks', req: 'pikemen', cost: { f: 300, g: 200 }, time: 45, age: 3, eff: { unit: { sword: { hp: 1.3, dmg: 4 }, spear: { hp: 1.2, dmg: 2 } } }, desc: 'Swordsmen and spearmen: +30%/+20% hit points and much more attack' },
+  paladins:  { name: 'Paladins', at: 'stable', req: 'chivalry', cost: { f: 350, g: 250 }, time: 50, age: 3, eff: { unit: { knight: { hp: 1.3, dmg: 4 }, lightcav: { hp: 1.2, dmg: 2 } } }, desc: 'Knights +30% hit points and +4 attack; light cavalry tougher' },
+  royalbows: { name: 'Royal Bowmen', at: 'range', req: 'marksmen', cost: { w: 250, g: 200 }, time: 45, age: 3, eff: { unit: { archer: { hp: 1.25, dmg: 2 }, crossbow: { hp: 1.25, dmg: 3 } } }, desc: 'Archers and crossbowmen +25% hit points and more attack' },
+  blastfurnace: { name: 'Blast Furnace', at: 'smith', req: 'ironcast', cost: { f: 300, g: 220 }, time: 45, age: 3, eff: { melee: 2, armor: 1 }, desc: 'Infantry and cavalry +2 attack and +1 armour' },
   guardtower:{ name: 'Guard Towers', at: 'tower', cost: { s: 150, g: 80 }, time: 35, age: 2, eff: { towerUp: 1 }, desc: 'Watchtowers become stone Guard Towers: +60% hit points, +4 attack, +2 range' },
 };
 export const RES = { f: 'Food', w: 'Wood', g: 'Gold' };
@@ -108,13 +114,14 @@ export const CIVS = {
 export const CIV_LIST = Object.keys(CIVS);
 
 export const DIFF = [
-  { name: 'Squire', a1: 320, a2: 760, gather: .8, first: 330, every: 170, peas: 12, mix: { inf: .5, arch: .3, cav: .2, siege: 0 }, waveMul: .7 },
-  { name: 'Knight', a1: 240, a2: 540, gather: 1.1, first: 250, every: 140, peas: 16, mix: { inf: .4, arch: .3, cav: .25, siege: .05 }, waveMul: 1 },
-  { name: 'Warlord', a1: 170, a2: 400, gather: 1.6, first: 190, every: 115, peas: 20, mix: { inf: .35, arch: .3, cav: .25, siege: .1 }, waveMul: 1.4 },
+  { name: 'Squire', a1: 320, a2: 760, a3: 1500, gather: .8, first: 330, every: 170, peas: 12, mix: { inf: .5, arch: .3, cav: .2, siege: 0 }, waveMul: .7 },
+  { name: 'Knight', a1: 240, a2: 540, a3: 1100, gather: 1.1, first: 250, every: 140, peas: 16, mix: { inf: .4, arch: .3, cav: .25, siege: .05 }, waveMul: 1 },
+  { name: 'Warlord', a1: 170, a2: 400, a3: 820, gather: 1.6, first: 190, every: 115, peas: 20, mix: { inf: .35, arch: .3, cav: .25, siege: .1 }, waveMul: 1.4 },
 ];
 
 export const MODES = {
   tutorial: { name: 'Tutorial', desc: 'New to Bannerfall? A guided first game: gather, build, train, fight, and ride into battle. The enemy waits until you are ready.' },
+  castle:   { name: 'Castle', desc: 'Race to the Castle Age and build a Castle, then keep it standing for 5 minutes to win. Or wipe the enemy out. You start in the Bronze Age with extra resources.' },
   campaign: { name: 'Campaign', desc: 'Four missions: muster an army, hold the ford, storm the highland pass, and face the Warlord.' },
   online: { name: 'Online', desc: 'Play against a friend over the internet: one of you hosts and gets a code, the other joins with it. Skirmish rules.' },
   skirmish: { name: 'Skirmish', desc: 'Build a town, gather food, wood and gold, raise an army and burn down the enemy Town Hall.' },

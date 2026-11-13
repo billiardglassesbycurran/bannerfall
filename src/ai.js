@@ -19,7 +19,7 @@ export class AI {
       for (const u of this.my(u => u.task.type === 'idle' && u.d.acq && !u.routed)) { let t = null, bd = 22; for (const f of this.g.units) if (f.alive && f.team !== this.team) { const d = dist(f, u); if (d < bd) { bd = d; t = f; } } if (t) this.g.amove(u, t.x, t.z); }
       return;
     }
-    if (this.g.mode === 'skirmish') this.skirmish();
+    if (this.g.mode === 'skirmish' || this.g.mode === 'castle') this.skirmish();
     else if (this.g.mode === 'battle') this.battle();
     else this.survival();
   }
@@ -74,25 +74,33 @@ export class AI {
     const peas = this.my(u => u.type === 'peasant'), mil = this.my(u => u.type !== 'peasant' && u.type !== 'hero' && u.d.dmg > 0);
     const time = g.time, wantPeas = Math.min(this.D.peas + Math.floor(time / 90), 30);
     // when it's time to advance an age, save up for it: fewer new peasants/soldiers, more food gathering
-    const ageKey = T.age === 0 ? 'feudal' : T.age === 1 ? 'kingdom' : null, ageCost = ageKey && TECH[ageKey].cost;
-    const saving = !!ageKey && time > (T.age === 0 ? this.D.a1 : this.D.a2) && !g.queuedTech(this.team, ageKey);
-    const short = saving && (T.f < (ageCost.f || 0) || T.g < (ageCost.g || 0));
-    if (peas.length < (short ? Math.min(wantPeas, T.age === 0 ? 12 : 18) : wantPeas) && hall.queue.length < 2 && T.pop < T.cap) g.train(hall, 'peasant');
+    const castleMode = g.mode === 'castle';
+    const ageKey = ['feudal', 'kingdom', 'castleage'][T.age] || null, ageCost = ageKey && TECH[ageKey].cost;
+    const ageAt = castleMode ? [0, 200, 480][T.age] * (1.3 - g.diff * .15) : [this.D.a1, this.D.a2, this.D.a3 || 1100][T.age];
+    const needCastle = castleMode && T.age >= 3 && !g.blds.some(b => b.alive && b.team === this.team && b.type === 'castle'); // Castle mode: save up for the Castle
+    const goal = needCastle ? BD.castle.cost : ageCost;
+    const saving = needCastle || (!!ageKey && time > ageAt && !g.queuedTech(this.team, ageKey) && !T.techs.has(ageKey));
+    const short = saving && (T.f < (goal.f || 0) || T.g < (goal.g || 0) || (T.s || 0) < (goal.s || 0) || T.w < (goal.w || 0));
+    const nPeas = this.my(u => u.type === 'peasant').length;
+    if (saving && !short && !needCastle && nPeas >= (T.age === 0 ? 7 : 12)) g.research(hall, ageKey);
+    if (needCastle && !short) this.tryBuild('castle', hall); // advance first, before spending on anything else
+    if (peas.length < (short && !castleMode ? Math.min(wantPeas, T.age === 0 ? 12 : 18) : castleMode ? (short ? Math.min(24, wantPeas) : Math.min(34, wantPeas + 6)) : wantPeas) && hall.queue.length < 2 && T.pop < T.cap) g.train(hall, 'peasant');
     // gatherer balance
     const count = { f: 0, w: 0, g: 0, s: 0 };
     for (const p of peas) { const tt = p.task; if (tt.type === 'gather') count[tt.res.rt]++; else if (tt.type === 'farm') count.f++; else if (tt.type === 'return' && tt.back?.res) count[tt.back.res.rt]++; }
     const building = t => g.blds.some(b => b.alive && b.team === this.team && b.type === t && !b.built);
     const nOf = t => g.blds.filter(b => b.alive && b.team === this.team && b.type === t).length;
     const hasBarracks = g.blds.some(b => b.alive && b.team === this.team && b.type === 'barracks');
-    const want0 = short ? (ageCost.g && T.g < ageCost.g ? { f: .5, w: .15, g: .35 } : { f: .6, w: .35, g: .05 }) : hasBarracks ? (T.age ? { f: .34, w: .38, g: .2, s: .08 } : { f: .4, w: .46, g: .1, s: .04 }) : { f: .5, w: .45, g: .05 };
+    const want0 = short ? (goal.s && (T.s || 0) < goal.s ? { f: .25, w: goal.w && T.w < goal.w ? .3 : .15, g: .25, s: .3 } : goal.g && T.g < goal.g ? { f: .5, w: .15, g: .35 } : { f: .6, w: .35, g: .05 }) : hasBarracks ? (T.age ? { f: .34, w: .38, g: .2, s: .08 } : { f: .4, w: .46, g: .1, s: .04 }) : { f: .5, w: .45, g: .05 };
     const want = { s: 0, ...want0 }; // stone: for towers and stone upgrades
+    if (castleMode && T.age >= 2 && !short) { want.s = Math.max(want.s, .2); want.g = Math.max(want.g, .22); }
     // react to what's piling up and what's running out: shift workers from a rich resource to a scarce one
     if (!short) { const st = { f: T.f, w: T.w, g: T.g, s: T.s || 0 }; for (const k of ['f', 'w', 'g', 's']) { if (st[k] > 450) want[k] *= .4; if (st[k] < 80 && want[k]) want[k] *= 1.6; } const tot = want.f + want.w + want.g + want.s; for (const k of ['f', 'w', 'g', 's']) want[k] /= tot; }
-    if (!short && (this.shiftT = (this.shiftT || 0) + 1) % 20 === 0) {
+    if ((this.shiftT = (this.shiftT || 0) + 1) % 20 === 0) {
       const rich = ['f', 'w', 'g', 's'].find(k => T[k] > 450), poor = ['w', 'f', 'g'].find(k => T[k] < 100 && k !== rich);
       if (rich && poor) for (const u of peas.filter(u => (u.task.type === 'gather' && u.task.res.rt === rich) || (rich === 'f' && u.task.type === 'farm')).slice(0, 3)) { if (u.task.type === 'farm' && u.task.b) u.task.b.farmer = null; g.setTask(u, { type: 'idle' }); }
     }
-    if (short && (this.rebalT = (this.rebalT || 0) + 1) % 15 === 0) { const wood = peas.filter(u => u.task.type === 'gather' && u.task.res.rt === 'w'); for (const u of wood.slice(0, Math.ceil(wood.length / 3))) g.setTask(u, { type: 'idle' }); } // move some woodcutters to food
+    if (short && (!goal.w || T.w >= goal.w) && (this.rebalT = (this.rebalT || 0) + 1) % 15 === 0) { const wood = peas.filter(u => u.task.type === 'gather' && u.task.res.rt === 'w'); for (const u of wood.slice(0, Math.ceil(wood.length / 3))) g.setTask(u, { type: 'idle' }); } // move some woodcutters to food
     for (const p of peas) {
       if (p.task.type !== 'idle') continue;
       const n = peas.length || 1; let rt = 'f', worst = 1e9;
@@ -118,11 +126,11 @@ export class AI {
       const near = stores.some(b => Math.hypot(b.x - r.x, b.z - r.z) < 11);
       if (!near && g.afford(this.team, BD.store.cost) && nOf('store') < 3) { const sp = this.findSpot('store', r, 2, 9); if (sp) { const ps = peas.filter(u => u.task.type === 'gather' && u.task.res.rt === rt).sort((a, b) => dist(a, r) - dist(b, r)).slice(0, 2); g.startBuilding(this.team, 'store', sp[0], sp[1], ps.length ? ps : peas.slice(0, 1)); } break; }
     }
-    if (hasBarracks && time > 200 && nOf('range') === 0) this.tryBuild('range', hall);
-    if (hasBarracks && this.g.diff >= 1 && time > 300 && nOf('stable') === 0) this.tryBuild('stable', hall);
-    if (nOf('range') && this.g.diff >= 1 && time > 520 && nOf('workshop') === 0) this.tryBuild('workshop', hall);
+    if (!short && hasBarracks && time > 200 && nOf('range') === 0) this.tryBuild('range', hall);
+    if (!short && hasBarracks && this.g.diff >= 1 && time > 300 && nOf('stable') === 0) this.tryBuild('stable', hall);
+    if (!short && nOf('range') && this.g.diff >= 1 && time > 520 && nOf('workshop') === 0) this.tryBuild('workshop', hall);
     // navy: a dock on the river, fishing boats for food, a few warships
-    if (this.g.diff >= 1 && time > 330 && nOf('dock') === 0 && !this.noDock && g.afford(this.team, BD.dock.cost)) {
+    if (!short && this.g.diff >= 1 && time > 330 && nOf('dock') === 0 && !this.noDock && g.afford(this.team, BD.dock.cost)) {
       const sp = this.findDockSpot(hall);
       if (!sp) this.noDock = true;
       else { const ps = this.my(u => u.type === 'peasant').sort((a, b) => dist(a, hall) - dist(b, hall)).slice(0, 2); g.startBuilding(this.team, 'dock', sp[0], sp[1], ps); }
@@ -132,11 +140,11 @@ export class AI {
       const nf = this.my(u => u.type === 'fishboat').length, nw = this.my(u => u.type === 'warship').length;
       if (nf < 2 + this.g.diff) g.train(dock, 'fishboat'); else if (nw < this.g.diff && T.g > 100) g.train(dock, 'warship');
     }
-    if (hasBarracks && time > 260 && nOf('tower') < this.g.diff + 1 && T.g > 120 && g.afford(this.team, BD.tower.cost)) { // towers guard the gold mines and the road in
+    if (!short && hasBarracks && time > 260 && nOf('tower') < this.g.diff + 1 && T.g > 120 && g.afford(this.team, BD.tower.cost)) { // towers guard the gold mines and the road in
       const mine = g.nearestRes(hall.x, hall.z, 'g', 30), at = nOf('tower') % 2 === 0 && mine ? mine : this.rally(hall), sp = this.findSpot('tower', at, 3, 12);
       if (sp) { const ps = this.my(u => u.type === 'peasant').sort((a, b) => dist(a, at) - dist(b, at)).slice(0, 2); g.startBuilding(this.team, 'tower', sp[0], sp[1], ps); }
     }
-    if ((time > 480 || (T.f > 600 && T.w > 200)) && nOf('barracks') < 1 + this.g.diff) this.tryBuild('barracks', hall);
+    if (!short && (time > 480 || (T.f > 600 && T.w > 200)) && nOf('barracks') < 1 + this.g.diff) this.tryBuild('barracks', hall);
     // training military
     const threatNear = g.nearestEnemy({ x: hall.x, z: hall.z, team: this.team }, 26, false);
     if (T.pop < T.cap && (!short || threatNear)) for (const b of g.blds) {
@@ -149,14 +157,16 @@ export class AI {
       for (const [t] of ranked) if (g.train(b, t) === 'ok') break;
     }
     // advance through the ages, then research upgrades while keeping a reserve
-    if (saving && peas.length >= (T.age === 0 ? 7 : 12)) g.research(hall, ageKey);
+    if (saving && !needCastle && peas.length >= (T.age === 0 ? 7 : 12)) g.research(hall, ageKey);
+    // the Castle: in Castle mode it's the whole point; otherwise a late-game luxury
+    if (T.age >= 3 && !g.blds.some(b => b.alive && b.team === this.team && b.type === 'castle') && (castleMode || time > 1500 || T.s > 900) && g.afford(this.team, BD.castle.cost)) this.tryBuild('castle', hall);
     if (!short && !g.queuedTech(this.team, 'feudal') && !g.queuedTech(this.team, 'kingdom') && (this.techT = (this.techT || 0) + 1) % 6 === 0) {
       const pri = ['watch', 'wheelbarrow', 'axe', 'forging', 'fletching', 'chainmail', 'goldmining', 'plough', 'veterans', 'masonry', 'handcart', 'ironcast', 'bodkin', 'plate', 'pikemen', 'marksmen', 'chivalry', 'elite', 'guardtower', 'fortify', 'gillnets', 'careening'];
       outer: for (const k of pri) for (const b of g.blds) if (b.alive && b.built && b.team === this.team && b.queue.length === 0 && g.techsFor(b).includes(k)) {
         const c = TECH[k].cost; if (T.f >= (c.f || 0) + 150 && T.w >= (c.w || 0) + 80 && T.g >= (c.g || 0) + 60 && g.research(b, k) === 'ok') break outer;
       }
     }
-    if (time > 280 && nOf('smith') === 0 && T.age >= 1) this.tryBuild('smith', hall);
+    if (!short && time > 280 && nOf('smith') === 0 && T.age >= 1) this.tryBuild('smith', hall);
     this.defend(hall, mil);
     this.army(hall, mil);
     if (g.diff >= 1) { this.raid(hall); this.scout(hall); }
@@ -201,8 +211,11 @@ export class AI {
     const army = mil.filter(u => !u.raider && !u.scout && !u.d.ship && !fast.includes(u)); // a few riders stay back for raids
     if (!this.attacking) {
       for (const u of army) if (u.task.type === 'idle' && Math.hypot(u.x - R.x, u.z - R.z) > 7) g.amove(u, R.x + (Math.random() - .5) * 6, R.z + (Math.random() - .5) * 6);
-      if (time < this.nextAttack || army.length < 4) return;
+      const theirCastle = g.mode === 'castle' && g.blds.find(b => b.alive && b.built && b.team !== this.team && b.type === 'castle');
+      if (theirCastle && army.length >= 3) { this.attacking = true; this.target = theirCastle; this.wave++; g.toast('The enemy is storming your Castle!', 3); for (const h of this.my(u => u.type === 'hero')) h.inArmy = true; }
+      else if (time < this.nextAttack || army.length < 4) return;
       const mine = this.power(army), theirs = this.power(this.foeMil());
+      if (this.attacking) { /* already storming a castle */ } else {
       if (!this.waitFrom) this.waitFrom = time;
       if (g.diff >= 1 && mine < theirs * (g.diff >= 2 ? 1.0 : 1.15) && time - this.waitFrom < 150) { this.nextAttack = time + 25; return; } // not strong enough yet: wait (at most 2½ min) and build up
       this.waitFrom = 0;
@@ -210,15 +223,16 @@ export class AI {
       this.target = g.diff >= 1 ? this.weakSpot(hall) : this.attackTarget(hall);
       if (this.wave >= 2) for (const h of this.my(u => u.type === 'hero')) h.inArmy = true;
       g.toast('The enemy army is marching on you!');
-    }
+    } }
     const force = [...army, ...this.my(u => u.type === 'hero' && u.inArmy)];
     if (!force.length) { this.attacking = false; return; }
+    { const c = g.mode === 'castle' && g.blds.find(b => b.alive && b.built && b.team !== this.team && b.type === 'castle'); if (c) this.target = c; } // a Castle must fall
     if (!this.target?.alive) this.target = g.diff >= 1 ? this.weakSpot(hall) : this.attackTarget(hall);
     if (!this.target) { this.attacking = false; return; }
     // losing badly near the fight? fall back to regroup (not on Squire)
     const C = { x: force.reduce((a, u) => a + u.x, 0) / force.length, z: force.reduce((a, u) => a + u.z, 0) / force.length };
     const near = this.foeMil().filter(u => Math.hypot(u.x - C.x, u.z - C.z) < 16);
-    if (g.diff >= 1 && near.length >= 3 && this.power(force) < this.power(near) * .45) {
+    if (g.diff >= 1 && near.length >= 3 && this.power(force) < this.power(near) * .45 && this.target?.type !== 'castle') {
       this.attacking = false; this.nextAttack = time + 45;
       for (const u of force) { u.inArmy = false; if (!u.routed) g.moveTo(u, R.x + (Math.random() - .5) * 6, R.z + (Math.random() - .5) * 6); }
       if (this.team === 1) g.toast('The enemy falls back to regroup!', 2.5); return;

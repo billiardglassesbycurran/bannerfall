@@ -72,6 +72,9 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
 - `src/net.js` — online 1v1 over WebRTC (PeerJS 1.5.4 from jsDelivr, loaded on demand). Host runs the game (`HostSync`:
   10 Hz snapshots, team-swapped); guest is a puppet (`GuestSync`: `game.puppet`, game methods in `RPC` forwarded to the host).
   `?loop` in the URL = two-tab test link (BroadcastChannel) used by test_game.py; the sandbox here blocks real WebRTC.
+- Ages: `AGES` = Stone, Bronze, Iron, Castle (tech keys `feudal`, `kingdom`, `castleage`); soldiers' metal gear is tinted per
+  age (`AGE_TINT`, `Figures.setAge`). Castle (BD.castle, Castle Age, one per side). Castle mode (`mode 'castle'`): skirmish rules,
+  Bronze start, win by holding a built Castle `CASTLE_HOLD` (300 s) or eliminating the enemy; AI saves for ages/castle (`goal`).
 - `src/battle.js` — Battle mode field: 3 capturable banners, reserves + reinforcement waves, army breaks if all banners held.
 - `src/path.js` — A* pathfinding on the grid (pass a walk function: `cellWalk` for land, `navCell` for ships). `src/ai.js` — enemy AI for Skirmish, Battle, Survival.
   Skirmish AI (Knight/Warlord): counters the player's army (`counterW`), gathers at a rally point and attacks only when

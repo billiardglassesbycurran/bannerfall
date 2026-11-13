@@ -23,10 +23,10 @@ const ageTo = (g, t, age) => { if (age >= 1) g.applyTech(t, 'feudal'); if (age >
 export const MISSIONS = [
   {
     name: 'I. The Muster', map: 'riverlands', diff: 0, aiOff: true,
-    brief: 'Bandits have built a camp across the river and raid our farms. Gather food, build a Barracks and advance to the Feudal Age. Then raise an army, cross the bridge and burn their camp.',
+    brief: 'Bandits have built a camp across the river and raid our farms. Gather food, build a Barracks and advance to the Bronze Age. Then raise an army, cross the bridge and burn their camp.',
     goals: [
       { t: 'Build a Barracks', done: g => has(g, 0, 'barracks') },
-      { t: 'Advance to the Feudal Age', done: g => g.T[0].age >= 1 },
+      { t: 'Advance to the Bronze Age', done: g => g.T[0].age >= 1 },
       { t: 'Train 5 soldiers', done: g => g.ms.trained >= 5 },
       { t: 'Destroy the bandit camp', done: g => g.ms.camp.every(b => !b.alive) },
     ],

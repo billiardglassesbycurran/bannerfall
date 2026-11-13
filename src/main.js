@@ -339,12 +339,16 @@ function setupGame(mode, diff, civ = 'franks', enemyCiv) {
     const peas = g.units.filter(u => u.type === 'peasant');
     const berry = g.nearestRes(hall.x, hall.z, 'f', 20), tree = g.nearestRes(hall.x, hall.z, 'w', 25);
     peas.forEach((p, i) => { const r = i < 2 ? berry : tree; if (r) g.gather(p, r); });
-    if (mode === 'skirmish') {
+    if (mode === 'skirmish' || mode === 'castle') {
       const eh = g.placeBuilding(1, 'hall', SIZE - B0.x - 3, SIZE - B0.z - 3, true);
       for (let i = 0; i < 4; i++) g.spawnUnit(1, 'peasant', eh.x - 4 - i * .8, eh.z + 3.5);
       g.spawnUnit(1, 'hero', eh.x - 4.5, eh.z + 1);
+      if (mode === 'castle') { // a head start: Bronze Age, more people and resources, so the race to the Castle is on
+        for (const t of [0, 1]) { g.applyTech(t, 'feudal'); Object.assign(g.T[t], { f: 700, w: 700, g: 450, s: 450 }); }
+        for (let i = 0; i < 4; i++) { g.spawnUnit(0, 'peasant', hall.x + 4 + i * .8, hall.z - 5); g.spawnUnit(1, 'peasant', eh.x - 4 - i * .8, eh.z + 5); }
+      }
     } else {
-      Object.assign(g.T[0], { f: 300, w: 350, g: 150, age: 1 }); g.refreshLooks(0);
+      Object.assign(g.T[0], { f: 300, w: 350, g: 150, age: 1 }); g.refreshLooks(0); figures.setAge(0, 1);
       for (let i = 0; i < 3; i++) g.spawnUnit(0, 'sword', hall.x + 6 + i, hall.z - 6);
       for (let i = 0; i < 2; i++) g.spawnUnit(0, 'archer', hall.x + 5 + i, hall.z - 7.5);
     }
@@ -359,7 +363,7 @@ function setupGame(mode, diff, civ = 'franks', enemyCiv) {
   rts.yaw = -Math.PI / 4;
   app.mode = 'rts'; app.select([]);
   $('title').classList.add('hide'); $('home').classList.add('hide'); $('hud').classList.remove('hide');
-  if (!tut && !mis) app.toast(MODES[mode].name + ': ' + (mode === 'skirmish' ? 'destroy the enemy Town Hall!' : mode === 'battle' ? 'defeat the enemy army!' : 'survive 10 waves!'), 5);
+  if (!tut && !mis) app.toast(MODES[mode].name + ': ' + (mode === 'skirmish' ? 'destroy the enemy Town Hall!' : mode === 'castle' ? 'reach the Castle Age, build a Castle and hold it for 5:00!' : mode === 'battle' ? 'defeat the enemy army!' : 'survive 10 waves!'), 5);
 }
 function showEnd(res) {
   clearSave();
@@ -370,6 +374,7 @@ function showEnd(res) {
   if (cm && res === 'win' && cm.id === MISSIONS.length - 1) { $('endS').textContent = 'The Warlord is beaten and the valley is free. Campaign complete!'; $('end').classList.remove('hide'); return; }
   const s = app.game.time | 0;
   $('endS').textContent = (res === 'win' ? 'The day is yours, Commander.' : 'Your banner has fallen.') + ` (${s / 60 | 0}m ${s % 60}s)`;
+  if (app.game.mode === 'castle') $('endS').textContent = res === 'win' ? (app.game.castleHold?.[0] >= 300 ? 'Your Castle stood for five minutes. The realm is yours!' : 'The enemy is wiped out. The realm is yours!') + ` (${s / 60 | 0}m ${s % 60}s)` : (app.game.castleHold?.[1] >= 300 ? 'The enemy Castle stood for five minutes. The realm is theirs.' : 'Your people have been wiped out.');
   $('end').classList.remove('hide');
 }
 const reloadTo = hash => { location.hash = hash; location.reload(); };
@@ -493,10 +498,10 @@ function showSetup(mode) {
   if (mode) app.cfg.mode = mode;
   $('setupT').textContent = { campaign: 'Campaign', online: 'Online' }[app.cfg.mode] || 'New game';
   $('modes').classList.toggle('hide', ['campaign', 'online', 'tutorial'].includes(app.cfg.mode));
-  for (const b of document.querySelectorAll('[data-mode]')) b.classList.toggle('hide', !['skirmish', 'battle', 'survival'].includes(b.dataset.mode));
+  for (const b of document.querySelectorAll('[data-mode]')) b.classList.toggle('hide', !['skirmish', 'battle', 'survival', 'castle'].includes(b.dataset.mode));
   refreshMenu(); $('home').classList.add('hide'); $('title').classList.remove('hide');
 }
-onBtn('hPlay', () => showSetup(['skirmish', 'battle', 'survival'].includes(app.cfg.mode) ? app.cfg.mode : 'skirmish'));
+onBtn('hPlay', () => showSetup(['skirmish', 'battle', 'survival', 'castle'].includes(app.cfg.mode) ? app.cfg.mode : 'skirmish'));
 onBtn('hCamp', () => showSetup('campaign'));
 onBtn('hOnline', () => showSetup('online'));
 onBtn('hTut', () => { app.cfg.mode = 'tutorial'; try { localStorage.setItem('bf.tutSeen', '1'); } catch { /* ignore */ } if (isTouch) goFullscreen(); setupGame('tutorial', 0, app.cfg.civ); });

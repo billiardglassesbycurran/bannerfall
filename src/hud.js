@@ -59,7 +59,7 @@ export class HUD {
 
   // ---------------- selection panel ----------------
   updateSel() {
-    const bb = document.getElementById('battlebar'), F = this.a.game?.field; bb.classList.toggle('hide', !F || this.a.mode !== 'rts'); document.body.classList.toggle('battle', !!F && this.a.mode === 'rts'); if (F) bb.innerHTML = F.hudText();
+    const bb = document.getElementById('battlebar'), F = this.a.game?.field, CT = this.a.game?.castleText?.(), show = (!!F || !!CT) && this.a.mode === 'rts'; bb.classList.toggle('hide', !show); document.body.classList.toggle('battle', show); if (F) bb.innerHTML = F.hudText(); else if (CT) bb.innerHTML = CT;
     const sel = this.a.sel, name = $('selname'), desc = $('seldesc'), q = $('selq');
     q.innerHTML = '';
     if (!sel.length) { name.textContent = this.a.game.mode === 'battle' ? 'Select your soldiers' : 'Nothing selected'; desc.innerHTML = this.a.hint(); return; }
@@ -112,7 +112,7 @@ export class HUD {
       if (peas.length && g.mode !== 'battle' && (this.page === 'eco' || this.page === 'mil')) {
         for (const t of this.page === 'eco' ? BUILD_ECO : BUILD_MIL) {
           const d = BD[t], req = d.req && !g.has(0, d.req), old = !g.ageOK(0, d);
-          btns.push({ label: short(d.name), sub: old ? ageName(d.age) + ' Age' : req ? 'needs ' + short(BD[d.req].name) : costHtml(d.cost), dis: old || req || !g.afford(0, d.cost), why: old ? `Requires the ${AGES[d.age]}.` : req ? `Requires a ${BD[d.req].name}.` : null, on: () => { a.startPlace(t); this.page = null; }, tip: d.desc });
+          btns.push({ label: short(d.name), sub: old ? ageName(d.age) + ' Age' : req ? 'needs ' + short(BD[d.req].name) : costHtml(d.cost), dis: old || req || !g.afford(0, d.cost) || (d.one && g.blds.some(b => b.alive && b.team === 0 && b.type === t)), why: d.one && g.blds.some(b => b.alive && b.team === 0 && b.type === t) ? 'You already have one.' : old ? `Requires the ${AGES[d.age]}.` : req ? `Requires a ${BD[d.req].name}.` : null, on: () => { a.startPlace(t); this.page = null; }, tip: d.desc });
         }
         back();
       } else {

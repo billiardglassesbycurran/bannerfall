@@ -21,6 +21,7 @@ export const ABIL = {
   rally: { name: 'Rally', cd: 60, desc: 'Every fleeing soldier nearby turns and fights again, at full morale, healed a little' },
 };
 export const RANKS = ['', 'Veteran', 'Elite', 'Champion'];
+const CASTLE_HOLD = 300; // seconds a Castle must stand to win Castle mode
 const PACE = .5, TAU = Math.PI * 2;
 /** Rock-paper-scissors bonuses on top of spearmen's 3x vs horses. */
 function counterMul(a, t) {
@@ -39,6 +40,7 @@ export class Game {
     Object.assign(this, { scene, figures, Q, mode, diff }); this.diffD = DIFF[diff] || DIFF[1];
     this.units = []; this.blds = []; this.shots = [];
     this.T = [0, 1].map(() => ({ f: 200, w: 200, g: 100, s: 100, pop: 0, cap: 0, hallLost: false, age: mode === 'battle' ? 2 : 0, techs: new Set(), carry: 10, gm: { f: 1, w: 1, g: 1, s: 1 }, fish: 1, farm: 1, bldHp: 1 }));
+    for (const t of [0, 1]) this.figures?.setAge?.(t, this.T[t].age);
     this.time = 0; this.over = null; this.hero = null; this.heroRespawn = 0;
     this.toast = () => {}; this.onEnd = () => {};
     this.hash = new Map();
@@ -68,7 +70,13 @@ export class Game {
     this.statCache.set(key, d); return d;
   }
   /** What a building can train for this team (its civilization's unique unit included). */
-  trainsFor(b) { const list = [...(b.d.trains || [])], u = this.civ[b.team].unique; if (u && u.at === b.type) list.push(u.type); return list; }
+  trainsFor(b) { const list = [...(b.d.trains || [])], u = this.civ[b.team].unique; if (u && (u.at === b.type || b.type === 'castle')) list.push(u.type); return list; }
+  castleText() {
+    if (this.mode !== 'castle' || !this.castleHold) return '';
+    const f = s => `${Math.max(0, CASTLE_HOLD - s) / 60 | 0}:${String(Math.max(0, CASTLE_HOLD - s) % 60 | 0).padStart(2, '0')}`;
+    const [a, b] = this.castleHold; if (!a && !b) return '🏰 Build a Castle (Castle Age) and hold it 5:00 to win';
+    return (a ? `🏰 Your Castle: <b>${f(a)}</b> to victory` : '') + (a && b ? ' · ' : '') + (b ? `<span style="color:#ff8a7a">Enemy Castle: <b>${f(b)}</b> — destroy it!</span>` : '');
+  }
   ageOK(team, def) { return (def.age || 0) <= this.T[team].age; }
   queuedTech(team, key) { return this.blds.some(b => b.alive && b.team === team && b.queue.some(q => q.tech === key)); }
   /** Technologies this building offers right now (age reached, prerequisite researched, not done or queued). */
@@ -86,7 +94,7 @@ export class Game {
   /** Apply a finished technology to the team (and to every existing unit/building). */
   applyTech(team, key) {
     const t = TECH[key], e = t.eff || {}, T = this.T[team]; T.techs.add(key);
-    if (t.toAge) T.age = t.toAge;
+    if (t.toAge) { T.age = t.toAge; this.figures?.setAge?.(team, T.age); }
     if (e.gatherAll) for (const r of ['f', 'w', 'g', 's']) T.gm[r] = (T.gm[r] || 1) * e.gatherAll;
     if (e.gather) for (const [r, v] of Object.entries(e.gather)) T.gm[r] *= v;
     if (e.carry) T.carry += e.carry; if (e.fish) T.fish *= e.fish;
@@ -312,6 +320,7 @@ export class Game {
   gateSpot(team, cx, cz) { const o = bldAt[cz * N + cx]; return o && o.alive && o.team === team && o.type === 'wall' ? o : null; }
   startBuilding(team, type, cx, cz, builders) {
     const d = BD[type];
+    if (d.one && this.blds.some(b => b.alive && b.team === team && b.type === type)) return null; // only one Castle each
     if (type === 'gate') { const w = this.gateSpot(team, cx, cz); if (w && this.afford(team, d.cost)) { this.unplace(w); this.blds.splice(this.blds.indexOf(w), 1); } } if (!this.afford(team, d.cost) || !this.canPlace(type, cx, cz) || !this.ageOK(team, d)) return null;
     if (d.req && !this.has(team, d.req)) return null;
     this.pay(team, d.cost); const b = this.placeBuilding(team, type, cx, cz, false);
@@ -447,6 +456,10 @@ export class Game {
     else if (this.mode === 'battle') {
       for (const t of [0, 1]) if (!alive(t) && this.field?.reserves[t] > 0 && !this.over) this.field.lastStand(t); // reserves rush in before the end
       if (!alive(1) || this.field?.broken === 1) res = 'win'; else if (!alive(0) || this.field?.broken === 0) res = 'lose';
+    }
+    else if (this.mode === 'castle') { // Castle mode: hold a Castle for 5 minutes, or wipe the other side out
+      const gone = t => !this.units.some(u => u.alive && u.team === t) && !this.blds.some(b => b.alive && b.team === t && !b.d.wall);
+      if (gone(1) || this.castleHold?.[0] >= CASTLE_HOLD) res = 'win'; else if (gone(0) || this.castleHold?.[1] >= CASTLE_HOLD) res = 'lose';
     }
     else {
       if (this.T[0].hallLost) res = 'lose';
@@ -657,7 +670,7 @@ export class Game {
       }
     }
   }
-  gatherMul(team) { return team === 1 && this.mode === 'skirmish' ? this.diffD.gather : 1; }
+  gatherMul(team) { return team === 1 && (this.mode === 'skirmish' || this.mode === 'castle') ? this.diffD.gather : 1; }
 
   updateBuilding(b, dt) {
     if (!b.built) return;
@@ -725,10 +738,20 @@ export class Game {
       if (this.heroRespawn <= 0) { const hall = this.blds.find(b => b.alive && b.team === 0 && b.type === 'hall'); if (hall) { this.hero = this.spawnUnit(0, 'hero', hall.x + 3.5, hall.z + 3.5); this.recount(); this.toast('Your Commander has returned.'); this.onHero?.(this.hero); } }
     }
     // the enemy Commander returns too (45 s after falling), as long as their Town Hall stands
-    if (this.mode === 'skirmish') { // (online, this brings back the friend's Commander)
+    if (this.mode === 'skirmish' || this.mode === 'castle') { // (online, this brings back the friend's Commander)
       const eh = this.units.find(u => u.alive && u.team === 1 && u.d.hero);
       if (eh) { this.eHeroSeen = true; this.eHeroT = 0; }
       else if (this.eHeroSeen && (this.eHeroT = (this.eHeroT || 0) + dt) > 45) { const h = this.blds.find(b => b.alive && b.team === 1 && b.type === 'hall'); if (h) { this.spawnUnit(1, 'hero', h.x - 3.5, h.z - 3.5); this.recount(); if (this.time > 60) this.toast('The enemy Commander has returned.', 2.5); } this.eHeroT = 0; }
+    }
+    // Castle mode: each side's castle clock
+    if (this.mode === 'castle' && !this.over) {
+      this.castleHold = this.castleHold || [0, 0];
+      for (const t of [0, 1]) {
+        const c = this.blds.find(b => b.alive && b.built && b.team === t && b.type === 'castle');
+        if (c) { if (this.castleHold[t] === 0) { this.toast(t === 0 ? 'Your Castle stands! Keep it standing for 5:00 to win.' : 'The enemy has built a Castle! Destroy it within 5:00 or you lose!', 5); this.onAlert?.(c.x, c.z); } this.castleHold[t] += dt; }
+        else if (this.castleHold[t] > 0) { this.toast(t === 0 ? 'Your Castle has fallen! The clock is reset.' : 'The enemy Castle has fallen!', 4); this.castleHold[t] = 0; }
+      }
+      if ((this.castleCheck = (this.castleCheck || 0) + dt) > .5) { this.castleCheck = 0; this.checkEnd(); }
     }
     // dead unit cleanup
     for (let i = this.units.length - 1; i >= 0; i--) { const u = this.units[i]; if (u.dead && (u.deathT += dt) > (u.d.ship ? 4 : 40)) { u.batch.release(u.slot); this.units.splice(i, 1); } } // the fallen stay on the field for a while
