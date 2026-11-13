@@ -115,11 +115,19 @@ def main():
         page.click('#bLead'); page.wait_for_timeout(300)
         page.evaluate("""() => { const a = window.bannerfall, g = a.game, h = g.hero, hall = g.blds[0], pov = a.pov;
           h.x = hall.x; h.z = hall.z + hall.size / 2 + 1.6; pov.yaw = Math.PI; pov.snap = true; }""")  # at the door, facing it
-        page.keyboard.down('KeyW'); page.wait_for_timeout(1500); page.keyboard.up('KeyW')
+        page.keyboard.down('KeyW')
+        for _ in range(30):  # wait for it (slow software rendering) rather than a fixed time
+            page.wait_for_timeout(300)
+            if page.evaluate('!!window.bannerfall.pov.room'): break
+        page.keyboard.up('KeyW')
         check(page.evaluate('!!window.bannerfall.pov.room'), 'walking through the door takes the Commander inside (no button)')
         page.screenshot(path=str(OUT / 'inside-hall.png'))
         page.evaluate("() => { const pov = window.bannerfall.pov; pov.yaw = pov.room.ry; }")  # turn back to the door
-        page.keyboard.down('KeyW'); page.wait_for_timeout(4000); page.keyboard.up('KeyW')
+        page.keyboard.down('KeyW')
+        for _ in range(40):
+            page.wait_for_timeout(300)
+            if page.evaluate('!window.bannerfall.pov.room'): break
+        page.keyboard.up('KeyW')
         check(page.evaluate('!window.bannerfall.pov.room'), 'walking back out of the door leaves the building')
         page.evaluate("""() => { const a = window.bannerfall, g = a.game, h = g.hero, hall = g.blds[0], pov = a.pov;
           h.x = hall.x + hall.size / 2 + 1.2; h.z = hall.z; pov.yaw = -Math.PI / 2; pov.snap = true; }""")  # against a side wall
