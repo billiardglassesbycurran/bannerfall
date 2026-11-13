@@ -21,6 +21,7 @@ export const ABIL = {
   rally: { name: 'Rally', cd: 60, desc: 'Every fleeing soldier nearby turns and fights again, at full morale, healed a little' },
 };
 export const RANKS = ['', 'Veteran', 'Elite', 'Champion'];
+const MAX_POP = 200;
 const CASTLE_HOLD = 300; // seconds a Castle must stand to win Castle mode
 const PACE = .5, TAU = Math.PI * 2;
 /** Rock-paper-scissors bonuses on top of spearmen's 3x vs horses. */
@@ -104,12 +105,14 @@ export class Game {
     if (e.hallUp) for (const b of this.blds) if (b.alive && b.team === team && b.type === 'hall') scaleB(b, 1.5);
     if (e.wallUp) { this.T[team].wallHp = 2.5; for (const b of this.blds) if (b.alive && b.team === team && b.d.wall) scaleB(b, 2.5); }
     if (e.towerUp) for (const b of this.blds) if (b.alive && b.team === team && b.type === 'tower') scaleB(b, 1.6);
+    if (e.towerUp2) for (const b of this.blds) if (b.alive && b.team === team && b.type === 'tower') scaleB(b, 1.6);
+    if (e.wallUp2) { this.T[team].wallHp = (this.T[team].wallHp || 1) * 2; for (const b of this.blds) if (b.alive && b.team === team && b.d.wall) scaleB(b, 2); }
     this.statCache.clear();
     for (const u of this.units) if (u.alive && u.team === team) { const nd = this.stat(team, u.type); u.hp = u.hp * nd.hp / u.maxHp; u.maxHp = nd.hp; u.d = nd; }
-    if (t.toAge || e.hallUp || e.towerUp) this.refreshLooks(team);
+    if (t.toAge || e.hallUp || e.towerUp || e.towerUp2 || e.wallUp || e.wallUp2) this.refreshLooks(team);
     this.onTech?.(team, key);
   }
-  look(team) { const T = this.T[team]; return { age: T.age, fort: T.techs.has('fortify'), guard: T.techs.has('guardtower'), stone: T.techs.has('stonewalls') }; }
+  look(team) { const T = this.T[team]; return { age: T.age, fort: T.techs.has('fortify'), guard: T.techs.has('guardtower'), keep: T.techs.has('keeps'), stone: T.techs.has('stonewalls'), castle: T.techs.has('fortresswalls') }; }
   /** Buildings change style with each age / upgrade. */
   refreshLooks(team) { for (const b of this.blds) if (b.alive && b.team === team && b.built && b.mesh.isMesh) { b.mesh.geometry = buildingGeo(b.type, team, { ...this.look(team), conn: this.wallConn(b) }); } }
   /** Which sides (1 E, 2 S, 4 W, 8 N) of a wall/gate join another wall or gate of the same team. */
@@ -223,16 +226,26 @@ export class Game {
   }
   edgeDist(p, b) { const h = b.size / 2, dx = Math.max(Math.abs(p.x - b.x) - h, 0), dz = Math.max(Math.abs(p.z - b.z) - h, 0); return Math.hypot(dx, dz); }
   reachDist(u, t) { return t.kind === 'bld' ? this.edgeDist(u, t) : dist(u, t) - t.d.rad - u.d.rad * .5; }
-  nearestDrop(u) { let best = null, bd = 1e9; for (const b of this.blds) if (b.alive && b.built && b.team === u.team && b.d.drop && (!u.d.ship || b.d.dock)) { const d = this.edgeDist(u, b); if (d < bd) { bd = d; best = b; } } return best; }
+  nearestDrop(u) { let best = null, bd = 1e9; for (const b of this.blds) if (b.alive && b.built && b.team === u.team && b.d.drop && (typeof b.d.drop !== 'string' || !u.carry || b.d.drop.includes(u.carry.rt)) && (!u.d.ship || b.d.dock)) { const d = this.edgeDist(u, b); if (d < bd) { bd = d; best = b; } } return best; }
   nearestRes(x, z, rt, r = 18, fish = false) { let best = null, bd = r; for (const s of resources) if (s.alive && s.rt === rt && !!s.fish === fish) { const d = Math.hypot(s.x - x, s.z - z); if (d < bd) { bd = d; best = s; } } return best; }
   recount() {
     for (const t of this.T) { t.pop = 0; t.cap = 0; }
     for (const u of this.units) if (u.alive) this.T[u.team].pop++;
     for (const b of this.blds) if (b.alive && b.built && b.d.pop) this.T[b.team].cap += b.d.pop;
+    for (const t of this.T) t.cap = Math.min(MAX_POP, t.cap);
     for (const t of this.T) t.cap = Math.min(t.cap, 100);
   }
   afford(team, cost) { const t = this.T[team]; return (t.f >= (cost.f || 0)) && (t.w >= (cost.w || 0)) && (t.g >= (cost.g || 0)) && ((t.s || 0) >= (cost.s || 0)); }
   pay(team, cost, sign = 1) { const t = this.T[team]; t.f -= sign * (cost.f || 0); t.w -= sign * (cost.w || 0); t.g -= sign * (cost.g || 0); t.s = (t.s || 0) - sign * (cost.s || 0); }
+  /** Market: buy or sell 100 food, wood or stone for gold. Prices move with every trade. */
+  trade(team, rt, buy) {
+    const T = this.T[team], P = T.price || (T.price = { f: 100, w: 100, s: 100 }), p = Math.round(P[rt] * (buy ? 1.3 : .7));
+    if (!this.blds.some(b => b.alive && b.built && b.team === team && b.d.market)) return 'no';
+    if (buy) { if (T.g < p) return 'cost'; T.g -= p; T[rt] += 100; P[rt] = Math.min(400, P[rt] * 1.04); }
+    else { if (T[rt] < 100) return 'cost'; T[rt] -= 100; T.g += p; P[rt] = Math.max(25, P[rt] * .96); }
+    return 'ok';
+  }
+  tradePrice(team, rt, buy) { const P = this.T[team].price || { f: 100, w: 100, s: 100 }; return Math.round(P[rt] * (buy ? 1.3 : .7)); }
   has(team, type) { return this.blds.some(b => b.alive && b.built && b.team === team && b.type === type); }
 
   // ---------------- orders ----------------
@@ -317,11 +330,11 @@ export class Game {
   }
   cancelTrain(b, i) { const q = b.queue.splice(i, 1)[0]; if (q) this.pay(b.team, q.tech ? TECH[q.tech].cost : this.stat(b.team, q.type).cost, -1); }
   /** A gate can go on an empty cell or replace a piece of your own wall. */
-  gateSpot(team, cx, cz) { const o = bldAt[cz * N + cx]; return o && o.alive && o.team === team && o.type === 'wall' ? o : null; }
+  gateSpot(team, cx, cz) { const o = bldAt[cz * N + cx]; return o && o.alive && o.team === team && o.type === 'wall' ? o : null; } // gates and wall towers can replace a wall piece
   startBuilding(team, type, cx, cz, builders) {
     const d = BD[type];
     if (d.one && this.blds.some(b => b.alive && b.team === team && b.type === type)) return null; // only one Castle each
-    if (type === 'gate') { const w = this.gateSpot(team, cx, cz); if (w && this.afford(team, d.cost)) { this.unplace(w); this.blds.splice(this.blds.indexOf(w), 1); } } if (!this.afford(team, d.cost) || !this.canPlace(type, cx, cz) || !this.ageOK(team, d)) return null;
+    if (type === 'gate' || type === 'walltower') { const w = this.gateSpot(team, cx, cz); if (w && this.afford(team, d.cost)) { this.unplace(w); this.blds.splice(this.blds.indexOf(w), 1); } } if (!this.afford(team, d.cost) || !this.canPlace(type, cx, cz) || !this.ageOK(team, d)) return null;
     if (d.req && !this.has(team, d.req)) return null;
     this.pay(team, d.cost); const b = this.placeBuilding(team, type, cx, cz, false);
     for (const u of builders) if (u.type === 'peasant') this.build(u, b);
@@ -439,7 +452,7 @@ export class Game {
       for (const [i, v] of t.prev) { blocked[i] = v; bldAt[i] = null; navBlock[i] = 0; }
       if (t.d.wall) { this.joinWalls(t); for (const u of this.units) if (u.alive) u.path = null; } // a breach: everyone re-plans
       if (!t.d.wall) this.rubble(t);
-      if (t.type === 'hall') { this.T[t.team].hallLost = true; this.toast(t.team === 0 ? 'Your Town Hall has fallen!' : 'The enemy Town Hall burns!'); }
+      if (t.type === 'hall') { const more = this.blds.some(b => b.alive && b.team === t.team && b.type === 'hall'); if (!more) this.T[t.team].hallLost = true; this.toast(t.team === 0 ? (more ? 'One of your Town Halls has fallen!' : 'Your Town Hall has fallen!') : (more ? 'An enemy Town Hall burns!' : 'The enemy Town Hall burns!')); }
     }
     this.recount(); this.checkEnd();
   }
@@ -531,6 +544,13 @@ export class Game {
     if (u.chargeT > this.time) u.run = Math.max(u.run, 7);
     u.braced = u.d.vsHorse && u.task.type !== 'move' && u.run < .5;
     if (u.d.regen && u.hp < u.maxHp) u.hp = Math.min(u.maxHp, u.hp + u.d.regen * dt);
+    if (u.d.heal && !u.possessed) { // healers mend wounded friends nearby, and walk to the nearest wounded one when idle
+      if ((u.healT = (u.healT || 0) - dt) <= 0) {
+        u.healT = 1; let n = 0, far = null, fd = 14;
+        this.unitsNear(u.x, u.z, 14, o => { if (!o.alive || o.team !== u.team || o === u || o.hp >= o.maxHp || o.d.ship) return; const d = Math.hypot(o.x - u.x, o.z - u.z); if (d < 4.5 && n < 4) { o.hp = Math.min(o.maxHp, o.hp + u.d.heal); n++; } else if (d < fd) { fd = d; far = o; } });
+        if (n) { u.swingT = 0; this.onHeal?.(u); } else if (far && u.task.type === 'idle') this.moveTo(u, far.x, far.z);
+      }
+    }
     if (u.possessed) return;
     const t = u.task;
     switch (t.type) {
@@ -675,14 +695,15 @@ export class Game {
   updateBuilding(b, dt) {
     if (!b.built) return;
     if (b.d.atk && (b.atkCd -= dt) <= 0) {
-      const T0 = this.T[b.team], xr = (b.type === 'tower' && T0.techs.has('guardtower') ? 2 : 0) + (T0.techs.has('fletching') ? 1 : 0) + (T0.techs.has('bodkin') ? 1 : 0);
+      const T0 = this.T[b.team], xr = (b.type === 'tower' && T0.techs.has('guardtower') ? 2 : 0) + (b.type === 'tower' && T0.techs.has('keeps') ? 1 : 0) + (T0.techs.has('fletching') ? 1 : 0) + (T0.techs.has('bodkin') ? 1 : 0);
       b.atkCd = .5; const e = this.nearestEnemy({ x: b.x, z: b.z, team: b.team }, b.d.atk.rng + xr + b.size / 2, false);
       if (e) {
         const T = this.T[b.team], guard = b.type === 'tower' && T.techs.has('guardtower'), fort = b.type === 'hall' && T.techs.has('fortify');
-        const bonus = (T.techs.has('fletching') ? 1 : 0) + (T.techs.has('bodkin') ? 1 : 0) + (guard ? 4 : 0) + (fort ? 3 : 0);
+        const keep = b.type === 'tower' && T.techs.has('keeps'), cw = b.d.wtower && T.techs.has('fortresswalls');
+        const bonus = (T.techs.has('fletching') ? 1 : 0) + (T.techs.has('bodkin') ? 1 : 0) + (guard ? 4 : 0) + (keep ? 4 : 0) + (fort ? 3 : 0) + (cw ? 4 : 0);
         const arrows = 1 + (b.cargo ? Math.floor(b.cargo.length / 3) : 0) + (fort ? 1 : 0);
         b.atkCd = b.d.atk.cd;
-        for (let i = 0; i < arrows; i++) this.shoot(b, e, b.d.atk.dmg + bonus, new THREE.Vector3(b.x + (i - arrows / 2) * .4, b.y + (b.type === 'tower' ? (guard ? 5.6 : 4.6) : 3), b.z));
+        for (let i = 0; i < arrows; i++) this.shoot(b, e, b.d.atk.dmg + bonus, new THREE.Vector3(b.x + (i - arrows / 2) * .4, b.y + (b.type === 'tower' ? (keep ? 6.6 : guard ? 5.6 : 4.6) : b.d.wtower ? 2.8 : 3), b.z));
       }
     }
     const q = b.queue[0];

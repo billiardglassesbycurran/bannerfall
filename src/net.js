@@ -75,9 +75,9 @@ function deref(g, x) {
   const o = {}; for (const k in x) o[k] = deref(g, x[k]); return o;
 }
 // methods the guest's buttons and orders call; they run on the host instead (team-number arguments get swapped)
-const RPC = ['setTask', 'gather', 'damage', 'shoot', 'useAbility', 'setMount', 'sendPeasants', 'startBuilding', 'unloadAt', 'train', 'research', 'ringBell',
+const RPC = ['trade', 'setTask', 'gather', 'damage', 'shoot', 'useAbility', 'setMount', 'sendPeasants', 'startBuilding', 'unloadAt', 'train', 'research', 'ringBell',
   'formation', 'farm', 'command', 'cancelTrain', 'build', 'amove', 'moveTo', 'attack', 'ungarrison'];
-const TEAM_ARG = { sendPeasants: 0, startBuilding: 0, ringBell: 0 };
+const TEAM_ARG = { sendPeasants: 0, startBuilding: 0, ringBell: 0, trade: 0 };
 // which argument is "the thing doing it" (must belong to the guest)
 const SUBJ = { damage: 2, shoot: 0 };
 
@@ -130,7 +130,7 @@ export class GuestSync {
   call(fn, args) {
     const g = this.a.game;
     if (fn === 'startBuilding') { // check locally so the buttons can say "can't build there"
-      const [, type, cx, cz] = args; if (!g.canPlace(type, cx, cz) && !(type === 'gate' && g.gateSpot(0, cx, cz))) return null;
+      const [, type, cx, cz] = args; if (!g.canPlace(type, cx, cz) && !((type === 'gate' || type === 'walltower') && g.gateSpot(0, cx, cz))) return null;
       this.l.send({ k: 'rpc', fn, args: ref(args) }); return { kind: 'bld', pending: [cx, cz], type };
     }
     this.l.send({ k: 'rpc', fn, args: ref(args) });

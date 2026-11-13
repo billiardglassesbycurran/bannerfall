@@ -20,13 +20,19 @@ export const UD = {
   fishboat:  { name: 'Fishing Boat', plural: 'Fishing Boats', cls: 'ship', hp: 80, spd: 3.3, dmg: 0, rng: 0, cd: 1, arm: 0, cost: { w: 60 }, time: 12, rad: .9, acq: 0, ship: 1, fisher: 1, desc: 'Catches fish and brings it to a Dock' },
   transport: { name: 'Transport Ship', plural: 'Transport Ships', cls: 'ship', hp: 160, spd: 3.5, dmg: 0, rng: 0, cd: 1, arm: 1, cost: { w: 100 }, time: 16, rad: 1.3, acq: 0, ship: 1, carry: 10, desc: 'Carries up to 10 units across water' },
   warship:   { age: 1, name: 'Warship', plural: 'Warships', cls: 'ship', hp: 230, spd: 3.3, dmg: 9, rng: 9.5, cd: 1.5, arm: 2, cost: { w: 120, g: 50 }, time: 22, rad: 1.3, acq: 11, ship: 1, ranged: 1, desc: 'Archers on a fast galley; attacks ships and the shore' },
+  healer:    { age: 1, name: 'Healer', plural: 'Healers', cls: 'civ', hp: 45, spd: 2.8, dmg: 0, rng: 0, cd: 1, arm: 0, cost: { g: 90 }, time: 16, rad: .4, acq: 0, heal: 4, desc: 'Heals wounded troops near them (4 hit points a second)' },
   hero:      { name: 'Commander', plural: 'Commanders', cls: 'hero', hp: 620, spd: 3.6, dmg: 28, rng: 1.6, cd: .85, arm: 4, cost: null, time: 0, rad: .5, acq: 10, hero: 1, melee: 1, scale: 1.15, desc: 'Your hero. Soldiers near the Commander fight harder and rally' },
   herohorse: { name: 'Commander', plural: 'Commanders', cls: 'hero', hp: 620, spd: 5.6, dmg: 28, rng: 1.9, cd: .85, arm: 4, cost: null, time: 0, rad: .7, acq: 10, hero: 1, melee: 1, horse: 1, scale: 1.1, desc: 'Your Commander on horseback' },
 };
 
 export const BD = {
-  hall:     { name: 'Town Hall', hp: 1800, size: 5, cost: {}, time: 60, trains: ['peasant'], pop: 10, drop: 1, atk: { dmg: 7, rng: 9, cd: 2 }, arm: 3 },
-  house:    { name: 'House', hp: 320, size: 2, cost: { w: 40 }, time: 14, pop: 6, arm: 1, desc: '+6 population' },
+  hall:     { name: 'Town Hall', hp: 1800, size: 5, cost: {}, time: 60, trains: ['peasant'], pop: 15, drop: 1, atk: { dmg: 7, rng: 9, cd: 2 }, arm: 3, one: 1, desc: 'Trains villagers, stores everything, +15 population. Only one per side' },
+  house:    { name: 'House', hp: 320, size: 2, cost: { w: 30 }, time: 12, pop: 10, arm: 1, desc: '+10 population (up to 200)' },
+  mill:     { name: 'Mill', hp: 420, size: 2, cost: { w: 100 }, time: 16, drop: 'f', arm: 1, desc: 'Drop-off for food. Build it by berry bushes and farms' },
+  lumber:   { name: 'Lumber Camp', hp: 420, size: 2, cost: { w: 100 }, time: 16, drop: 'w', arm: 1, desc: 'Drop-off for wood. Build it at the edge of a forest' },
+  mining:   { name: 'Mining Camp', hp: 420, size: 2, cost: { w: 100 }, time: 16, drop: 'gs', arm: 1, desc: 'Drop-off for gold and stone. Build it by a mine or quarry' },
+  market:   { age: 1, name: 'Market', hp: 800, size: 4, cost: { w: 175 }, time: 26, arm: 2, market: 1, desc: 'Trade: buy and sell food, wood and stone for gold' },
+  temple:   { age: 1, name: 'Temple', hp: 700, size: 3, cost: { w: 120, s: 60 }, time: 24, trains: ['healer'], arm: 2, desc: 'Trains healers, who mend your wounded troops' },
   farm:     { name: 'Farm', hp: 200, size: 3, cost: { w: 60 }, time: 12, walk: 1, food: 300, arm: 0, desc: 'A peasant farms food from it' },
   store:    { name: 'Storehouse', hp: 450, size: 3, cost: { w: 100 }, time: 18, drop: 1, arm: 1, desc: 'Drop-off for food, wood and gold' },
   barracks: { name: 'Barracks', hp: 850, size: 4, cost: { w: 150 }, time: 24, trains: ['sword', 'spear'], arm: 2, desc: 'Trains swordsmen and spearmen' },
@@ -35,14 +41,16 @@ export const BD = {
   workshop: { age: 2, name: 'Siege Workshop', hp: 700, size: 4, cost: { w: 200, g: 60 }, time: 28, trains: ['catapult'], req: 'range', arm: 2, desc: 'Builds catapults (needs an Archery Range)' },
   smith:    { age: 1, name: 'Blacksmith', hp: 650, size: 3, cost: { w: 120 }, time: 22, arm: 2, desc: 'Researches better weapons and armour' },
   wall:     { name: 'Wall', hp: 420, size: 1, cost: { w: 4 }, time: 3, arm: 6, wall: 1, desc: 'Blocks enemies. Tap the start, then the end, to build a whole line' },
+  walltower: { age: 1, name: 'Wall Tower', hp: 900, size: 1, cost: { w: 20, s: 60 }, time: 14, arm: 7, wall: 1, wtower: 1, atk: { dmg: 8, rng: 10, cd: 1.6 }, desc: 'A tower in your wall line that shoots arrows. Place it on your own wall (or open ground)' },
   gate:     { name: 'Gate', hp: 700, size: 1, cost: { w: 25 }, time: 8, arm: 6, wall: 1, gate: 1, desc: 'Your troops pass, enemies can\'t. Place it on your own wall' },
   castle:   { age: 3, name: 'Castle', hp: 5000, size: 6, cost: { w: 400, s: 650, g: 300 }, time: 90, trains: ['knight', 'crossbow'], pop: 15, drop: 0, atk: { dmg: 18, rng: 13, cd: .9 }, arm: 8, one: 1, desc: 'The mightiest building: 5000 hit points, rains arrows, trains your unique unit, knights and crossbowmen. One per side' },
   tower:    { age: 1, name: 'Watchtower', hp: 600, size: 2, cost: { w: 50, s: 100 }, time: 20, atk: { dmg: 11, rng: 11, cd: 1.4 }, arm: 4, desc: 'Shoots arrows at enemies' },
   dock:     { name: 'Dock', hp: 900, size: 3, cost: { w: 150 }, time: 22, trains: ['fishboat', 'transport', 'warship'], drop: 1, dock: 1, arm: 2, desc: 'Build on the shore. Builds ships, stores fish' },
 };
 export const BUILD_LIST = ['house', 'farm', 'store', 'barracks', 'range', 'stable', 'workshop', 'smith', 'tower', 'dock'];
-export const BUILD_ECO = ['house', 'farm', 'store', 'dock', 'smith', 'tower', 'wall', 'gate'];
-export const BUILD_MIL = ['barracks', 'range', 'stable', 'workshop', 'tower', 'wall', 'gate', 'castle'];
+export const BUILD_ECO = ['house', 'farm', 'mill', 'lumber', 'mining', 'store', 'dock', 'market', 'smith'];
+export const BUILD_MIL = ['barracks', 'range', 'stable', 'workshop', 'temple', 'castle'];
+export const BUILD_DEF = ['wall', 'gate', 'walltower', 'tower'];
 
 // ---------------- ages & technologies ----------------
 export const AGES = ['Stone Age', 'Bronze Age', 'Iron Age', 'Castle Age'];
@@ -55,7 +63,9 @@ export const TECH = {
   wheelbarrow: { name: 'Wheelbarrow', at: 'hall', cost: { f: 150, w: 60 }, time: 25, age: 1, eff: { gatherAll: 1.15, carry: 4 }, desc: 'Peasants gather 15% faster and carry more' },
   handcart:  { name: 'Handcart', at: 'hall', req: 'wheelbarrow', cost: { f: 300, w: 150 }, time: 35, age: 2, eff: { gatherAll: 1.15, carry: 4 }, desc: 'Peasants gather another 15% faster and carry more' },
   masonry:   { name: 'Masonry', at: 'hall', cost: { w: 100, s: 150 }, time: 30, age: 1, eff: { bldHp: 1.25 }, desc: 'All buildings +25% hit points' },
-  stonewalls: { name: 'Stone Walls', at: 'smith', cost: { w: 100, s: 200 }, time: 35, age: 1, eff: { wallUp: 1 }, desc: 'Walls and gates become stone: ×2.5 hit points' },
+  stonewalls: { name: 'Stone Walls', at: 'smith', cost: { w: 100, s: 200 }, time: 35, age: 1, eff: { wallUp: 1 }, desc: 'Wooden walls, gates and wall towers become stone: ×2.5 hit points' },
+  fortresswalls: { name: 'Castle Walls', at: 'smith', req: 'stonewalls', cost: { w: 150, s: 400 }, time: 45, age: 3, eff: { wallUp2: 1 }, desc: 'Walls, gates and wall towers become tall, thick castle walls: ×2 hit points again, wall towers +4 attack' },
+  keeps:     { name: 'Keeps', at: 'tower', req: 'guardtower', cost: { s: 300, g: 150 }, time: 45, age: 3, eff: { towerUp2: 1 }, desc: 'Guard Towers become great stone Keeps: +60% hit points, +4 attack, +1 range' },
   fortify:   { name: 'Fortified Hall', at: 'hall', cost: { w: 150, s: 250, g: 100 }, time: 40, age: 2, eff: { hallUp: 1 }, desc: 'Town Hall: +50% hit points, stronger arrows, stone keep' },
   axe:       { name: 'Double-Bit Axe', at: 'store', cost: { f: 100, w: 50 }, time: 20, age: 1, eff: { gather: { w: 1.2 } }, desc: 'Wood chopping +20%' },
   goldmining:{ name: 'Gold Mining', at: 'store', cost: { f: 100, w: 75 }, time: 20, age: 1, eff: { gather: { g: 1.2 } }, desc: 'Gold mining +20%' },

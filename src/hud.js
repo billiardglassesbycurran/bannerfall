@@ -1,13 +1,15 @@
 // HUD: resource bar, selection panel, command card, minimap, health bars, toasts.
 import * as THREE from 'three';
-import { UD, BD, BUILD_ECO, BUILD_MIL, TECH, AGES } from './data.js';
+import { UD, BD, BUILD_ECO, BUILD_MIL, BUILD_DEF, TECH, AGES } from './data.js';
 import { ABIL, RANKS } from './game.js';
 import { N, SIZE, resources, minimapColors, heightAt, WL } from './world.js';
 
 const $ = id => document.getElementById(id);
 const HK = ['KeyZ', 'KeyX', 'KeyC', 'KeyV', 'KeyB', 'KeyN', 'KeyM', 'Comma', 'Period', 'Slash'];
 const HKL = ['Z', 'X', 'C', 'V', 'B', 'N', 'M', ',', '.', '/'];
-export const costHtml = c => !c ? '' : ['f', 'w', 'g', 's'].filter(k => c[k]).map(k => `<span class="${k}">${c[k]}${k}</span>`).join(' ');
+export const costHtml = c => !c ? '' : ['f', 'w', 'g', 's'].filter(k => c[k]).map(k => `<span class="${k}"><i class="ic ${k}"></i>${c[k]}</span>`).join(' ');
+/** "Need 30 more wood, 20 more gold" */
+export const missing = (T, c) => ['f', 'w', 'g', 's'].filter(k => (c?.[k] || 0) > (T[k] || 0)).map(k => `${Math.ceil(c[k] - (T[k] || 0))} more ${({ f: 'food', w: 'wood', g: 'gold', s: 'stone' })[k]}`).join(', ');
 const TASK = { patrol: 'Patrolling', garrison: 'Running to the Town Hall', repair: 'Repairing', board: 'Boarding ship', unload: 'Sailing to land troops', idle: 'Idle', move: 'Moving', amove: 'Attacking', attack: 'Fighting', follow: 'Following', build: 'Building', farm: 'Farming', return: 'Carrying to storage' };
 const RN = { f: 'food', w: 'wood', g: 'gold', s: 'stone' };
 
@@ -109,17 +111,17 @@ export class HUD {
       for (const n of [1, 3, 5]) btns.push({ label: `+${n}`, sub: n === 1 ? 'peasant' : 'peasants', on: () => { const k = g.sendPeasants(0, r, n); a.toast(k ? `${k} peasant${k > 1 ? 's' : ''} sent.` : 'No free peasants.', 1.5); } });
     } else if (mine.length && mine[0].kind === 'unit') {
       const peas = mine.filter(u => u.type === 'peasant'), mil = mine.filter(u => u.type !== 'peasant' && !u.d.ship), ships = mine.filter(u => u.d.ship);
-      if (peas.length && g.mode !== 'battle' && (this.page === 'eco' || this.page === 'mil')) {
-        for (const t of this.page === 'eco' ? BUILD_ECO : BUILD_MIL) {
+      if (peas.length && g.mode !== 'battle' && (this.page === 'eco' || this.page === 'mil' || this.page === 'def')) {
+        for (const t of { eco: BUILD_ECO, mil: BUILD_MIL, def: BUILD_DEF }[this.page]) {
           const d = BD[t], req = d.req && !g.has(0, d.req), old = !g.ageOK(0, d);
-          btns.push({ label: short(d.name), sub: old ? ageName(d.age) + ' Age' : req ? 'needs ' + short(BD[d.req].name) : costHtml(d.cost), dis: old || req || !g.afford(0, d.cost) || (d.one && g.blds.some(b => b.alive && b.team === 0 && b.type === t)), why: d.one && g.blds.some(b => b.alive && b.team === 0 && b.type === t) ? 'You already have one.' : old ? `Requires the ${AGES[d.age]}.` : req ? `Requires a ${BD[d.req].name}.` : null, on: () => { a.startPlace(t); this.page = null; }, tip: d.desc });
+          btns.push({ cost: d.cost, label: short(d.name), sub: old ? ageName(d.age) + ' Age' : req ? 'needs ' + short(BD[d.req].name) : costHtml(d.cost), dis: old || req || !g.afford(0, d.cost) || (d.one && g.blds.some(b => b.alive && b.team === 0 && b.type === t)), why: d.one && g.blds.some(b => b.alive && b.team === 0 && b.type === t) ? 'You already have one.' : old ? `Requires the ${AGES[d.age]}.` : req ? `Requires a ${BD[d.req].name}.` : null, on: () => { a.startPlace(t); this.page = null; }, tip: d.desc });
         }
         back();
       } else {
         if (peas.length && g.mode !== 'battle') {
           const go = rt => () => { let k = 0; for (const u of peas) { const r = rt === 'f' ? (g.blds.find(b => b.alive && b.built && b.team === 0 && b.type === 'farm' && (!b.farmer || !b.farmer.alive || b.farmer.task.b !== b)) || g.nearestRes(u.x, u.z, 'f', 60)) : g.nearestRes(u.x, u.z, rt, 70); if (r) { if (r.kind === 'bld') g.farm(u, r); else g.gather(u, r); k++; } } if (!k) a.toast('None nearby.', 1.5); };
           btns.push({ label: 'Food', sub: 'gather', on: go('f') }, { label: 'Wood', sub: 'chop', on: go('w') }, { label: 'Gold', sub: 'mine', on: go('g') }, { label: 'Stone', sub: 'quarry', on: go('s') });
-          btns.push({ label: 'Build', sub: 'economy &#9654;', on: () => { this.page = 'eco'; } }, { label: 'Build', sub: 'military &#9654;', on: () => { this.page = 'mil'; } });
+          btns.push({ label: 'Build', sub: 'economy &#9654;', on: () => { this.page = 'eco'; } }, { label: 'Build', sub: 'military &#9654;', on: () => { this.page = 'mil'; } }, { label: 'Build', sub: 'defences &#9654;', on: () => { this.page = 'def'; } });
           btns.push({ label: 'Repair', sub: 'pick building', on: () => a.setPending({ type: 'repair' }) });
           if (peas.some(u => u.carry)) btns.push({ label: 'Return', sub: 'goods', on: () => { for (const u of peas) if (u.carry) g.setTask(u, { type: 'return' }); } });
         }
@@ -146,11 +148,17 @@ export class HUD {
       if (b.built) {
         for (const t of g.trainsFor(b)) {
           const d = g.stat(0, t), n = b.queue.filter(q => q.type === t).length, old = !g.ageOK(0, d);
-          btns.push({ label: short(d.name), sub: old ? ageName(d.age) + ' Age' : costHtml(d.cost), dis: old || !g.afford(0, d.cost) || b.queue.length >= 5, why: old ? `Requires the ${AGES[d.age]}.` : null, badge: n || '', on: () => { const r = g.train(b, t); if (r === 'cost') a.toast('Not enough resources.', 2); else if (r === 'full') a.toast('Queue is full.', 2); this.updateSel(); }, tip: d.desc });
+          btns.push({ cost: d.cost, label: short(d.name), sub: old ? ageName(d.age) + ' Age' : costHtml(d.cost), dis: old || !g.afford(0, d.cost) || b.queue.length >= 5, why: old ? `Requires the ${AGES[d.age]}.` : b.queue.length >= 5 ? 'The queue is full (5).' : null, badge: n || '', on: () => { const r = g.train(b, t); if (r === 'cost') a.toast('Not enough resources.', 2); else if (r === 'full') a.toast('Queue is full.', 2); this.updateSel(); }, tip: d.desc });
         }
         for (const k of g.techsFor(b)) {
           const t = TECH[k], old = (t.age || 0) > T.age;
-          btns.push({ label: (t.toAge ? '&#9733; ' : '') + t.name.replace('Double-Bit ', '').replace(' Infantry', ''), sub: old ? ageName(t.age) + ' Age' : costHtml(t.cost), dis: old || !g.afford(0, t.cost) || b.queue.length >= 5, why: old ? `Requires the ${AGES[t.age]}.` : null, tech: 1, on: () => { const r = g.research(b, k); if (r === 'cost') a.toast('Not enough resources.', 2); else if (r === 'no') a.toast('Already advancing.', 2); this.updateSel(); }, tip: t.desc });
+          btns.push({ cost: t.cost, label: (t.toAge ? '&#9733; ' : '') + t.name.replace('Double-Bit ', '').replace(' Infantry', ''), sub: old ? ageName(t.age) + ' Age' : costHtml(t.cost), dis: old || !g.afford(0, t.cost) || b.queue.length >= 5, why: old ? `Requires the ${AGES[t.age]}.` : null, tech: 1, on: () => { const r = g.research(b, k); if (r === 'cost') a.toast('Not enough resources.', 2); else if (r === 'no') a.toast('Already advancing.', 2); this.updateSel(); }, tip: t.desc });
+        }
+        if (b.type === 'hall' && g.mode !== 'battle') { const pc = g.stat(0, 'peasant').cost, n = Math.min(5, 5 - b.queue.length), c5 = { f: (pc.f || 0) * Math.max(1, n) }; btns.push({ cost: c5, label: 'Peasant ×5', sub: costHtml(c5), dis: n <= 0 || !g.afford(0, c5), why: n <= 0 ? 'The queue is full (5).' : null, on: () => { let k = 0; for (let i = 0; i < n; i++) if (g.train(b, 'peasant') === 'ok') k++; a.toast(`${k} peasant${k === 1 ? '' : 's'} queued.`, 1.5); this.updateSel(); } }); }
+        if (b.d.market && g.mode !== 'battle') for (const rt of ['f', 'w', 's']) {
+          const nm = { f: 'Food', w: 'Wood', s: 'Stone' }[rt], pb = g.tradePrice(0, rt, true), ps = g.tradePrice(0, rt, false);
+          btns.push({ cost: { g: pb }, label: `Buy ${nm}`, sub: `100 for <i class="ic g"></i>${pb}`, dis: T.g < pb, on: () => { g.trade(0, rt, true); a.sfx?.('chime'); } });
+          btns.push({ cost: { [rt]: 100 }, label: `Sell ${nm}`, sub: `100 → <i class="ic g"></i>${ps}`, dis: (T[rt] || 0) < 100, on: () => { g.trade(0, rt, false); a.sfx?.('chime'); } });
         }
         if (b.type === 'hall' && g.mode !== 'battle') btns.push({ label: b.cargo?.length ? 'All Clear' : '&#128276; Bell', sub: b.cargo?.length ? `${b.cargo.length} inside` : 'peasants hide', on: () => { const n = g.ringBell(0); a.toast(n < 0 ? 'All clear! Back to work.' : n ? `${n} peasants run for the Town Hall!` : 'No peasants nearby.', 2); } });
         if (b.d.trains) btns.push({ label: 'Rally', sub: 'point', on: () => a.setPending({ type: 'rally', b }) });
@@ -173,7 +181,7 @@ export class HUD {
   }
   press(b) {
     const a = this.a;
-    if (b.dis) { a.toast(b.why || (b.sub && b.sub.startsWith('needs') ? `Requires a ${b.sub.slice(6)}.` : 'Not enough resources.'), 2); return; }
+    if (b.dis) { const T = this.a.game.T[0], need = b.cost && missing(T, b.cost); a.toast(b.why || (b.sub && b.sub.startsWith('needs') ? `Requires a ${b.sub.slice(6)}.` : need ? `Need ${need}.` : 'Not enough resources.'), 2.2); return; }
     a.sfx?.('click'); b.on(); this.sig = ''; this.updateCard(); if (b.tip && this.a.isTouch && b.tech) a.toast(b.tip, 2.5);
   }
   hotkey(code) { const i = HK.indexOf(code); const b = this.buttons[i]; if (!b) return false; this.press(b); return true; }

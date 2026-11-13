@@ -169,7 +169,7 @@ app.order = (ent, x, z) => {
 };
 app.setPending = p => {
   app.pending = p; hud.sig = ''; hud.updateCard(); $('place').classList.remove('hide'); $('pok').classList.toggle('hide', !(p.type === 'place' && isTouch));
-  $('ptxt').textContent = p.type === 'place' && p.btype === 'wall' ? (isTouch ? 'Tap where the wall starts, then ✓' : 'Click where the wall starts') : p.type === 'place' && p.btype === 'gate' ? (isTouch ? 'Tap a piece of your wall (or open ground), then ✓' : 'Click a piece of your wall (or open ground)') : p.type === 'place' ? (isTouch ? 'Tap the map to position, then ✓' : 'Click to place (Shift: place several)') : p.type === 'amove' ? 'Tap where to attack' : p.type === 'patrol' ? 'Tap the far end of the patrol' : p.type === 'repair' ? 'Tap a damaged building' : p.type === 'unload' ? 'Tap the shore to land your troops' : 'Tap the rally point';
+  $('ptxt').textContent = p.type === 'place' && p.btype === 'wall' ? (isTouch ? 'Tap where the wall starts, then ✓' : 'Click where the wall starts') : p.type === 'place' && (p.btype === 'gate' || p.btype === 'walltower') ? (isTouch ? 'Tap a piece of your wall (or open ground), then ✓' : 'Click a piece of your wall (or open ground)') : p.type === 'place' ? (isTouch ? 'Tap the map to position, then ✓' : 'Click to place (Shift: place several)') : p.type === 'amove' ? 'Tap where to attack' : p.type === 'patrol' ? 'Tap the far end of the patrol' : p.type === 'repair' ? 'Tap a damaged building' : p.type === 'unload' ? 'Tap the shore to land your troops' : 'Tap the rally point';
 };
 app.cancelPending = () => { clearLineGhosts(); app.pending = null; if (ghost) { ghost.removeFromParent(); ghost = null; } $('place').classList.add('hide'); hud.sig = ''; hud.updateCard(); };
 
@@ -207,7 +207,7 @@ function moveGhost(x, z) {
   const p = app.pending; if (!p || p.type !== 'place' || !ghost) return;
   const s = BD[p.btype].size; p.cx = Math.round(x - s / 2); p.cz = Math.round(z - s / 2);
   ghost.position.set(p.cx + s / 2, BD[p.btype].dock ? WL + .02 : heightAt(p.cx + s / 2, p.cz + s / 2) + .05, p.cz + s / 2);
-  p.ok = app.game.canPlace(p.btype, p.cx, p.cz) || (p.btype === 'gate' && !!app.game.gateSpot(0, p.cx, p.cz));
+  p.ok = app.game.canPlace(p.btype, p.cx, p.cz) || ((p.btype === 'gate' || p.btype === 'walltower') && !!app.game.gateSpot(0, p.cx, p.cz));
   if (p.btype === 'wall') { ghost.visible = !p.a; if (p.a) showWallLine(p); } const gm = ghostMats[p.ok ? 0 : 1]; if (ghost.isMesh) ghost.material = gm; else ghost.traverse(o => { if (o.isMesh) o.material = gm; });
 }
 function confirmPlace(keep) {

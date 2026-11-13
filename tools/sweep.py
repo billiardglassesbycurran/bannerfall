@@ -39,12 +39,12 @@ SWEEP = r"""async () => {
   await step('advance to Castle Age', () => { g.applyTech(0, 'feudal'); g.applyTech(0, 'kingdom'); g.applyTech(0, 'castleage'); g.T[0].s = 99999; });
   const h = g.blds[0], placed = {};
   const place = t => { for (let r = 6; r < 30; r++) for (let k = 0; k < 24; k++) { const cx = Math.round(h.x + Math.cos(k / 24 * 6.28 + r) * r - 2), cz = Math.round(h.z + Math.sin(k / 24 * 6.28 + r) * r - 2); if (g.canPlace(t, cx, cz)) return g.placeBuilding(0, t, cx, cz, true); } };
-  for (const t of ['house', 'farm', 'store', 'barracks', 'range', 'stable', 'workshop', 'smith', 'tower', 'wall', 'gate', 'castle']) await step('place ' + t, () => { placed[t] = place(t); if (!placed[t]) throw new Error('no room for ' + t); });
+  for (const t of ['house', 'farm', 'store', 'mill', 'lumber', 'mining', 'market', 'temple', 'barracks', 'range', 'stable', 'workshop', 'smith', 'tower', 'wall', 'gate', 'walltower', 'castle']) await step('place ' + t, () => { placed[t] = place(t); if (!placed[t]) throw new Error('no room for ' + t); });
   await step('place dock', () => { for (let cz = 4; cz < 124 && !placed.dock; cz++) for (let cx = 4; cx < 124 && !placed.dock; cx++) if (g.canPlace('dock', cx, cz)) placed.dock = g.placeBuilding(0, 'dock', cx, cz, true); });
   g.recount();
   const report = { buildings: {}, units: {} };
   for (const [t, b] of Object.entries({ hall: h, ...placed })) if (b) report.buildings[t] = await pressAll(t, () => [b]);
-  const types = ['peasant', 'sword', 'spear', 'archer', 'crossbow', 'knight', 'lightcav', 'horsearcher', 'catapult', g.civ[0].unique.type, 'fishboat', 'transport', 'warship'];
+  const types = ['peasant', 'healer', 'sword', 'spear', 'archer', 'crossbow', 'knight', 'lightcav', 'horsearcher', 'catapult', g.civ[0].unique.type, 'fishboat', 'transport', 'warship'];
   const made = {};
   for (const t of types) await step('spawn ' + t, () => { made[t] = g.spawnUnit(0, t, h.x + 6, h.z - 6); if (!made[t]) throw new Error('spawn failed'); });
   for (const t of types) if (made[t]) report.units[t] = await pressAll(t, () => [made[t]]);

@@ -72,7 +72,7 @@ export class AI {
     const g = this.g, T = g.T[this.team], hall = g.blds.find(b => b.alive && b.team === this.team && b.type === 'hall');
     if (!hall) { for (const u of this.my(u => u.task.type === 'idle' && u.d.acq)) { const t = this.attackTarget(u); if (t) g.amove(u, t.x, t.z); } return; }
     const peas = this.my(u => u.type === 'peasant'), mil = this.my(u => u.type !== 'peasant' && u.type !== 'hero' && u.d.dmg > 0);
-    const time = g.time, wantPeas = Math.min(this.D.peas + Math.floor(time / 90), 30);
+    const time = g.time, wantPeas = Math.min(this.D.peas + Math.floor(time / 75), 40);
     // when it's time to advance an age, save up for it: fewer new peasants/soldiers, more food gathering
     const castleMode = g.mode === 'castle';
     const ageKey = ['feudal', 'kingdom', 'castleage'][T.age] || null, ageCost = ageKey && TECH[ageKey].cost;
@@ -116,15 +116,22 @@ export class AI {
       if (!r) r = g.nearestRes(p.x, p.z, 'w', 60);
       if (r) { g.gather(p, r); count[r.rt]++; }
     }
-    if (T.pop >= T.cap - 3 && T.cap < 100 && !building('house')) this.tryBuild('house', hall);
+    if (T.pop >= T.cap - 3 && T.cap < 200 && !building('house')) this.tryBuild('house', hall);
+    // trade surplus at a Market for gold (Knight and Warlord)
+    if (g.diff >= 1 && T.age >= 1 && !short) {
+      const rich = ['f', 'w', 's'].find(k => (T[k] || 0) > 1100);
+      if (rich && nOf('market') === 0 && g.afford(this.team, BD.market.cost)) this.tryBuild('market', hall);
+      else if (rich && T.g < 400) g.trade(this.team, rich, false);
+    }
     if (!hasBarracks && peas.length >= 7) this.tryBuild('barracks', hall);
     // storehouses next to the woods (and later the gold) so workers don't walk back to the Town Hall every trip
-    const stores = g.blds.filter(b => b.alive && b.team === this.team && (b.type === 'store' || b.type === 'hall'));
-    for (const rt of ['w', 'g', 's']) {
-      if (rt !== 'w' && time < 360) continue;
-      const r = g.nearestRes(hall.x, hall.z, rt, 70); if (!r || building('store')) continue;
-      const near = stores.some(b => Math.hypot(b.x - r.x, b.z - r.z) < 11);
-      if (!near && g.afford(this.team, BD.store.cost) && nOf('store') < 3) { const sp = this.findSpot('store', r, 2, 9); if (sp) { const ps = peas.filter(u => u.task.type === 'gather' && u.task.res.rt === rt).sort((a, b) => dist(a, r) - dist(b, r)).slice(0, 2); g.startBuilding(this.team, 'store', sp[0], sp[1], ps.length ? ps : peas.slice(0, 1)); } break; }
+    const drops = g.blds.filter(b => b.alive && b.team === this.team && b.d.drop);
+    for (const rt of ['w', 'g', 's', 'f']) { // a Lumber Camp by the woods, a Mining Camp by the gold/stone, a Mill by the berries
+      if ((rt === 'g' || rt === 's') && time < 300) continue;
+      const kind = rt === 'w' ? 'lumber' : rt === 'f' ? 'mill' : 'mining';
+      const r = g.nearestRes(hall.x, hall.z, rt, 70); if (!r || building(kind)) continue;
+      const near = drops.some(b => Math.hypot(b.x - r.x, b.z - r.z) < 11 && (typeof b.d.drop !== 'string' || b.d.drop.includes(rt)));
+      if (!near && g.afford(this.team, BD[kind].cost) && nOf(kind) < 3) { const sp = this.findSpot(kind, r, 2, 9); if (sp) { const ps = peas.filter(u => u.task.type === 'gather' && u.task.res.rt === rt).sort((a, b) => dist(a, r) - dist(b, r)).slice(0, 2); g.startBuilding(this.team, kind, sp[0], sp[1], ps.length ? ps : peas.slice(0, 1)); } break; }
     }
     if (!short && hasBarracks && time > 200 && nOf('range') === 0) this.tryBuild('range', hall);
     if (!short && hasBarracks && this.g.diff >= 1 && time > 300 && nOf('stable') === 0) this.tryBuild('stable', hall);
