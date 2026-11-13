@@ -8,6 +8,7 @@ import { Tutorial } from './tutorial.js';
 import { Field } from './battle.js';
 import { Atmosphere, isNight } from './sky.js';
 import { Link, HostSync, GuestSync, newCode } from './net.js';
+import { initIcons, symbolHtml } from './icons.js';
 import { MISSIONS, progress, saveProgress } from './campaign.js';
 import { saveGame, loadSave, applySave, saveInfo, clearSave } from './save.js';
 import { Sound } from './audio.js';
@@ -111,6 +112,8 @@ const app = {
   cfg: { mode: 'skirmish', diff: 1, civ: 'franks' },
 };
 app.scene = scene; app.renderer = renderer;
+initIcons(renderer); // button pictures are rendered from the real models
+for (const [id, k] of [['bAll', 'helmet'], ['bIdle', 'zzz'], ['bBox', 'box'], ['bLead', 'crown']]) { const el = $(id); if (el) el.innerHTML = symbolHtml(k) + el.innerHTML.replace(/^(&#\d+;|[\u2500-\u2bff\u{1F300}-\u{1FAFF}])\s*/u, ''); }
 const fx = new FX(scene), sound = new Sound();
 const atmo = new Atmosphere({ scene, sun, hemi, renderer, base: { sun: sun.intensity, hemi: hemi.intensity }, low: qLevel === 'low', sound });
 // ---------------- player settings (saved on this device) ----------------

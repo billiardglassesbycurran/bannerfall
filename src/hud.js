@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { UD, BD, BUILD_ECO, BUILD_MIL, BUILD_DEF, TECH, AGES } from './data.js';
 import { ABIL, RANKS } from './game.js';
+import { portrait, iconHtml, techSymbol, actionSymbol, symbolHtml } from './icons.js';
 import { N, SIZE, resources, minimapColors, heightAt, WL } from './world.js';
 
 const $ = id => document.getElementById(id);
@@ -97,7 +98,7 @@ export class HUD {
 
   // ---------------- command card ----------------
   updateCard() {
-    { const f = this.a.sel.find(e => e.kind === 'unit' && e.team === 0 && e.alive), el = document.getElementById('bRide'); if (el) { const n = f ? (f.d.hero ? 'Commander' : f.d.name) : 'selected'; if (el.dataset.n !== n) { el.dataset.n = n; el.innerHTML = `&#128065; Play as<small>${n}</small>`; el.classList.toggle('dis', !f); } } }
+    { const f = this.a.sel.find(e => e.kind === 'unit' && e.team === 0 && e.alive), el = document.getElementById('bRide'); if (el) { const n = f ? (f.d.hero ? 'Commander' : f.d.name) : 'selected'; if (el.dataset.n !== n) { el.dataset.n = n; el.innerHTML = `${symbolHtml('eye')}Play as<small>${n}</small>`; el.classList.toggle('dis', !f); } } }
     const a = this.a, g = a.game, sel = a.sel, card = $('card'), btns = [];
     const T = g.T[0], touch = a.isTouch;
     const mine = sel.filter(e => e.alive !== false && e.team === 0);
@@ -114,7 +115,7 @@ export class HUD {
       if (peas.length && g.mode !== 'battle' && (this.page === 'eco' || this.page === 'mil' || this.page === 'def')) {
         for (const t of { eco: BUILD_ECO, mil: BUILD_MIL, def: BUILD_DEF }[this.page]) {
           const d = BD[t], req = d.req && !g.has(0, d.req), old = !g.ageOK(0, d);
-          btns.push({ cost: d.cost, label: short(d.name), sub: old ? ageName(d.age) + ' Age' : req ? 'needs ' + short(BD[d.req].name) : costHtml(d.cost), dis: old || req || !g.afford(0, d.cost) || (d.one && g.blds.some(b => b.alive && b.team === 0 && b.type === t)), why: d.one && g.blds.some(b => b.alive && b.team === 0 && b.type === t) ? 'You already have one.' : old ? `Requires the ${AGES[d.age]}.` : req ? `Requires a ${BD[d.req].name}.` : null, on: () => { a.startPlace(t); this.page = null; }, tip: d.desc });
+          btns.push({ ic: 'b:' + t, cost: d.cost, label: short(d.name), sub: old ? ageName(d.age) + ' Age' : req ? 'needs ' + short(BD[d.req].name) : costHtml(d.cost), dis: old || req || !g.afford(0, d.cost) || (d.one && g.blds.some(b => b.alive && b.team === 0 && b.type === t)), why: d.one && g.blds.some(b => b.alive && b.team === 0 && b.type === t) ? 'You already have one.' : old ? `Requires the ${AGES[d.age]}.` : req ? `Requires a ${BD[d.req].name}.` : null, on: () => { a.startPlace(t); this.page = null; }, tip: d.desc });
         }
         back();
       } else {
@@ -148,11 +149,11 @@ export class HUD {
       if (b.built) {
         for (const t of g.trainsFor(b)) {
           const d = g.stat(0, t), n = b.queue.filter(q => q.type === t).length, old = !g.ageOK(0, d);
-          btns.push({ cost: d.cost, label: short(d.name), sub: old ? ageName(d.age) + ' Age' : costHtml(d.cost), dis: old || !g.afford(0, d.cost) || b.queue.length >= 5, why: old ? `Requires the ${AGES[d.age]}.` : b.queue.length >= 5 ? 'The queue is full (5).' : null, badge: n || '', on: () => { const r = g.train(b, t); if (r === 'cost') a.toast('Not enough resources.', 2); else if (r === 'full') a.toast('Queue is full.', 2); this.updateSel(); }, tip: d.desc });
+          btns.push({ ic: 'u:' + t, cost: d.cost, label: short(d.name), sub: old ? ageName(d.age) + ' Age' : costHtml(d.cost), dis: old || !g.afford(0, d.cost) || b.queue.length >= 5, why: old ? `Requires the ${AGES[d.age]}.` : b.queue.length >= 5 ? 'The queue is full (5).' : null, badge: n || '', on: () => { const r = g.train(b, t); if (r === 'cost') a.toast('Not enough resources.', 2); else if (r === 'full') a.toast('Queue is full.', 2); this.updateSel(); }, tip: d.desc });
         }
         for (const k of g.techsFor(b)) {
           const t = TECH[k], old = (t.age || 0) > T.age;
-          btns.push({ cost: t.cost, label: (t.toAge ? '&#9733; ' : '') + t.name.replace('Double-Bit ', '').replace(' Infantry', ''), sub: old ? ageName(t.age) + ' Age' : costHtml(t.cost), dis: old || !g.afford(0, t.cost) || b.queue.length >= 5, why: old ? `Requires the ${AGES[t.age]}.` : null, tech: 1, on: () => { const r = g.research(b, k); if (r === 'cost') a.toast('Not enough resources.', 2); else if (r === 'no') a.toast('Already advancing.', 2); this.updateSel(); }, tip: t.desc });
+          btns.push({ ic: 't:' + k, cost: t.cost, label: (t.toAge ? '&#9733; ' : '') + t.name.replace('Double-Bit ', '').replace(' Infantry', ''), sub: old ? ageName(t.age) + ' Age' : costHtml(t.cost), dis: old || !g.afford(0, t.cost) || b.queue.length >= 5, why: old ? `Requires the ${AGES[t.age]}.` : null, tech: 1, on: () => { const r = g.research(b, k); if (r === 'cost') a.toast('Not enough resources.', 2); else if (r === 'no') a.toast('Already advancing.', 2); this.updateSel(); }, tip: t.desc });
         }
         if (b.type === 'hall' && g.mode !== 'battle') { const pc = g.stat(0, 'peasant').cost, n = Math.min(5, 5 - b.queue.length), c5 = { f: (pc.f || 0) * Math.max(1, n) }; btns.push({ cost: c5, label: 'Peasant ×5', sub: costHtml(c5), dis: n <= 0 || !g.afford(0, c5), why: n <= 0 ? 'The queue is full (5).' : null, on: () => { let k = 0; for (let i = 0; i < n; i++) if (g.train(b, 'peasant') === 'ok') k++; a.toast(`${k} peasant${k === 1 ? '' : 's'} queued.`, 1.5); this.updateSel(); } }); }
         if (b.d.market && g.mode !== 'battle') for (const rt of ['f', 'w', 's']) {
@@ -173,11 +174,18 @@ export class HUD {
     card.innerHTML = '';
     btns.forEach((b, i) => {
       const el = document.createElement('button'); el.className = 'btn' + (b.dis ? ' dis' : '') + (b.tech ? ' tech' : '');
-      el.innerHTML = `${b.label}<span class="cost">${b.sub || ''}</span>${b.badge ? `<span class="q">${b.badge}</span>` : ''}${!touch && HKL[i] ? `<span class="hk">${HKL[i]}</span>` : ''}`;
+      el.innerHTML = `${this.pic(b)}<span class="bl">${b.label}</span><span class="cost">${b.sub || ''}</span>${b.badge ? `<span class="q">${b.badge}</span>` : ''}${!touch && HKL[i] ? `<span class="hk">${HKL[i]}</span>` : ''}`;
       if (b.tip) el.title = b.tip;
       el.addEventListener('click', ev => { ev.stopPropagation(); this.press(b); });
       card.appendChild(el);
     });
+  }
+  /** The small picture on a button: a portrait of the unit/building, or a drawn symbol. */
+  pic(b) {
+    const g = this.a.game;
+    if (b.ic && b.ic.startsWith('t:')) { const k = b.ic.slice(2); return iconHtml({ sym: techSymbol(k, TECH[k]) }); }
+    if (b.ic) { const url = portrait(b.ic, 0, g.civKeys?.[0] || 'franks', g.look ? g.look(0) : { age: 1 }); if (url) return iconHtml({ url }); }
+    const k = actionSymbol(b.label, b.sub || ''); return k ? iconHtml({ sym: k }) : '';
   }
   press(b) {
     const a = this.a;

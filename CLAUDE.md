@@ -79,6 +79,8 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
   (`game.trade`), Temple (healers: `d.heal`), one Town Hall per side (`one`), population cap `MAX_POP` 200. Walls have three looks:
   wood → Stone Walls → Castle Walls (`fortresswalls`); `walltower` is a wall piece that shoots; towers: Guard Tower → Keep.
   Build menu pages: eco / mil / def (`BUILD_ECO/MIL/DEF`). Costs show with resource icons; disabled buttons say what's missing.
+- `src/icons.js` — button pictures: `portrait('u:sword' | 'b:barracks')` renders the real model to a 96px image once (cached);
+  `techSymbol` / `actionSymbol` pick a drawn SVG symbol for upgrades and actions. hud.js `pic(b)` uses `b.ic` or the label.
 - `src/battle.js` — Battle mode field: 3 capturable banners, reserves + reinforcement waves, army breaks if all banners held.
 - `src/path.js` — A* pathfinding on the grid (pass a walk function: `cellWalk` for land, `navCell` for ships). `src/ai.js` — enemy AI for Skirmish, Battle, Survival.
   Skirmish AI (Knight/Warlord): counters the player's army (`counterW`), gathers at a rally point and attacks only when
