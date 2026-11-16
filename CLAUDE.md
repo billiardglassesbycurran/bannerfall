@@ -81,11 +81,13 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
   Build menu pages: eco / mil / def (`BUILD_ECO/MIL/DEF`). Costs show with resource icons; disabled buttons say what's missing.
 - `src/icons.js` — button pictures: `portrait('u:sword' | 'b:barracks')` renders the real model to a 96px image once (cached);
   `techSymbol` / `actionSymbol` pick a drawn SVG symbol for upgrades and actions. hud.js `pic(b)` uses `b.ic` or the label.
-- `src/anim.js` + `assets/anim/` — animated soldiers (trial, Settings switch / `?anim=1`, off by default). KayKit CC0 skeleton +
-  clips, slimmed by `tools/kaykit.py`; every clip frame is baked into a bone texture and each unit type is one instanced mesh
-  posed in the vertex shader (`AnimBatch`, same interface as `FigureBatch`; `Figures.get` picks it for kinds in `KINDS`).
-  `PROP` re-proportions the chibi rig (small head, long legs). Gear is geometry bound to one bone (`onBone`). Body is the
-  pack's mannequin until the owner downloads KayKit Adventurers (`kaykit.py --char Knight.glb knight`). Viewer: `tools/animview.html`.
+- `src/anim.js` + `assets/anim/` — animated soldiers (on by default; Settings switch `animOn`, or `?anim=0/1`). A KayKit CC0
+  character (`char_knight.glb`, slimmed by `tools/kaykit.py --char`) with its own clips; every clip frame is baked into a bone
+  texture and each unit type is one instanced mesh posed in the vertex shader (`AnimBatch`, same interface as `FigureBatch`;
+  `Figures.get` picks it for kinds in `KINDS`). `PROP` re-proportions the chibi rig (small head, long legs); `teamMap` repaints
+  the red accents and copper trim in the team colour; attachments (sword, shield, helmet, cape) ride one bone each (`show`).
+  `animFigure` = still copy for portraits/export. So far: Swordsman only. Viewer: `tools/animview.html`. The `rig_*.glb`
+  files (mannequin + extra clips from KayKit Character Animations 1.1) are not loaded yet; they are for future unit types.
 - `src/battle.js` — Battle mode field: 3 capturable banners, reserves + reinforcement waves, army breaks if all banners held.
 - `src/path.js` — A* pathfinding on the grid (pass a walk function: `cellWalk` for land, `navCell` for ships). `src/ai.js` — enemy AI for Skirmish, Battle, Survival.
   Skirmish AI (Knight/Warlord): counters the player's army (`counterW`), gathers at a rally point and attacks only when

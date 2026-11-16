@@ -1,54 +1,69 @@
 // Animated soldiers: real skeleton animation (walk, run, attack, death...) for whole armies at once.
 //
-// How it works: the CC0 KayKit skeleton and animation clips (assets/anim/, see tools/kaykit.py) are loaded once and
-// every frame of every clip is "baked" into one texture (a row of bone positions per frame). Each unit type is then a
-// single instanced mesh, and the graphics card poses every soldier itself by reading that soldier's current row.
+// How it works: a CC0 KayKit character (assets/anim/, see tools/kaykit.py) is loaded once and every frame of every
+// clip is "baked" into one texture (a row of bone positions per frame). Each unit type is then a single instanced
+// mesh, and the graphics card poses every soldier itself by reading that soldier's current row of the texture.
 // So 200 animated swordsmen still cost one draw call.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const FPS = 30;
-const PACK = { general: 'rig_general.glb', move: 'rig_move.glb', melee: 'rig_melee.glb', tools: 'rig_tools.glb', ranged: 'rig_ranged.glb' };
-// Unit types that use animated models, and which clip plays for what.
-// speed = ground speed (units/s) the walk/run clip was made for; from/rate/len shape the attack swing.
-const KINDS = {
-  sword: { packs: ['general', 'move', 'melee'], gear: 'swordShield', size: 1,
-    clips: { idle: 'Idle_A', walk: 'Walking_A', run: 'Running_A', attack: 'Melee_1H_Attack_Slice_Diagonal', death: 'Death_A' } },
+export const ANIM_DEFAULT = true; // used when the player has never touched the Settings switch
+// Character files.
+const MODELS = {
+  knight: { file: 'char_knight.glb' },
 };
-export const ANIM = { on: false, ready: false, kinds: KINDS, rig: null, pbr: true };
+// Unit types that use animated models: which character, which of its attachments show, and which clip plays for what.
+const KINDS = {
+  sword: { model: 'knight', show: ['1H_Sword', 'Badge_Shield', 'Knight_Helmet', 'Knight_Cape'], size: 1,
+    clips: { idle: 'Idle', walk: 'Walking_A', run: 'Running_A', attack: '1H_Melee_Attack_Slice_Diagonal', death: 'Death_A' } },
+};
+export const ANIM = { on: false, ready: false, kinds: KINDS, rigs: {}, pbr: true };
 
-/** Is the animated-soldiers trial switched on? (Settings, or ?anim=1 / &anim=1 in the address) */
+/** Are animated soldiers switched on? (Settings, or ?anim=1 / ?anim=0 in the address) */
 export function animWanted() {
   if (/[?&#]anim=1/.test(location.href)) return true; if (/[?&#]anim=0/.test(location.href)) return false;
-  try { return !!JSON.parse(localStorage.getItem('bf.settings') || '{}').anim; } catch { return false; }
+  try { const v = JSON.parse(localStorage.getItem('bf.settings') || '{}').animOn; return v === undefined ? ANIM_DEFAULT : !!v; } catch { return ANIM_DEFAULT; }
 }
 
-/** Load the skeleton + clips and bake them. Safe to call when switched off (does nothing). */
+/** Load the characters + clips and bake them. Safe to call when switched off (does nothing). */
 export async function loadAnim(pbr) {
   ANIM.pbr = pbr; if (!animWanted()) return;
   try {
-    const packs = [...new Set(['general', ...Object.values(KINDS).flatMap(k => k.packs)])];
-    const loader = new GLTFLoader(), v = window.BF_VERSION || '';
-    const base = new URL('../assets/anim/', import.meta.url).href.split('?')[0];
-    const get = async p => { const r = await fetch(`${base}${PACK[p]}?v=${v}`); if (!r.ok) throw new Error(`${PACK[p]}: ${r.status}`); return loader.parseAsync(await r.arrayBuffer(), base); };
-    const files = await Promise.all(packs.map(get));
-    ANIM.rig = bake(files); ANIM.on = ANIM.ready = true;
+    const loader = new GLTFLoader(), v = window.BF_VERSION || '', base = new URL('../assets/anim/', import.meta.url).href.split('?')[0];
+    const need = [...new Set(Object.values(KINDS).map(k => k.model))];
+    await Promise.all(need.map(async id => {
+      const r = await fetch(`${base}${MODELS[id].file}?v=${v}`); if (!r.ok) throw new Error(`${MODELS[id].file}: ${r.status}`);
+      const gltf = await loader.parseAsync(await r.arrayBuffer(), base);
+      const clips = [...new Set(Object.values(KINDS).filter(k => k.model === id).flatMap(k => Object.values(k.clips)))];
+      ANIM.rigs[id] = bake(gltf, clips);
+    }));
+    ANIM.on = ANIM.ready = true;
   } catch (e) { console.warn('Animated soldiers could not load; using the built-in figures.', e); ANIM.on = false; }
 }
 
 // KayKit figures have big heads and short legs. The game's other soldiers are realistically proportioned, so the
-// skeleton is re-proportioned while baking: head shrunk about the neck, legs lengthened (and the hips lifted to match).
-const PROP = { head: .5, leg: [1.22, 1.95, 1.22], hand: .8, arm: [1, 1.18, 1], chest: [1, 1.12, 1] };
+// skeleton is re-proportioned while baking: head shrunk about the neck, legs lengthened (and the body lifted to match).
+const PROP = { head: .52, leg: [1.2, 1.9, 1.2], hand: .8, arm: [1, 1.16, 1], chest: [1, 1.1, 1] };
 
-function bake(files) {
-  const root = files[0].scene; root.updateMatrixWorld(true);
+function bake(gltf, names) {
+  const root = gltf.scene; root.updateMatrixWorld(true);
   const parts = []; root.traverse(o => { if (o.isSkinnedMesh) parts.push(o); });
   const skel = parts[0].skeleton, bones = skel.bones, nB = bones.length;
   const boneIdx = {}; bones.forEach((b, i) => { boneIdx[b.name] = i; });
-  const bind = bones.map((b, i) => skel.boneInverses[i].clone().invert()); // where each bone sits in the rest pose
-  const all = {}; for (const f of files) for (const c of f.animations) all[c.name] = c;
-  const names = [...new Set(Object.values(KINDS).flatMap(k => Object.values(k.clips)))].filter(n => all[n]);
+  const bind = bones.map((b, i) => skel.boneInverses[i].clone().invert()); // where each bone sits in the bind pose
+  const restWorld = bones.map(b => b.matrixWorld.clone());
+  // attachments: plain meshes parented to a bone (sword in the hand slot, helmet on the head...)
+  const attach = [];
+  root.traverse(o => {
+    if (!o.isMesh || o.isSkinnedMesh) return; let p = o.parent; while (p && !p.isBone) p = p.parent; if (!p) return;
+    const bi = boneIdx[p.name]; if (bi === undefined) return;
+    const m = bind[bi].clone().multiply(restWorld[bi].clone().invert()).multiply(o.matrixWorld); // into bind space, riding that bone
+    attach.push({ name: o.name, bone: bi, geo: o.geometry.clone().applyMatrix4(m) });
+  });
+  const all = {}; for (const c of gltf.animations) all[c.name] = c;
+  names = names.filter(n => all[n]);
   const table = {}; let rows = 0;
   for (const n of names) { const c = all[n], k = Math.max(2, Math.round(c.duration * FPS) + 1); table[n] = { name: n, start: rows, n: k, dur: (k - 1) / FPS }; rows += k; }
   // re-proportioning, applied on top of every animation frame
@@ -61,7 +76,8 @@ function bake(files) {
     for (const n of ['upperarml', 'upperarmr']) B(n)?.scale.multiply(armV);
     B('spine')?.scale.multiply(chestV); B('head')?.scale.divide(chestV);
   };
-  const lowest = () => { let y = 1e9; for (const b of bones) y = Math.min(y, b.matrixWorld.elements[13]); return y; };
+  const body = bones.filter(b => !/IK|control|^root$/.test(b.name)); // real body bones (not the rig's helper handles)
+  const lowest = () => { let y = 1e9; for (const b of body) y = Math.min(y, b.matrixWorld.elements[13]); return y; };
   const W = nB * 4, data = new Float32Array(W * rows * 4), mixer = new THREE.AnimationMixer(root), m = new THREE.Matrix4();
   for (const n of names) {
     bones.forEach((b, i) => { b.position.copy(rest[i][0]); b.quaternion.copy(rest[i][1]); b.scale.copy(rest[i][2]); });
@@ -78,8 +94,8 @@ function bake(files) {
     }
     act.stop(); mixer.uncacheClip(c);
   }
-  // normalise: measure the figure standing idle, then scale to 1.8 tall with the feet on the ground
-  const idle = table[KINDS.sword.clips.idle] || table[names[0]], v = new THREE.Vector3(), acc = new THREE.Vector3(), bm = new THREE.Matrix4(); let lo = 1e9, hi = -1e9;
+  // normalise: measure the figure standing idle, then scale to soldier height with the feet on the ground
+  const idle = table[names.find(n => /^Idle/.test(n)) || names[0]], v = new THREE.Vector3(), acc = new THREE.Vector3(), bm = new THREE.Matrix4(); let lo = 1e9, hi = -1e9;
   for (const mesh of parts) {
     const g = mesh.geometry, P = g.attributes.position, SI = g.attributes.skinIndex, SW = g.attributes.skinWeight;
     for (let i = 0; i < P.count; i += 3) { // every third vertex is plenty for a bounding height
@@ -88,22 +104,41 @@ function bake(files) {
       lo = Math.min(lo, acc.y); hi = Math.max(hi, acc.y);
     }
   }
-  const sc = 1.8 / (hi - lo), N = new THREE.Matrix4().makeScale(sc, sc, sc).setPosition(0, -lo * sc, 0);
+  const sc = 1.74 / (hi - lo), N = new THREE.Matrix4().makeScale(sc, sc, sc).setPosition(0, -lo * sc, 0);
   for (let i = 0; i < data.length; i += 16) { m.fromArray(data, i).premultiply(N); data.set(m.elements, i); }
   const tex = new THREE.DataTexture(data, W, rows, THREE.RGBAFormat, THREE.FloatType);
   tex.minFilter = tex.magFilter = THREE.NearestFilter; tex.generateMipmaps = false; tex.needsUpdate = true;
-  return { parts, table, uBones: { value: tex }, boneIdx, bind, map: parts[0].material.map || null, nB };
+  return { parts, attach, table, uBones: { value: tex }, boneIdx, bind, map: parts[0].material.map || null, teamMaps: {}, nB };
 }
 
-// ---------- geometry: the body, plus gear fixed to a bone ----------
-const lin = hex => new THREE.Color(hex);
-function withAttrs(g, color, skinI, skinW) {
+// ---------- team colours: repaint the character's red accents (cape, plume, emblem) in the team colour ----------
+function teamMap(rig, teamColor) {
+  if (!rig.map?.image) return rig.map;
+  if (rig.teamMaps[teamColor]) return rig.teamMaps[teamColor];
+  const S = 256, cv = document.createElement('canvas'); cv.width = cv.height = S; const cx = cv.getContext('2d', { willReadFrequently: true });
+  cx.drawImage(rig.map.image, 0, 0, S, S); const img = cx.getImageData(0, 0, S, S), d = img.data;
+  const th = {}; new THREE.Color(teamColor).getHSL(th, THREE.SRGBColorSpace); const c = new THREE.Color(), hsl = {};
+  for (let i = 0; i < d.length; i += 4) {
+    c.setRGB(d[i] / 255, d[i + 1] / 255, d[i + 2] / 255, THREE.SRGBColorSpace).getHSL(hsl, THREE.SRGBColorSpace);
+    if ((hsl.h > .83 || hsl.h < .022) && hsl.s > .35) { // the reds and red-purples of the palette; skin and leather browns are left alone
+      c.setHSL(th.h, Math.min(1, hsl.s * (.55 + th.s * .6)), hsl.l * (.6 + th.l), THREE.SRGBColorSpace).getRGB(hsl, THREE.SRGBColorSpace);
+      d[i] = hsl.r * 255; d[i + 1] = hsl.g * 255; d[i + 2] = hsl.b * 255;
+    } else if (hsl.h >= .022 && hsl.h < .075 && hsl.s > .3 && hsl.l < .62) { // copper trim (belt, straps, shield back): a darker shade of the team colour
+      c.setHSL(th.h, Math.min(1, th.s * .85), hsl.l * (.5 + th.l * .9), THREE.SRGBColorSpace).getRGB(hsl, THREE.SRGBColorSpace);
+      d[i] = hsl.r * 255; d[i + 1] = hsl.g * 255; d[i + 2] = hsl.b * 255;
+    }
+  }
+  cx.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(cv); t.flipY = false; t.colorSpace = THREE.SRGBColorSpace; t.magFilter = t.minFilter = THREE.LinearFilter; t.generateMipmaps = false;
+  return (rig.teamMaps[teamColor] = t);
+}
+
+// ---------- geometry: the body, plus the attachments riding one bone each ----------
+function withAttrs(g, skinI, skinW) {
   const n = g.attributes.position.count, out = new THREE.BufferGeometry();
   out.setAttribute('position', g.attributes.position.clone());
   if (!g.attributes.normal) g.computeVertexNormals(); out.setAttribute('normal', g.attributes.normal.clone());
   out.setAttribute('uv', g.attributes.uv ? g.attributes.uv.clone() : new THREE.BufferAttribute(new Float32Array(n * 2), 2));
-  const col = new Float32Array(n * 3), c = lin(color); for (let i = 0; i < n; i++) col.set([c.r, c.g, c.b], i * 3);
-  out.setAttribute('color', new THREE.BufferAttribute(col, 3));
   const I = new Float32Array(n * 4), Wt = new Float32Array(n * 4);
   for (let i = 0; i < n; i++) {
     if (skinI.isBufferAttribute) { let s = 0; for (let k = 0; k < 4; k++) { I[i * 4 + k] = skinI.getComponent(i, k); Wt[i * 4 + k] = skinW.getComponent(i, k); s += Wt[i * 4 + k]; } for (let k = 0; k < 4; k++) Wt[i * 4 + k] /= s || 1; }
@@ -113,37 +148,26 @@ function withAttrs(g, color, skinI, skinW) {
   out.setIndex(g.index ? g.index.clone() : [...Array(n).keys()]);
   return out;
 }
-/** A solid piece stuck to one bone (sword in the hand, helmet on the head...). mat = where it sits relative to the bone. */
-function onBone(rig, bone, geo, color, mat) {
-  const i = rig.boneIdx[bone]; if (i === undefined) return null;
-  const g = geo.clone(); if (mat) g.applyMatrix4(mat); g.applyMatrix4(rig.bind[i]);
-  return withAttrs(g, color, i, 1);
-}
-const T = (x, y, z, rx = 0, ry = 0, rz = 0, s = 1) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), new THREE.Vector3(s, s, s));
-const PART_COL = (name, tc, textured) => textured ? 0xffffff : /Head/.test(name) ? 0xd8a07c : /Body/.test(name) ? tc : /Arm/.test(name) ? 0x8f949c : 0x4a3d30;
-
-function gearFor(rig, kind, tc) {
-  const out = [], add = g => { if (g) out.push(g); }; // gear is modelled in the skeleton's own units
-  if (kind === 'swordShield') {
-    // sword in the right hand
-    add(onBone(rig, 'handslotr', new THREE.BoxGeometry(.07, 1.0, .02), 0xd9dde2, T(0, .62, 0)));       // blade
-    add(onBone(rig, 'handslotr', new THREE.BoxGeometry(.3, .05, .06), 0xb08a3a, T(0, .12, 0)));        // crossguard
-    add(onBone(rig, 'handslotr', new THREE.CylinderGeometry(.03, .03, .22, 6), 0x4a3020, T(0, 0, 0))); // grip
-    // kite shield on the left arm
-    const sh = new THREE.CylinderGeometry(.42, .42, .06, 5, 1); sh.scale(.85, 1, 1.15);
-    add(onBone(rig, 'handslotl', sh, tc, T(0, .02, .1, Math.PI / 2, 0, 0)));
-    add(onBone(rig, 'handslotl', new THREE.CylinderGeometry(.11, .11, .1, 8), 0xc9a94e, T(0, .02, .14, Math.PI / 2, 0, 0)));
-    // helmet
-    add(onBone(rig, 'head', new THREE.SphereGeometry(.47, 10, 6, 0, Math.PI * 2, 0, Math.PI * .55), 0x9aa0a8, T(0, .62, 0)));
-    add(onBone(rig, 'head', new THREE.BoxGeometry(.07, .34, .05), 0x9aa0a8, T(0, .5, .46)));          // nose guard
-  }
-  return out;
-}
-function unitGeo(rig, def, tc) {
-  const textured = !!rig.map, list = [];
-  for (const m of rig.parts) { const g = m.geometry.clone(); g.applyMatrix4(m.bindMatrix); list.push(withAttrs(g, PART_COL(m.name, tc, textured), g.attributes.skinIndex, g.attributes.skinWeight)); }
-  list.push(...gearFor(rig, def.gear, tc));
+function unitGeo(rig, def) {
+  const list = [];
+  for (const m of rig.parts) { const g = m.geometry.clone(); g.applyMatrix4(m.bindMatrix); list.push(withAttrs(g, g.attributes.skinIndex, g.attributes.skinWeight)); }
+  for (const a of rig.attach) if (def.show.includes(a.name)) list.push(withAttrs(a.geo, a.bone, 1));
   return mergeGeometries(list, false);
+}
+
+/** A still copy of an animated unit standing idle (for button portraits and the Unity export). */
+export function animFigure(kind, teamColor) {
+  const def = KINDS[kind], rig = ANIM.rigs[def.model], g = unitGeo(rig, def), P = g.attributes.position, Nn = g.attributes.normal, I = g.attributes.aSkinI, Wt = g.attributes.aSkinW;
+  const data = rig.uBones.value.image.data, W = rig.nB * 4, row = (rig.table[def.clips.idle] || Object.values(rig.table)[0]).start;
+  const m = new THREE.Matrix4(), e = m.elements, v = new THREE.Vector3(), n = new THREE.Vector3(), n3 = new THREE.Matrix3();
+  for (let i = 0; i < P.count; i++) {
+    e.fill(0);
+    for (let k = 0; k < 4; k++) { const w = Wt.getComponent(i, k); if (!w) continue; const o = (row * W + I.getComponent(i, k) * 4) * 4; for (let j = 0; j < 16; j++) e[j] += data[o + j] * w; }
+    v.fromBufferAttribute(P, i).applyMatrix4(m); P.setXYZ(i, v.x, v.y, v.z);
+    n.fromBufferAttribute(Nn, i).applyMatrix3(n3.setFromMatrix4(m)).normalize(); Nn.setXYZ(i, n.x, n.y, n.z);
+  }
+  g.deleteAttribute('aSkinI'); g.deleteAttribute('aSkinW'); g.computeBoundingBox();
+  const mesh = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: teamMap(rig, teamColor), roughness: .62, metalness: .08 })); mesh.name = kind; return mesh;
 }
 
 // ---------- shader: pose each instance from its row of the bone texture ----------
@@ -151,30 +175,30 @@ const HEAD = `attribute vec4 aSkinI; attribute vec4 aSkinW; attribute float aRow
 mat4 boneM(float b, int r) { int x = int(b + .5) * 4; return mat4(texelFetch(uBones, ivec2(x, r), 0), texelFetch(uBones, ivec2(x + 1, r), 0), texelFetch(uBones, ivec2(x + 2, r), 0), texelFetch(uBones, ivec2(x + 3, r), 0)); }
 mat4 animM() { int r = int(aRow + .5); return aSkinW.x * boneM(aSkinI.x, r) + aSkinW.y * boneM(aSkinI.y, r) + aSkinW.z * boneM(aSkinI.z, r) + aSkinW.w * boneM(aSkinI.w, r); }
 `;
-function patch(mat, depth) {
+function patch(mat, depth, rig, id) {
   mat.onBeforeCompile = sh => {
-    sh.uniforms.uBones = ANIM.rig.uBones;
+    sh.uniforms.uBones = rig.uBones;
     let v = sh.vertexShader;
     if (!depth) v = v.replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\n gSkin = animM(); objectNormal = mat3(gSkin) * objectNormal;');
     v = v.replace('#include <begin_vertex>', (depth ? 'gSkin = animM();\n' : '') + '#include <begin_vertex>\n transformed = (gSkin * vec4(transformed, 1.0)).xyz;');
     sh.vertexShader = HEAD + v;
   };
-  mat.customProgramCacheKey = () => 'bfanim' + (depth ? 'D' : 'C');
+  mat.customProgramCacheKey = () => 'bfanim' + (depth ? 'D' : 'C') + id;
   return mat;
 }
-let depthMat = null;
 
 const _root = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _v = new THREE.Vector3(), _s = new THREE.Vector3(), ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
 
 /** One instanced, animated mesh per (team, unit type). Same interface as the built-in FigureBatch in models.js. */
 export class AnimBatch {
   constructor(scene, team, kind, cap, shadows, teamColor) {
-    const rig = ANIM.rig, def = KINDS[kind]; this.def = def; this.cap = cap; this.used = 0; this.free = []; this.metal = []; this.parts = []; this.anim = true;
-    const geo = unitGeo(rig, def, teamColor);
+    const def = KINDS[kind], rig = ANIM.rigs[def.model]; this.def = def; this.cap = cap; this.used = 0; this.free = []; this.metal = []; this.parts = []; this.anim = true;
+    const geo = unitGeo(rig, def);
     this.rows = new THREE.InstancedBufferAttribute(new Float32Array(cap), 1); this.rows.setUsage(THREE.DynamicDrawUsage); geo.setAttribute('aRow', this.rows);
-    const mat = patch(ANIM.pbr ? new THREE.MeshStandardMaterial({ vertexColors: true, map: rig.map, roughness: .7, metalness: .1 }) : new THREE.MeshLambertMaterial({ vertexColors: true, map: rig.map }), false);
+    const map = teamMap(rig, teamColor);
+    const mat = patch(ANIM.pbr ? new THREE.MeshStandardMaterial({ map, roughness: .62, metalness: .08 }) : new THREE.MeshLambertMaterial({ map }), false, rig, def.model);
     const m = this.mesh = new THREE.InstancedMesh(geo, mat, cap); m.count = 0; m.frustumCulled = false; m.castShadow = shadows; m.receiveShadow = false;
-    if (shadows) { depthMat = depthMat || patch(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }), true); m.customDepthMaterial = depthMat; }
+    if (shadows) { rig.depthMat = rig.depthMat || patch(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }), true, rig, def.model); m.customDepthMaterial = rig.depthMat; }
     m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); scene.add(m); this.meshes = [m];
     const c = n => rig.table[def.clips[n]] || rig.table[def.clips.idle];
     this.C = { idle: c('idle'), walk: c('walk'), run: c('run'), attack: c('attack'), death: c('death'), work: def.clips.work ? c('work') : null };

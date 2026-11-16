@@ -6,7 +6,7 @@ import { Builder, P, M, TEXMAT } from './geo.js';
 import { UD } from './data.js';
 import { planksTexture, sailTexture, foamTexture } from './textures.js';
 import { GM, buildingParts } from './gltfmodels.js';
-import { ANIM, AnimBatch } from './anim.js';
+import { ANIM, AnimBatch, animFigure } from './anim.js';
 
 export const TEAM = [0x2c50a8, 0xa62419];
 const C = {
@@ -561,6 +561,7 @@ class FigureBatch {
  * hA/hB, cat) is its own child object with its pivot at the joint, so it can be animated in another program.
  */
 export function figureGroup(team, kind, style = 'franks') {
+  if (ANIM.on && ANIM.kinds[kind]) return animFigure(kind, TEAM[team]);
   const root = new THREE.Group(); root.name = kind;
   figureParts(team, kind, style).forEach((p, n) => {
     const node = p.anim ? new THREE.Group() : root;

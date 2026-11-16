@@ -19,6 +19,11 @@ PACKS = {
     'Rig_Medium_Tools.glb': ('rig_tools.glb', False, ['Chopping', 'Hammering', 'Pickaxing', 'Working_A', 'Digging']),
     'Rig_Medium_CombatRanged.glb': ('rig_ranged.glb', False, ['Ranged_Bow_Idle', 'Ranged_Bow_Draw', 'Ranged_Bow_Release', 'Ranged_2H_Aiming', 'Ranged_2H_Shoot', 'Ranged_2H_Reload']),
 }
+# clips kept from a character file (KayKit Adventurers 1.0 characters carry ~75 clips each) and attachments left out
+CHAR_CLIPS = ['Idle', 'Walking_A', 'Running_A', '1H_Melee_Attack_Slice_Diagonal', '1H_Melee_Attack_Chop', '1H_Melee_Attack_Stab', '2H_Melee_Attack_Chop',
+              '2H_Melee_Attack_Slice', '2H_Melee_Idle', 'Block', 'Blocking', 'Death_A', 'Death_B', 'Hit_A', 'Cheer', 'Interact', 'PickUp', '2H_Ranged_Aiming', '2H_Ranged_Shoot',
+              '1H_Ranged_Aiming', '1H_Ranged_Shoot', 'Throw', 'Unarmed_Idle']
+CHAR_DROP = ('1H_Sword_Offhand', 'Spike_Shield')
 CSIZE = {5120: 1, 5121: 1, 5122: 2, 5123: 2, 5125: 4, 5126: 4}
 NCOMP = {'SCALAR': 1, 'VEC2': 2, 'VEC3': 3, 'VEC4': 4, 'MAT2': 4, 'MAT3': 9, 'MAT4': 16}
 
@@ -32,8 +37,15 @@ def read_glb(path):
     return j, b[off + 8:off + 8 + m]
 
 
-def prune(src, dst, keep_mesh, clips):
+def prune(src, dst, keep_mesh, clips, drop_nodes=()):
     j, binb = read_glb(src)
+    for n in j['nodes']:  # attachments we never show (spare shields etc.)
+        if n.get('name') in drop_nodes: n.pop('mesh', None)
+    if keep_mesh and drop_nodes:  # drop meshes nothing points at any more
+        used = sorted({n['mesh'] for n in j['nodes'] if 'mesh' in n}); remap = {o: i for i, o in enumerate(used)}
+        j['meshes'] = [j['meshes'][o] for o in used]
+        for n in j['nodes']:
+            if 'mesh' in n: n['mesh'] = remap[n['mesh']]
     have = {a['name'] for a in j.get('animations', [])}
     missing = [c for c in clips if c not in have]
     if missing: print(f'  note: {src.name} has no clip(s) {missing}')
@@ -85,8 +97,8 @@ def prune(src, dst, keep_mesh, clips):
 
 def main():
     a = sys.argv[1:]
-    if len(a) == 3 and a[0] == '--char':  # a textured character (e.g. Knight.glb): keep the mesh, drop its animations
-        prune(pathlib.Path(a[1]).expanduser(), OUT / f'char_{a[2]}.glb', True, []); return
+    if len(a) == 3 and a[0] == '--char':  # a textured character with its own clips (e.g. Knight.glb from KayKit Adventurers)
+        prune(pathlib.Path(a[1]).expanduser(), OUT / f'char_{a[2]}.glb', True, CHAR_CLIPS, CHAR_DROP); return
     if len(a) != 1: print(__doc__); sys.exit(1)
     pack = pathlib.Path(a[0]).expanduser(); src = pack / 'Animations' / 'gltf' / 'Rig_Medium'
     if not src.is_dir(): sys.exit(f'Could not find Animations/gltf/Rig_Medium inside {pack}')

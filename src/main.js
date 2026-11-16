@@ -119,7 +119,7 @@ for (const [id, k] of [['bAll', 'helmet'], ['bIdle', 'zzz'], ['bBox', 'box'], ['
 const fx = new FX(scene), sound = new Sound();
 const atmo = new Atmosphere({ scene, sun, hemi, renderer, base: { sun: sun.intensity, hemi: hemi.intensity }, low: qLevel === 'low', sound });
 // ---------------- player settings (saved on this device) ----------------
-const SET_DEFAULT = { look: 1, cam: 1, vol: .7, music: true, voice: true, big: false, auto: true, fog: true, mapBot: false, mapOff: false, cycle: true, anim: false };
+const SET_DEFAULT = { look: 1, cam: 1, vol: .7, music: true, voice: true, big: false, auto: true, fog: true, mapBot: false, mapOff: false, cycle: true, animOn: true };
 app.settings = { ...SET_DEFAULT }; try { Object.assign(app.settings, JSON.parse(localStorage.getItem('bf.settings') || '{}')); } catch { /* ignore */ }
 function applySettings() {
   sound.setMusic?.(app.settings.music !== false); sound.voiceOn = app.settings.voice !== false;
@@ -512,12 +512,12 @@ onBtn('hOnline', () => showSetup('online'));
 onBtn('hTut', () => { app.cfg.mode = 'tutorial'; try { localStorage.setItem('bf.tutSeen', '1'); } catch { /* ignore */ } if (isTouch) goFullscreen(); setupGame('tutorial', 0, app.cfg.civ); });
 onBtn('bBack', showHome);
 const openSettings = () => {
-  const S = app.settings; $('sLook').value = S.look; $('sCam').value = S.cam; $('sVol').value = S.vol; $('sMusic').checked = S.music; $('sVoice').checked = S.voice; $('sBig').checked = S.big; $('sAuto').checked = S.auto; $('sFog').checked = S.fog; $('sMapBot').checked = S.mapBot; $('sCycle').checked = S.cycle; $('sAnim').checked = !!S.anim;
+  const S = app.settings; $('sLook').value = S.look; $('sCam').value = S.cam; $('sVol').value = S.vol; $('sMusic').checked = S.music; $('sVoice').checked = S.voice; $('sBig').checked = S.big; $('sAuto').checked = S.auto; $('sFog').checked = S.fog; $('sMapBot').checked = S.mapBot; $('sCycle').checked = S.cycle; $('sAnim').checked = S.animOn !== false;
   $('settings').classList.remove('hide');
 };
 onBtn('bSettings', openSettings); onBtn('bSettings2', openSettings);
 onBtn('bSetBack', () => { $('settings').classList.add('hide'); });
-for (const [id, key, num] of [['sLook', 'look', 1], ['sCam', 'cam', 1], ['sVol', 'vol', 1], ['sMusic', 'music'], ['sVoice', 'voice'], ['sBig', 'big'], ['sAuto', 'auto'], ['sFog', 'fog'], ['sMapBot', 'mapBot'], ['sCycle', 'cycle'], ['sAnim', 'anim']])
+for (const [id, key, num] of [['sLook', 'look', 1], ['sCam', 'cam', 1], ['sVol', 'vol', 1], ['sMusic', 'music'], ['sVoice', 'voice'], ['sBig', 'big'], ['sAuto', 'auto'], ['sFog', 'fog'], ['sMapBot', 'mapBot'], ['sCycle', 'cycle'], ['sAnim', 'animOn']])
   $(id).addEventListener('input', e => { app.settings[key] = num ? +e.target.value : e.target.checked; applySettings(); });
 $('sAnim').addEventListener('change', () => { if (!app.game) location.reload(); else app.toast('Animated soldiers: applies after you return to the main menu.', 3); }); // models load at start-up
 applySettings();
