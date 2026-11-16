@@ -159,6 +159,16 @@ def main():
         check(not err_box(page) and not errors, 'features: no errors ' + (err_box(page) + ' '.join(errors))[:300])
         page.context.browser.close()
 
+        print('Animated soldiers trial (?anim=1)')
+        page, errors = open_game(p, base + 'index.html?anim=1', 'play=battle,1', **desk)
+        r = page.evaluate("""async () => { const a = window.bannerfall, g = a.game; const A = await import(new URL('src/anim.js', location.href).href);
+          for (let i = 0; i < 1600 && !g.over; i++) { g.update(.05); a.ai.update(.05); if (i % 10 === 0) g.syncVisuals(.05, -1); }
+          const sw = g.units.find(u => u.type === 'sword'); return { on: A.ANIM.on, clips: Object.keys(A.ANIM.rig?.table || {}).length, animated: !!sw?.batch.anim, others: !g.units.find(u => u.type === 'spear')?.batch.anim, t: g.time | 0 }; }""")
+        check(r['on'] and r['clips'] >= 5 and r['animated'] and r['others'], f'swordsmen use the animated model, other units are unchanged {r}')
+        page.wait_for_timeout(1500); page.screenshot(path=str(OUT / 'animated.png'))
+        check(not err_box(page) and not errors, 'animated: no errors ' + (err_box(page) + ' '.join(errors))[:300])
+        page.context.browser.close()
+
         print('Online play (two tabs, same-computer test link)')
         H, herr = open_game(p, base + 'index.html?loop=1', '', viewport={'width': 1000, 'height': 600})
         G = H.context.new_page(); gerr = []; G.on('pageerror', lambda e: gerr.append(str(e))); G.goto(base + 'index.html?loop=1')

@@ -803,7 +803,7 @@ export class Game {
         u.aimK = (u.aimK || 0) + ((engaged ? 1 : 0) - (u.aimK || 0)) * Math.min(1, dt * 6);
         u.drawK = clamp(1 - u.cd / u.d.cd, 0, 1);
       }
-      u.batch.set(u.slot, { x: u.x, y, z: u.z, yaw: u.yaw, scale: u.scale, s: Math.sin(u.phase) * .7 * k, swing: sw, tilt, hidden: u.id === hideId || !!u.boarded || (u.fowHidden = u.team !== 0 && !!this.fow && !this.fow.see(u.x, u.z)), aim: u.aimK || 0, draw: u.drawK || 0 });
+      u.batch.set(u.slot, { x: u.x, y, z: u.z, yaw: u.yaw, scale: u.scale, s: Math.sin(u.phase) * .7 * k, swing: sw, tilt, hidden: u.id === hideId || !!u.boarded || (u.fowHidden = u.team !== 0 && !!this.fow && !this.fow.see(u.x, u.z)), aim: u.aimK || 0, draw: u.drawK || 0, dt, spd: u.speedNow, swT: u.swingT, dead: u.dead, dT: u.deathT, work: u.task.type === 'gather' || u.task.type === 'build' || u.task.type === 'farm' || u.task.type === 'repair' });
       if (u.d.ship) {
         if (!u.wake && u.alive) { u.wake = new THREE.Mesh(wakeGeo, wakeMaterial().clone()); this.scene.add(u.wake); }
         if (u.wake) {

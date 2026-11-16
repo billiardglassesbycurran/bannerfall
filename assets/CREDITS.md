@@ -11,3 +11,8 @@ Files were resized/recompressed for phones.
 ## Custom 3D models (assets/models)
 
 None yet. Models made with Tripo (tripo.com) go here with the account/plan they were made under.
+
+## Animated characters
+
+- **KayKit Character Animations 1.1** by Kay Lousberg (www.kaylousberg.com), CC0. Skeleton, mannequin body and animation clips
+  in `assets/anim/` (slimmed with `tools/kaykit.py`; licence text in `assets/anim/LICENSE-KayKit.txt`).
