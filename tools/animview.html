@@ -14,17 +14,18 @@ const cam = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, .1, 200);
 if (q.get('cam') === 'high') { cam.position.set(0, 9, 11); cam.lookAt(0, .9, 0); } else { cam.position.set(0, 1.9, 11.5); cam.lookAt(0, 1.0, 0); }
 await loadAnim(true); window.ANIM = ANIM;
 const batches = [new AnimBatch(scene, 0, kind, 40, true, 0x2c50a8), new AnimBatch(scene, 1, kind, 40, true, 0xa62419)];
-const cols = ['idle', 'walk', 'run', 'attack', 'death'], inst = [];
+const cols = ['idle', 'walk', 'attack', 'work', 'aim', 'death'], inst = [];
 const yaw0 = +(q.get('yaw') || 0);
-cols.forEach((c, i) => { const b = batches[i % 2 && q.has('teams') ? 1 : 0]; inst.push({ b, slot: b.alloc(), c, x: (i - 2) * 2.2, z: 0, yaw: yaw0 }); });
-{ const ref = new THREE.Mesh(new THREE.BoxGeometry(.5, 1.8, .3), new THREE.MeshLambertMaterial({ color: 0x999999 })); ref.position.set(-6.2, .9, 0); scene.add(ref); } // 1.8 m reference block
+cols.forEach((c, i) => { const b = batches[i % 2 && q.has('teams') ? 1 : 0]; inst.push({ b, slot: b.alloc(), c, x: (i - 2.5) * 2.1, z: 0, yaw: yaw0 }); });
+{ const ref = new THREE.Mesh(new THREE.BoxGeometry(.5, 1.8, .3), new THREE.MeshLambertMaterial({ color: 0x999999 })); ref.position.set(-7, .9, 0); scene.add(ref); } // 1.8 m reference block
 let t0 = performance.now(), last = t0; window.ready = true;
 R.setAnimationLoop(() => {
   const now = performance.now(), t = freeze ?? (now - t0) / 1000, dt = freeze != null ? 0 : (now - last) / 1000; last = now;
   for (const k of inst) {
     const o = { x: k.x, y: 0, z: k.z, yaw: k.yaw, scale: 1, dt, spd: 0, swT: 9 };
-    if (k.c === 'walk') o.spd = 2.9; if (k.c === 'run') o.spd = 5.5; if (k.c === 'attack') o.swT = freeze ?? (t % 1.0); if (k.c === 'death') { o.dead = true; o.dT = freeze != null ? freeze * 2 : (t % 3); }
-    if (freeze != null && (k.c === 'walk' || k.c === 'run' || k.c === 'idle')) { k.b.cur[k.slot] = k.b.C[k.c].start; k.b.t[k.slot] = freeze; }
+    if (k.c === 'walk') o.spd = 2.9; if (k.c === 'attack') o.swT = freeze ?? (t % 1.0); if (k.c === 'death') { o.dead = true; o.dT = freeze != null ? freeze * 2 : (t % 3); }
+    if (k.c === 'work') o.work = true; if (k.c === 'aim') { o.aim = 1; o.draw = freeze != null ? Math.min(1, freeze * 1.5) : (t % 1.6) / 1.6; o.swT = freeze != null ? 9 : (t % 1.6); }
+    if (freeze != null && (k.c === 'walk' || k.c === 'idle' || k.c === 'work')) { const cl = k.b.C[k.c] || k.b.C.idle; k.b.cur[k.slot] = cl.start; k.b.t[k.slot] = freeze; }
     k.b.set(k.slot, o);
   }
   batches.forEach(b => b.flush()); R.render(scene, cam);

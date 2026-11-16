@@ -86,7 +86,10 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
   texture and each unit type is one instanced mesh posed in the vertex shader (`AnimBatch`, same interface as `FigureBatch`;
   `Figures.get` picks it for kinds in `KINDS`). `PROP` re-proportions the chibi rig (small head, long legs); `teamMap` repaints
   the red accents and copper trim in the team colour; attachments (sword, shield, helmet, cape) ride one bone each (`show`).
-  `animFigure` = still copy for portraits/export. So far: Swordsman only. Viewer: `tools/animview.html`. The `rig_*.glb`
+  `animFigure` = still copy for portraits/export. Animated kinds (`KINDS`): sword, spear, hero (gold `look`), archer (bow),
+  crossbow, peasant (work clip). Characters share one skeleton: clips come from `CLIP_FILES` (knight + `rig_tools`/`rig_ranged`).
+  `GEAR` = extra pieces the pack lacks (spear, bow, quiver, axe), coloured per vertex. Cavalry, siege, ships and civ unique units
+  are still the built-in figures. Viewer: `tools/animview.html`. The `rig_*.glb`
   files (mannequin + extra clips from KayKit Character Animations 1.1) are not loaded yet; they are for future unit types.
 - `src/battle.js` — Battle mode field: 3 capturable banners, reserves + reinforcement waves, army breaks if all banners held.
 - `src/path.js` — A* pathfinding on the grid (pass a walk function: `cellWalk` for land, `navCell` for ships). `src/ai.js` — enemy AI for Skirmish, Battle, Survival.

@@ -2,7 +2,7 @@
 """Slim KayKit (CC0, www.kaylousberg.com) character/animation .glb files down to what Bannerfall uses.
 
 Run with:  python3 -I tools/kaykit.py <folder of the unzipped "KayKit Character Animations" pack>
-           python3 -I tools/kaykit.py --char <Character.glb> <name>     (a character from the Adventurers pack)
+           python3 -I tools/kaykit.py --chars <folder with Knight.glb, Rogue.glb, ...>   (KayKit Adventurers characters)
 
 Writes small files into assets/anim/: the mannequin body + only the chosen animation clips, per pack.
 The game (src/anim.js) loads them and plays them for whole armies at once.
@@ -19,11 +19,18 @@ PACKS = {
     'Rig_Medium_Tools.glb': ('rig_tools.glb', False, ['Chopping', 'Hammering', 'Pickaxing', 'Working_A', 'Digging']),
     'Rig_Medium_CombatRanged.glb': ('rig_ranged.glb', False, ['Ranged_Bow_Idle', 'Ranged_Bow_Draw', 'Ranged_Bow_Release', 'Ranged_2H_Aiming', 'Ranged_2H_Shoot', 'Ranged_2H_Reload']),
 }
-# clips kept from a character file (KayKit Adventurers 1.0 characters carry ~75 clips each) and attachments left out
-CHAR_CLIPS = ['Idle', 'Walking_A', 'Running_A', '1H_Melee_Attack_Slice_Diagonal', '1H_Melee_Attack_Chop', '1H_Melee_Attack_Stab', '2H_Melee_Attack_Chop',
-              '2H_Melee_Attack_Slice', '2H_Melee_Idle', 'Block', 'Blocking', 'Death_A', 'Death_B', 'Hit_A', 'Cheer', 'Interact', 'PickUp', '2H_Ranged_Aiming', '2H_Ranged_Shoot',
-              '1H_Ranged_Aiming', '1H_Ranged_Shoot', 'Throw', 'Unarmed_Idle']
-CHAR_DROP = ('1H_Sword_Offhand', 'Spike_Shield')
+# Characters from KayKit Adventurers 1.0 (github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0). They all share
+# one skeleton, so only the knight keeps animation clips (the game plays them on every character); the rest are mesh only.
+# name -> (source file, clips kept, attachments kept)
+CHARS = {
+    'knight': ('Knight.glb', ['Idle', 'Walking_A', 'Running_A', '1H_Melee_Attack_Slice_Diagonal', '1H_Melee_Attack_Chop', '1H_Melee_Attack_Stab', '2H_Melee_Attack_Chop',
+                              '2H_Melee_Attack_Slice', '2H_Melee_Idle', 'Block', 'Death_A', 'Hit_A', 'Cheer', 'Interact', 'PickUp', '2H_Ranged_Aiming', '2H_Ranged_Shoot',
+                              '2H_Ranged_Reload', 'Sit_Chair_Idle', 'Unarmed_Idle'],
+               ['1H_Sword', '2H_Sword', 'Badge_Shield', 'Round_Shield', 'Rectangle_Shield', 'Knight_Helmet', 'Knight_Cape']),
+    'rogue': ('Rogue.glb', [], ['2H_Crossbow', 'Knife']),
+    'hooded': ('Rogue_Hooded.glb', [], ['2H_Crossbow', 'Rogue_Cape']),
+    'barbarian': ('Barbarian.glb', [], ['1H_Axe', '2H_Axe', 'Barbarian_Round_Shield', 'Barbarian_Hat']),
+}
 CSIZE = {5120: 1, 5121: 1, 5122: 2, 5123: 2, 5125: 4, 5126: 4}
 NCOMP = {'SCALAR': 1, 'VEC2': 2, 'VEC3': 3, 'VEC4': 4, 'MAT2': 4, 'MAT3': 9, 'MAT4': 16}
 
@@ -37,11 +44,12 @@ def read_glb(path):
     return j, b[off + 8:off + 8 + m]
 
 
-def prune(src, dst, keep_mesh, clips, drop_nodes=()):
+def prune(src, dst, keep_mesh, clips, keep_nodes=None):
     j, binb = read_glb(src)
-    for n in j['nodes']:  # attachments we never show (spare shields etc.)
-        if n.get('name') in drop_nodes: n.pop('mesh', None)
-    if keep_mesh and drop_nodes:  # drop meshes nothing points at any more
+    if keep_nodes is not None:
+        for n in j['nodes']:  # attachments we never show (spare shields etc.): plain meshes not in the keep list
+            if 'mesh' in n and 'skin' not in n and n.get('name') not in keep_nodes: n.pop('mesh', None)
+    if keep_mesh and keep_nodes is not None:  # drop meshes nothing points at any more
         used = sorted({n['mesh'] for n in j['nodes'] if 'mesh' in n}); remap = {o: i for i, o in enumerate(used)}
         j['meshes'] = [j['meshes'][o] for o in used]
         for n in j['nodes']:
@@ -97,8 +105,12 @@ def prune(src, dst, keep_mesh, clips, drop_nodes=()):
 
 def main():
     a = sys.argv[1:]
-    if len(a) == 3 and a[0] == '--char':  # a textured character with its own clips (e.g. Knight.glb from KayKit Adventurers)
-        prune(pathlib.Path(a[1]).expanduser(), OUT / f'char_{a[2]}.glb', True, CHAR_CLIPS, CHAR_DROP); return
+    if len(a) == 2 and a[0] == '--chars':  # folder holding Knight.glb, Rogue.glb, Rogue_Hooded.glb, Barbarian.glb
+        for name, (file, clips, keep) in CHARS.items():
+            src = pathlib.Path(a[1]).expanduser() / file
+            if src.exists(): prune(src, OUT / f'char_{name}.glb', True, clips, keep)
+            else: print(f'  (no {file} in that folder, skipped)')
+        return
     if len(a) != 1: print(__doc__); sys.exit(1)
     pack = pathlib.Path(a[0]).expanduser(); src = pack / 'Animations' / 'gltf' / 'Rig_Medium'
     if not src.is_dir(): sys.exit(f'Could not find Animations/gltf/Rig_Medium inside {pack}')
