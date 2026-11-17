@@ -3,7 +3,7 @@
 // (patched into three.js's fog shader code), so terrain, trees, buildings and soldiers all match.
 import * as THREE from 'three';
 
-const S = 128;
+const S = 256; // must match SIZE in world.js (not imported: this file has to load before world.js)
 const data = new Uint8Array(S * S).fill(255);
 const tex = new THREE.DataTexture(data, S, S, THREE.RedFormat, THREE.UnsignedByteType);
 tex.magFilter = tex.minFilter = THREE.LinearFilter; tex.generateMipmaps = false; tex.needsUpdate = true;

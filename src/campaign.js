@@ -1,7 +1,9 @@
 // Campaign: four missions with their own goals, set-ups and maps (ported from the original prototype's campaign).
 // Missions unlock one after another; progress is kept on this device.
 import { BD } from './data.js';
-import { MAP } from './world.js';
+import { MAP, SIZE } from './world.js';
+/** A point given round the old 128-wide map's middle (64, 64) → the same spot round the middle of today's bigger map. */
+const C = (x, z) => [SIZE / 2 + x - 64, SIZE / 2 + z - 64];
 
 const hall = (g, t) => g.blds.find(b => b.alive && b.team === t && b.type === 'hall');
 const has = (g, t, type) => g.blds.some(b => b.alive && b.team === t && b.type === type && b.built);
@@ -33,14 +35,14 @@ export const MISSIONS = [
     setup(g) {
       Object.assign(g.T[0], { f: 250, w: 320, g: 150 }); clearTeam(g, 1);
       g.ms = { trained: 0, camp: [] };
-      const c = put(g, 1, 'barracks', 92, 40); if (c) { c.maxHp = c.hp = 600; g.ms.camp.push(c); }
-      const t = put(g, 1, 'tower', 86, 46); if (t) g.ms.camp.push(t);
-      for (let i = 0; i < 4; i++) g.spawnUnit(1, 'sword', 88 + i, 44);
-      for (let i = 0; i < 2; i++) g.spawnUnit(1, 'archer', 89 + i, 46);
+      const c = put(g, 1, 'barracks', ...C(92, 40)); if (c) { c.maxHp = c.hp = 600; g.ms.camp.push(c); }
+      const t = put(g, 1, 'tower', ...C(86, 46)); if (t) g.ms.camp.push(t);
+      const [cx, cz] = C(88, 44); for (let i = 0; i < 4; i++) g.spawnUnit(1, 'sword', cx + i, cz);
+      for (let i = 0; i < 2; i++) g.spawnUnit(1, 'archer', cx + 1 + i, cz + 2);
       g.onTrained2 = u => { if (u.team === 0 && u.type !== 'peasant') g.ms.trained++; };
     },
     tick(g) { // a small raid now and then keeps you on your toes
-      if (!g.ms.raid && g.time > 300) { g.ms.raid = 1; const h = hall(g, 0); if (h) for (let i = 0; i < 3; i++) { const u = g.spawnUnit(1, 'sword', 96 + i, 30); g.amove(u, h.x, h.z); } g.toast('Bandits are raiding your village!', 3); }
+      if (!g.ms.raid && g.time > 300) { g.ms.raid = 1; const h = hall(g, 0); if (h) for (let i = 0; i < 3; i++) { const [rx, rz] = C(96, 30), u = g.spawnUnit(1, 'sword', rx + i, rz); g.amove(u, h.x, h.z); } g.toast('Bandits are raiding your village!', 3); }
     },
   },
   {
@@ -60,13 +62,13 @@ export const MISSIONS = [
       if (g.time >= g.ms.next && g.time < 470) {
         const h = hall(g, 0); if (!h) return;
         g.ms.wave++; g.ms.next = g.time + 60;
-        const n = Math.round(2 + g.ms.wave * 1.6), spawns = [[108, 30], [96, 14], [114, 48]];
+        const n = Math.round(2 + g.ms.wave * 1.6), spawns = [C(108, 30), C(96, 14), C(114, 48)];
         for (let i = 0; i < n; i++) {
           const s = spawns[i % 3], r = Math.random(), ty = g.ms.wave >= 4 && r < .2 ? 'knight' : r < .5 ? 'sword' : r < .75 ? 'spear' : 'archer';
           const u = g.spawnUnit(1, ty, s[0] + (i % 2), s[1] + (i / 3 | 0)); g.amove(u, h.x + (Math.random() - .5) * 6, h.z + (Math.random() - .5) * 6);
         }
-        if (g.ms.wave === 6) { const c = g.spawnUnit(1, 'hero', 108, 26); g.amove(c, h.x, h.z); }
-        if (g.ms.wave >= 7) { const c = g.spawnUnit(1, 'catapult', 104, 20); g.amove(c, h.x, h.z); }
+        if (g.ms.wave === 6) { const c = g.spawnUnit(1, 'hero', ...C(108, 26)); g.amove(c, h.x, h.z); }
+        if (g.ms.wave >= 7) { const c = g.spawnUnit(1, 'catapult', ...C(104, 20)); g.amove(c, h.x, h.z); }
         g.recount(); g.toast(`Raiders cross the river! Wave ${g.ms.wave} (${n} soldiers)`, 3); g.onAlert?.(spawns[0][0], spawns[0][1]);
       }
       if (g.time >= 480 && !g.ms.relief) { g.ms.relief = 1; const h = hall(g, 0); if (h) for (let i = 0; i < 8; i++) g.spawnUnit(0, 'knight', h.x - 6 + i, h.z + 8); g.toast('The relief army has arrived!', 3); }
@@ -85,7 +87,7 @@ export const MISSIONS = [
       for (const [ty, dx, dz] of [['barracks', 9, -5], ['smith', 1, -10], ['workshop', 10, 4]]) put(g, 0, ty, h.x + dx, h.z + dz);
       put(g, 1, 'barracks', eh.x - 8, eh.z + 3);
       g.ms = { towers: [] };
-      for (const [px, pz] of (MAP.ridge?.passes || [[40, 40], [64, 64], [88, 88]])) {
+      for (const [px, pz] of (MAP.ridge?.passes || [C(40, 40), C(64, 64), C(88, 88)])) {
         for (const [ox, oz] of [[5, -2], [2, -5]]) { const t = put(g, 1, 'tower', px + ox, pz + oz); if (t) g.ms.towers.push(t); }
         for (let i = 0; i < 3; i++) g.spawnUnit(1, i ? 'spear' : 'archer', px + 6, pz - 6);
       }

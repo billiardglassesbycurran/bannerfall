@@ -1,7 +1,7 @@
 // Bannerfall — entry point: renderer, lighting, menus, game modes, input routing and the main loop.
 import * as THREE from 'three';
 import { FOW, FogOfWar } from './fow.js'; // must load before any material is made
-import { MAP, MAP_LIST, SIZE, BASES, WL, syncAnimals, animals, useAnimatedDeer, CLOUDS, buildDistant, buildTerrain, buildWater, buildSky, buildResources, buildBridge, buildFish, updateFish, heightAt } from './world.js';
+import { MAP, MAP_LIST, SIZE, BASES, FIELD, WL, syncAnimals, animals, useAnimatedDeer, CLOUDS, buildDistant, buildTerrain, buildWater, buildSky, buildResources, buildBridge, buildFish, updateFish, heightAt } from './world.js';
 import { BD, DIFF, MODES, CIVS, CIV_LIST, UD, TECH, AGES } from './data.js';
 import { FX } from './effects.js';
 import { Tutorial } from './tutorial.js';
@@ -381,11 +381,12 @@ function setupGame(mode, diff, civ = 'franks', enemyCiv, god) {
         for (let i = 0; i < n; i++) { const along = (i - (n - 1) / 2) * 1.15, back = r * 1.4; g.spawnUnit(team, type, cx + (along - back * s) * .707, cz + (along + back * s) * .707); }
       });
     };
-    army(0, 46, 82, 1); army(1, 82, 46, [.75, 1, 1.3][diff]);
-    g.hero = g.spawnUnit(0, 'hero', 40, 88); g.spawnUnit(1, 'hero', 88, 40);
+    const cx = FIELD.x - 64, cz = FIELD.z - 64; // the battlefield (the middle of the map, or by a corner on the sea map)
+    army(0, cx + 46, cz + 82, 1); army(1, cx + 82, cz + 46, [.75, 1, 1.3][diff]);
+    g.hero = g.spawnUnit(0, 'hero', cx + 40, cz + 88); g.spawnUnit(1, 'hero', cx + 88, cz + 40);
     for (const u of g.units) u.yaw = u.team === 0 ? Math.PI * .75 : -Math.PI * .25;
     g.field = new Field(g, scene, [30, [20, 28, 36][diff]]);
-    rts.lookAt(52, 78); rts.dist = rts.distT = 34;
+    rts.lookAt(cx + 52, cz + 78); rts.dist = rts.distT = 34;
   } else {
     const hall = g.placeBuilding(0, 'hall', B0.x - 2, B0.z - 2, true);
     for (let i = 0; i < 4; i++) g.spawnUnit(0, 'peasant', hall.x + 4 + i * .8, hall.z - 3.5);
@@ -748,7 +749,7 @@ renderer.setAnimationLoop(() => {
   else if (app.mode === 'rts') rts.update(real);
   else { // main menu: a slow, low cinematic sweep over the valley at golden hour
     menuYaw += real * .035; rts.yawGoal = null; rts.yaw = menuYaw + Math.PI * .25; rts.pitch = .6; rts.dist = rts.distT = 46;
-    rts.lookAt(64 + Math.cos(menuYaw * .7) * 16, 64 + Math.sin(menuYaw * .7) * 16); rts.update(real);
+    rts.lookAt(SIZE / 2 + Math.cos(menuYaw * .7) * 16, SIZE / 2 + Math.sin(menuYaw * .7) * 16); rts.update(real);
   }
   if (g) g.syncVisuals(dt, pov.first && pov.unit ? pov.unit.id : -1);
   if (deerBatch) { const gt = g ? g.time : t; animals.forEach((a, i) => deerBatch.set(i, { x: a.x, y: a.y ?? heightAt(a.x, a.z), z: a.z, yaw: a.yaw, scale: 1, dt, spd: a.moving ? (a.spd || .9) : 0, dead: a.hp <= 0, dT: a.hp <= 0 ? gt - (a.deadAt ?? gt - 9) : 0, hidden: !a.alive })); deerBatch.flush(); }

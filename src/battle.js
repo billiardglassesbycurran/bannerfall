@@ -1,7 +1,7 @@
 // Battle mode battlefield: three banners to capture. Every banner you hold brings reinforcements from your reserves;
 // hold all three long enough and the enemy army breaks. So it's not just "whoever has more wins": positioning matters.
 import * as THREE from 'three';
-import { groundY, cellWalk, MAP } from './world.js';
+import { groundY, cellWalk, MAP, FIELD } from './world.js';
 import { nearestWalkable } from './path.js';
 import { TEAM } from './models.js';
 
@@ -12,10 +12,10 @@ const POOL = [['sword', 4], ['spear', 4], ['archer', 3], ['crossbow', 2], ['ligh
 export class Field {
   constructor(g, scene, reserves = [24, 24]) {
     this.g = g; this.scene = scene; this.reserves = reserves; this.t = 0; this.waveT = WAVE; this.hold = [0, 0]; this.broken = -1;
-    this.spawn = [nearestWalkable(38, 90, 12, cellWalk) || { x: 38, z: 90 }, nearestWalkable(90, 38, 12, cellWalk) || { x: 90, z: 38 }];
+    const cx = FIELD.x, cz = FIELD.z; this.spawn = [nearestWalkable(cx - 26, cz + 26, 12, cellWalk) || { x: cx - 26, z: cz + 26 }, nearestWalkable(cx + 26, cz - 26, 12, cellWalk) || { x: cx + 26, z: cz - 26 }];
     // banners sit across the middle of the field, on the line between the two armies' flanks
     this.flags = [[-17, 'L'], [0, 'C'], [17, 'R']].map(([o], i) => {
-      const p = nearestWalkable(64 + o * .707, 64 - o * .707, 10, cellWalk) || { x: 64, z: 64 };
+      const p = nearestWalkable(FIELD.x + o * .707, FIELD.z - o * .707, 10, cellWalk) || { x: FIELD.x, z: FIELD.z };
       return { i, name: NAMES[i], x: p.x, z: p.z, own: -1, prog: 0, mesh: this.flagMesh(p.x, p.z) };
     });
   }

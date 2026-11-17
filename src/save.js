@@ -1,7 +1,7 @@
 // Save & resume: the running game is stored on this device (localStorage) and can be continued after a reload.
 import { resources, takeRes, MAP } from './world.js';
 
-const KEY = 'bf.save';
+const KEY = 'bf.save2'; // v0.36: maps doubled in size, so older saves (bf.save) no longer fit
 const round = v => Math.round(v * 100) / 100;
 
 export function hasSave() { try { return !!localStorage.getItem(KEY); } catch { return false; } }

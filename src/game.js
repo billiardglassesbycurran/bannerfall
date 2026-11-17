@@ -552,7 +552,9 @@ export class Game {
       u.speedNow = u.d.spd; this.face(u, Math.atan2(dx, dz), dt); return false;
     }
     if (!u.path || u.repath <= 0 || (u.goal && Math.hypot(u.goal.x - x, u.goal.z - z) > 1.5)) {
-      u.path = findPath(u.x, u.z, x, z, reach, 14000, this.walkFor(u)); u.pi = 0; u.repath = 3 + Math.random(); u.goal = { x, z };
+      const far = Math.hypot(x - u.x, z - u.z) > 80; // long marches on the big maps get a bigger search
+      u.path = findPath(u.x, u.z, x, z, reach, far ? 40000 : 14000, this.walkFor(u)); u.pi = 0; u.repath = 3 + Math.random(); u.goal = { x, z };
+      const end = u.path[u.path.length - 1]; if (end && Math.hypot(end.x - x, end.z - z) > reach + 2) u.repath = 6 + Math.random() * 2; // can't get there: don't keep searching
       if (!u.path.length) { u.path = null; return true; }
     }
     u.repath -= dt;

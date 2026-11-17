@@ -1,9 +1,19 @@
 // Enemy AI for each mode.
 import { BD, TECH } from './data.js';
 import { dist } from './util.js';
-import { BASES, blocked, N } from './world.js';
+import { BASES, blocked, N, SIZE, MAP, navCell, walkable } from './world.js';
+import { nearestWalkable } from './path.js';
 
 import { UD } from './data.js';
+
+/** The nearest boat-deep water within r of (x, z), or null. */
+function waterNear(x, z, r) {
+  let best = null, bd = 1e9;
+  for (let cz = Math.max(0, z - r | 0); cz <= Math.min(N - 1, z + r | 0); cz++) for (let cx = Math.max(0, x - r | 0); cx <= Math.min(N - 1, x + r | 0); cx++) {
+    if (!navCell(cx, cz)) continue; const d = Math.hypot(cx + .5 - x, cz + .5 - z); if (d < bd) { bd = d; best = { x: cx + .5, z: cz + .5 }; }
+  }
+  return best;
+}
 
 export class AI {
   constructor(game, team = 1) {
@@ -48,7 +58,7 @@ export class AI {
   /** Nearest spot on the river bank (to our Town Hall) where a Dock fits. */
   findDockSpot(hall) {
     let best = null, bd = 1e9;
-    for (let cz = 4; cz < 124; cz++) for (let cx = 4; cx < 124; cx++) {
+    for (let cz = 4; cz < SIZE - 4; cz++) for (let cx = 4; cx < SIZE - 4; cx++) {
       const d = Math.hypot(cx - hall.x, cz - hall.z); if (d >= bd || d > 70) continue;
       if (this.g.canPlace('dock', cx, cz)) { bd = d; best = [cx, cz]; }
     }
@@ -137,7 +147,7 @@ export class AI {
     if (!short && hasBarracks && this.g.diff >= 1 && time > 300 && nOf('stable') === 0) this.tryBuild('stable', hall);
     if (!short && nOf('range') && this.g.diff >= 1 && time > 520 && nOf('workshop') === 0) this.tryBuild('workshop', hall);
     // navy: a dock on the river, fishing boats for food, a few warships
-    if (!short && this.g.diff >= 1 && time > 330 && nOf('dock') === 0 && !this.noDock && g.afford(this.team, BD.dock.cost)) {
+    if (!short && (this.g.diff >= 1 || MAP.sea) && time > (MAP.sea ? 200 : 330) && nOf('dock') === 0 && !this.noDock && g.afford(this.team, BD.dock.cost)) {
       const sp = this.findDockSpot(hall);
       if (!sp) this.noDock = true;
       else { const ps = this.my(u => u.type === 'peasant').sort((a, b) => dist(a, hall) - dist(b, hall)).slice(0, 2); g.startBuilding(this.team, 'dock', sp[0], sp[1], ps); }
@@ -145,8 +155,9 @@ export class AI {
     const dock = g.blds.find(b => b.alive && b.built && b.team === this.team && b.type === 'dock');
     if (dock && dock.queue.length < 1 && T.pop < T.cap) {
       const nf = this.my(u => u.type === 'fishboat').length, nw = this.my(u => u.type === 'warship').length;
-      if (nf < 2 + this.g.diff) g.train(dock, 'fishboat'); else if (nw < this.g.diff && T.g > 100) g.train(dock, 'warship');
+      if (nf < 2 + this.g.diff) g.train(dock, 'fishboat'); else if (nw < this.g.diff + (MAP.sea ? 3 : 0) && T.g > 100) g.train(dock, 'warship');
     }
+    this.navy();
     if (!short && hasBarracks && time > 260 && nOf('tower') < this.g.diff + 1 && T.g > 120 && g.afford(this.team, BD.tower.cost)) { // towers guard the gold mines and the road in
       const mine = g.nearestRes(hall.x, hall.z, 'g', 30), at = nOf('tower') % 2 === 0 && mine ? mine : this.rally(hall), sp = this.findSpot('tower', at, 3, 12);
       if (sp) { const ps = this.my(u => u.type === 'peasant').sort((a, b) => dist(a, at) - dist(b, at)).slice(0, 2); g.startBuilding(this.team, 'tower', sp[0], sp[1], ps); }
@@ -199,8 +210,24 @@ export class AI {
     return Math.max(.25, m);
   }
   rally(hall) { // a gathering point in front of our town, toward the enemy
-    const e = this.g.blds.find(b => b.alive && b.team !== this.team && b.type === 'hall') || { x: 64, z: 64 };
-    return { x: hall.x + (e.x - hall.x) * .28, z: hall.z + (e.z - hall.z) * .28 };
+    const e = this.g.blds.find(b => b.alive && b.team !== this.team && b.type === 'hall') || { x: SIZE / 2, z: SIZE / 2 };
+    const p = { x: hall.x + (e.x - hall.x) * .28, z: hall.z + (e.z - hall.z) * .28 };
+    return walkable(p.x, p.z) ? p : nearestWalkable(p.x, p.z, 20) || { x: hall.x, z: hall.z }; // not in the sea
+  }
+  /** Warships go raiding: off to the enemy shore nearest them (docks, ships, buildings by the water) to shoot it up. */
+  navy() {
+    const g = this.g, ships = this.my(u => u.type === 'warship' && u.task.type === 'idle');
+    if (ships.length < (MAP.sea ? 3 : 4) || g.time < (this.navyT || 0)) return;
+    this.navyT = g.time + 45;
+    const s0 = ships[0]; let best = null, bd = 1e9;
+    for (const t of [...g.blds, ...g.units]) { // their docks and ships first
+      if (!t.alive || t.team === this.team || !(t.d.ship || t.d.dock)) continue;
+      const d = Math.hypot(t.x - s0.x, t.z - s0.z); if (d >= bd) continue;
+      const w = waterNear(t.x, t.z, 8); if (w) { bd = d; best = w; }
+    }
+    const eh = g.blds.find(b => b.alive && b.team !== this.team && b.type === 'hall');
+    if (!best && eh) best = waterNear(eh.x, eh.z, 45); // otherwise sail as close to their town as the water goes and shoot what's in reach
+    if (best) for (const s of ships) g.amove(s, best.x + (Math.random() - .5) * 4, best.z + (Math.random() - .5) * 4);
   }
   /** Enemies at the gates: everyone fights; on Warlord the peasants shelter if it's bad. */
   defend(hall, mil) {
@@ -308,7 +335,7 @@ export class AI {
     const r = this.my(u => u.d.horse && !u.d.hero && !u.d.ranged)[0]; if (!r) return;
     const e = g.blds.find(b => b.alive && b.team !== this.team && b.type === 'hall'); if (!e) return;
     this.scouted = true; r.scout = true;
-    this.scoutPath = [0, 1, 2, 3, 4].map(i => { const a = Math.atan2(hall.z - e.z, hall.x - e.x) + (i - 2) * .9; return { x: Math.max(8, Math.min(120, e.x + Math.cos(a) * 24)), z: Math.max(8, Math.min(120, e.z + Math.sin(a) * 24)) }; });
+    this.scoutPath = [0, 1, 2, 3, 4].map(i => { const a = Math.atan2(hall.z - e.z, hall.x - e.x) + (i - 2) * .9; return { x: Math.max(8, Math.min(SIZE - 8, e.x + Math.cos(a) * 24)), z: Math.max(8, Math.min(SIZE - 8, e.z + Math.sin(a) * 24)) }; });
   }
 
   // ---------- battle: real tactics ----------
@@ -354,14 +381,15 @@ export class AI {
     const g = this.g;
     if (this.wave < 10 && g.time >= this.nextWave) {
       this.wave++; this.nextWave = g.time + 70 + this.wave * 4;
-      const n = Math.round((3 + this.wave * 2.2) * this.D.waveMul), B = BASES[1];
+      const n = Math.round((3 + this.wave * 2.2) * this.D.waveMul), B = BASES[1], A = BASES[0];
+      const S = nearestWalkable(B.x + (A.x - B.x) * .35, B.z + (A.z - B.z) * .35, 12) || B; // waves start part-way over (the map is big)
       for (let i = 0; i < n; i++) {
         const r = Math.random(); let type = 'sword';
         if (this.wave >= 2 && r < .3) type = 'spear'; if (this.wave >= 3 && r > .62) type = r > .75 ? 'crossbow' : 'archer';
         if (this.wave >= 4 && r > .82) type = r > .9 ? 'lightcav' : 'horsearcher'; if (this.wave >= 6 && r > .92) type = 'knight';
         if (this.wave >= 5 && i < this.wave - 4 && i < 3) type = g.civ[this.team].unique.type;
         if (this.wave >= 7 && i === n - 1) type = 'catapult';
-        const u = g.spawnUnit(this.team, type, B.x + (i % 6) * 1.1 - 3, B.z + Math.floor(i / 6) * 1.1);
+        const u = g.spawnUnit(this.team, type, S.x + (i % 6) * 1.1 - 3, S.z + Math.floor(i / 6) * 1.1);
         const t = this.attackTarget(u); if (t) g.amove(u, t.x, t.z);
       }
       if (this.wave === 5 || this.wave === 10) { const h = g.spawnUnit(this.team, 'hero', B.x, B.z - 2); const t = this.attackTarget(h); if (t) g.amove(h, t.x, t.z); }

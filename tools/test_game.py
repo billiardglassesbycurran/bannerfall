@@ -100,6 +100,15 @@ def main():
             check(not err_box(page) and not errors, f'{mode}: no errors ' + (err_box(page) + ' '.join(errors))[:300])
             page.context.browser.close()
 
+        for mp, mode in [('sea', 'skirmish'), ('sea', 'battle'), ('highland', 'survival'), ('forest', 'skirmish'), ('random,4', 'skirmish')]:
+            print(f'Map: {mp} ({mode})')
+            page, errors = open_game(p, base, f'play={mode},1,franks,norse&map={mp}', **desk)
+            r = page.evaluate(SIM, 90)
+            check(r['err'] is None, f'{mp} {mode}: 90 s of simulated play without errors {r}')
+            time.sleep(.5); page.screenshot(path=str(OUT / f'map-{mp.split(",")[0]}-{mode}.png'))
+            check(not err_box(page) and not errors, f'{mp} {mode}: no errors ' + (err_box(page) + ' '.join(errors))[:300])
+            page.context.browser.close()
+
         print('Commander (3rd person)')
         page, errors = open_game(p, base, 'play=battle,1,franks,mongols', **desk)
         page.click('#bLead'); page.wait_for_timeout(500)
@@ -116,7 +125,7 @@ def main():
         page.evaluate("""() => { const a = window.bannerfall, g = a.game, h = g.hero, hall = g.blds[0], pov = a.pov;
           h.x = hall.x; h.z = hall.z + hall.size / 2 + 1.6; pov.yaw = Math.PI; pov.snap = true; }""")  # at the door, facing it
         page.keyboard.down('KeyW')
-        for _ in range(30):  # wait for it (slow software rendering) rather than a fixed time
+        for _ in range(80):  # wait for it (slow software rendering) rather than a fixed time
             page.wait_for_timeout(300)
             if page.evaluate('!!window.bannerfall.pov.room'): break
         page.keyboard.up('KeyW')
@@ -132,17 +141,17 @@ def main():
         page.evaluate("""() => { const a = window.bannerfall, g = a.game, h = g.hero, hall = g.blds[0], pov = a.pov;
           h.x = hall.x + hall.size / 2 + 1.2; h.z = hall.z; pov.yaw = -Math.PI / 2; pov.snap = true; }""")  # against a side wall
         page.keyboard.down('KeyW')
-        for _ in range(30):  # the software renderer is slow: wait for it rather than a fixed time
+        for _ in range(80):  # the software renderer is slow (and the maps are big now): wait for it rather than a fixed time
             page.wait_for_timeout(300)
             if page.evaluate('!!window.bannerfall.pov.room'): break
         page.keyboard.up('KeyW')
         check(page.evaluate('!!window.bannerfall.pov.room'), 'walking into a wall also goes inside')
-        page.evaluate("() => window.bannerfall.pov.exitRoom(true)")
+        page.evaluate("() => window.bannerfall.pov.room && window.bannerfall.pov.exitRoom(true)")
         page.click('#bMount'); page.wait_for_timeout(600)
         check(page.evaluate("window.bannerfall.pov.unit.type") == 'herohorse', 'Commander mounts his horse')
         page.screenshot(path=str(OUT / 'mounted.png'))
         r = page.evaluate("""() => { const a = window.bannerfall, g = a.game, pov = a.pov, h = pov.unit;
-          let best = null; for (let z = 20; z < 108; z++) for (let x = 20; x < 108; x++) { const w = g.walkFor({ d: { ship: 1 } }); if (w(x, z) && !w(x + 3, z) && g.walkFor(h)(x + 3, z)) { best = [x, z]; break; } if (best) break; }
+          let best = null; for (let z = 20; z < 236; z++) for (let x = 20; x < 236; x++) { const w = g.walkFor({ d: { ship: 1 } }); if (w(x, z) && !w(x + 3, z) && g.walkFor(h)(x + 3, z)) { best = [x, z]; break; } if (best) break; }
           const sh = g.spawnUnit(0, 'warship', best[0] + .5, best[1] + .5); h.x = best[0] + 3.5; h.z = best[1] + .5; pov.update(.05); const act = pov.action();
           return { act: act && act.label, ship: sh.id }; }""")
         check(r['act'] == 'Board', f'Act button offers to board a nearby ship {r}')

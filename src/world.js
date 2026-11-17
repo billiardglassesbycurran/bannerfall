@@ -7,20 +7,49 @@ import { GM } from './gltfmodels.js';
 import { NAT } from './nature.js';
 export const CLOUDS = { value: null };
 
-export const SIZE = 128, N = SIZE, HN = SIZE + 1;
+// The maps are laid out on a 128-wide "design" grid and stretched by K to the real size (256 = four times the land).
+// Things that belong to a town (its first wood, berries, gold, stone, deer) stay the same distance from it: see `home`.
+export const SIZE = 256, N = SIZE, HN = SIZE + 1, K = SIZE / 128;
 export const WL = -0.45;
-export const BASES = [{ x: 24, z: 104 }, { x: 104, z: 24 }];
+export const BASES = [{ x: 24 * K, z: 104 * K }, { x: 104 * K, z: 24 * K }];
 // A river winds between the two bases (bridge in the middle, shallow fords near each end) — layout from the prototype.
-export const BRIDGE = { x: 64, z: 64 };
-const RIVER_ROADS = [[[24, 104], [44, 76], [64, 64], [84, 52], [104, 24]], [[24, 104], [18, 62], [37, 33], [66, 20], [104, 24]], [[24, 104], [62, 110], [91, 95], [110, 62], [104, 24]]];
-const RIVER_GROVES = [[12, 72, 7], [46, 120, 6], [30, 84, 3.5], [44, 62, 6], [68, 98, 6], [18, 44, 7], [86, 118, 6], [64, 22, 5]];
+export const BRIDGE = { x: SIZE / 2, z: SIZE / 2 };
+/** Design point → map point (stretched). */
+const sc = ([x, z, r]) => r === undefined ? [x * K, z * K] : [x * K, z * K, r * KR];
+const KR = Math.sqrt(K) * 1.15; // groves, ponds and clearings grow a bit (their count grows with the map too)
+/** Design point near the first town (24, 104) → the same offset from the real town, so home resources stay close. */
+const home = (x, z) => [BASES[0].x + x - 24, BASES[0].z + z - 104];
+const roads = rs => rs.map(r => r.map(p => sc(p)));
+const RIVER_ROADS = roads([[[24, 104], [44, 76], [64, 64], [84, 52], [104, 24]], [[24, 104], [18, 62], [37, 33], [66, 20], [104, 24]], [[24, 104], [62, 110], [91, 95], [110, 62], [104, 24]]]);
+const RIDGE_ROADS = roads([[[24, 104], [44, 76], [64, 64], [84, 52], [104, 24]], [[24, 104], [20, 62], [39, 41], [66, 22], [104, 24]], [[24, 104], [62, 106], [89, 87], [108, 62], [104, 24]]]);
+// two extra woods by each town (the big forests are further out now), then the open-country groves
+const HOME_GROVES = [[...home(30, 86), 4.5], [...home(10, 112), 4]];
+const grovesOf = (gs, extra = []) => [...HOME_GROVES, ...gs.map(sc), ...extra.map(sc)];
+// more woods to fill the wider land (design coordinates; mirrored onto the other half)
+const WILD = [[30, 56, 6], [52, 104, 6], [8, 100, 5], [36, 72, 4], [56, 80, 5], [76, 120, 5]];
+const RIVER_GROVES = grovesOf([[12, 72, 7], [46, 120, 6], [30, 84, 3.5], [44, 62, 6], [68, 98, 6], [18, 44, 7], [86, 118, 6], [64, 22, 5]], WILD);
+const passes = ps => ps.map(([x, z, r]) => [x * K, z * K, r * 1.4]);
+// Inland Sea: open water between the two kingdoms (land only round the far corners), islands in the middle,
+// and a bay reaching close to each town so warships can raid the shore.
+const C0 = SIZE / 2, inward = (b, d) => { const l = Math.hypot(C0 - b.x, C0 - b.z); return [b.x + (C0 - b.x) / l * d, b.z + (C0 - b.z) / l * d]; };
+const SEA = { w: 17 * K, len: 50 * K, bays: BASES.map(b => [C0, C0, ...inward(b, 40), 13]), isles: [[C0, C0, 10], [C0 - 28, C0 - 28, 8.5], [C0 + 28, C0 + 28, 8.5]] };
+const SEA_ROADS = [[[BASES[0].x, BASES[0].z], [40, 130], [52, 52], [130, 40], [BASES[1].x, BASES[1].z]], [[BASES[0].x, BASES[0].z], [126, 216], [204, 204], [216, 126], [BASES[1].x, BASES[1].z]]];
+/** How far inside the sea (x, z) is: above 0 is water, below 0 is land. */
+function seaIn(x, z) {
+  const S = MAP.sea, n = (vnoise(x * .045 + 3, z * .045) - .5) * 14 + (vnoise(x * .16, z * .16) - .5) * 4;
+  let k = Math.min(S.w - Math.abs(x - z) / Math.SQRT2, S.len - Math.abs((x + z) / Math.SQRT2 - C0 * Math.SQRT2)) + n;
+  for (const [ax, az, bx, bz, br] of S.bays) k = Math.max(k, br - segDist(x, z, ax, az, bx, bz) + n * .5);
+  for (const [ix, iz, ir] of S.isles) k = Math.min(k, Math.hypot(x - ix, z - iz) - ir + n * .3);
+  return k;
+}
 // ---------------- maps ----------------
 // The map is built once when the page loads; picking another map on the title screen reloads the page.
 export const MAP_LIST = {
   riverlands: { name: 'Riverlands', desc: 'A winding river splits the land: one bridge and two shallow fords. Docks, fishing and warships.' },
   highland: { name: 'Highland Pass', desc: 'A mountain ridge with three narrow passes. Hold the high ground; gold in the hills, no sea.' },
   forest: { name: 'Forest Valley', desc: 'Thick forest everywhere: winding paths, clearings, two ponds. Lots of wood; easy to ambush, hard to scout.' },
-  random: { name: 'Random', desc: 'A new land every game: river, ridge or forest lakes, with hills and woods in new places.' },
+  sea: { name: 'Inland Sea', desc: 'Lots of water: a wide sea between the kingdoms with islands of gold, and a bay right by each town. Build a navy, raid the coast, or march the long way round.' },
+  random: { name: 'Random', desc: 'A new land every game: river, ridge, inland sea or forest lakes, with hills and woods in new places.' },
 };
 function pickMap() {
   let id = 'riverlands', seed = 1;
@@ -31,27 +60,33 @@ function pickMap() {
   return MAP_LIST[id] ? { id, seed } : { id: 'riverlands', seed: 1 };
 }
 function makeMap({ id, seed }) {
-  const base = { id, seed, name: MAP_LIST[id].name, river: false, bridge: false, fords: [], roads: RIVER_ROADS, groves: RIVER_GROVES, scatter: 170, hills: 7, off: 0, ridge: null, ponds: [], clear: [] };
-  if (id === 'riverlands') return { ...base, river: true, bridge: true, fords: [[37.2, 32.8], [90.8, 95.2]] };
-  if (id === 'highland') return { ...base, hills: 10, off: 23, scatter: 110,
-    roads: [[[24, 104], [44, 76], [64, 64], [84, 52], [104, 24]], [[24, 104], [20, 62], [39, 41], [66, 22], [104, 24]], [[24, 104], [62, 106], [89, 87], [108, 62], [104, 24]]],
-    ridge: { h: 11, w: 8, passes: [[39, 41, 4.5], [64, 64, 6], [89, 87, 4.5]] }, groves: [[12, 72, 6], [46, 120, 5], [30, 84, 3], [18, 44, 6], [86, 118, 5], [70, 100, 4]], hillGold: true };
-  if (id === 'forest') return { ...base, off: 51, hills: 5, scatter: 330, ponds: [[44, 44, 6.5], [84, 84, 6.5]],
-    groves: [[12, 72, 9], [46, 120, 8], [44, 62, 8], [68, 98, 8], [18, 44, 9], [86, 118, 8], [64, 22, 7], [64, 106, 7], [22, 64, 7]], clear: [[46, 82, 9], [82, 46, 9], [64, 64, 7]] };
+  const A = K * K; // tree counts grow with the land
+  const fords = [sc([37.2, 32.8]), sc([90.8, 95.2])];
+  const base = { id, seed, name: MAP_LIST[id].name, sea: null, river: false, bridge: false, fords: [], roads: RIVER_ROADS, groves: RIVER_GROVES, scatter: 170 * A, hills: 7, off: 0, ridge: null, ponds: [], clear: [] };
+  if (id === 'riverlands') return { ...base, river: true, bridge: true, fords };
+  if (id === 'highland') return { ...base, hills: 10, off: 23, scatter: 110 * A, roads: RIDGE_ROADS,
+    ridge: { h: 11, w: 8, passes: passes([[39, 41, 4.5], [64, 64, 6], [89, 87, 4.5]]) }, groves: grovesOf([[12, 72, 6], [46, 120, 5], [30, 84, 3], [18, 44, 6], [86, 118, 5], [70, 100, 4]], WILD.slice(0, 4)), hillGold: true };
+  if (id === 'forest') return { ...base, off: 51, hills: 5, scatter: 330 * A, ponds: [[44, 44, 6.5], [84, 84, 6.5], [26, 70, 4.5], [102, 58, 4.5]].map(sc),
+    groves: grovesOf([[12, 72, 9], [46, 120, 8], [44, 62, 8], [68, 98, 8], [18, 44, 9], [86, 118, 8], [64, 22, 7], [64, 106, 7], [22, 64, 7]], WILD), clear: [[46, 82, 9], [82, 46, 9], [64, 64, 7]].map(sc) };
+  if (id === 'sea') return { ...base, hills: 6, off: 77, scatter: 150 * A, roads: SEA_ROADS, sea: SEA, groves: grovesOf([[12, 72, 7], [46, 120, 6], [18, 44, 7], [86, 118, 6], [30, 84, 3.5]], WILD) };
   // random: seeded, mirrored so both sides are fair
-  const r = mulberry32(seed * 7919 + 13), kind = r() < .45 ? 'river' : r() < .55 ? 'ridge' : 'ponds';
-  const groves = []; for (let i = 0; i < 9; i++) { const x = 8 + r() * 70, z = 30 + r() * 90; if (z > SIZE - x + 10) continue; groves.push([x, z, 4 + r() * 5]); }
-  const m = { ...base, off: 100 + seed % 997, hills: 5 + r() * 6, scatter: 110 + r() * 200 | 0, groves, clear: [[46, 82, 8], [82, 46, 8], [64, 64, 6]] };
-  if (kind === 'river') Object.assign(m, { river: true, bridge: true, fords: [[37.2, 32.8], [90.8, 95.2]] });
-  else if (kind === 'ridge') Object.assign(m, { ridge: { h: 8 + r() * 5, w: 7 + r() * 2, passes: [[39, 41, 4.5], [64, 64, 5 + r() * 2], [89, 87, 4.5]] }, roads: [[[24, 104], [44, 76], [64, 64], [84, 52], [104, 24]], [[24, 104], [20, 62], [39, 41], [66, 22], [104, 24]], [[24, 104], [62, 106], [89, 87], [108, 62], [104, 24]]], hillGold: true });
-  else { const a = 30 + r() * 20; m.ponds = [[a, a, 5 + r() * 3], [SIZE - a, SIZE - a, 5 + r() * 3]]; }
-  m.name += ` (${kind === 'river' ? 'river' : kind === 'ridge' ? 'mountains' : 'lakes'} #${seed})`;
+  const r = mulberry32(seed * 7919 + 13), kind = r() < .35 ? 'river' : r() < .4 ? 'ridge' : r() < .5 ? 'sea' : 'ponds';
+  const gs = []; for (let i = 0; i < 16; i++) { const x = 8 + r() * 70, z = 30 + r() * 90; if (z > 128 - x + 10) continue; gs.push([x, z, 4 + r() * 5]); }
+  const m = { ...base, off: 100 + seed % 997, hills: 5 + r() * 6, scatter: (110 + r() * 200 | 0) * A, groves: grovesOf(gs), clear: [[46, 82, 8], [82, 46, 8], [64, 64, 6]].map(sc) };
+  if (kind === 'river') Object.assign(m, { river: true, bridge: true, fords });
+  else if (kind === 'sea') Object.assign(m, { sea: SEA, roads: SEA_ROADS });
+  else if (kind === 'ridge') Object.assign(m, { ridge: { h: 8 + r() * 5, w: 7 + r() * 2, passes: passes([[39, 41, 4.5], [64, 64, 5 + r() * 2], [89, 87, 4.5]]) }, roads: RIDGE_ROADS, hillGold: true });
+  else { const a = 30 + r() * 20, pr = 5 + r() * 3, pr2 = 5 + r() * 3; m.ponds = [sc([a, a, pr]), sc([128 - a, 128 - a, pr2])]; }
+  m.name += ` (${kind === 'river' ? 'river' : kind === 'ridge' ? 'mountains' : kind === 'sea' ? 'sea' : 'lakes'} #${seed})`;
   return m;
 }
 export const MAP = makeMap(pickMap());
 export const FORDS = MAP.fords;
+/** Where Battle mode's armies meet: the middle of the map, or the dry land by a corner on the sea map. */
+export const FIELD = MAP.sea ? { x: 52, z: 52 } : { x: SIZE / 2, z: SIZE / 2 };
 const ROADS = MAP.roads;
-export function riverDist(x, z) { return Math.abs((x - z) / Math.SQRT2 + Math.sin((x + z - 128) * .045) * 6); }
+/** How far (x, z) is from the river's centre line (also the frontier the mountain ridge follows). Wider bends on bigger maps. */
+export function riverDist(x, z) { return Math.abs((x - z) / Math.SQRT2 + Math.sin((x + z - SIZE) / K * .045) * 6 * K); }
 /** Height of the bridge deck at (x,z), or -99 if not on the bridge. */
 export function bridgeAt(x, z) {
   if (!MAP.bridge) return -99;
@@ -77,6 +112,7 @@ function rawH(x, z) {
     let pass = 1; for (const [px, pz, pr] of R.passes) pass = Math.min(pass, smooth(clamp((Math.hypot(x - px, z - pz) - pr) / 5, 0, 1)));
     h += R.h * (.75 + .5 * fbm(x * .08 + 3, z * .08)) * smooth(clamp((R.w - d) / (R.w * .7), 0, 1)) * pass;
   }
+  if (MAP.sea) { const k = seaIn(x, z); if (k > -4) h = Math.min(h, lerp(h, WL - 2.8, smooth(clamp((k + 4) / 10, 0, 1)))); }
   for (const [px, pz, pr] of MAP.ponds) { const d = Math.hypot(x - px, z - pz) + (vnoise(x * .3, z * .3) - .5) * 1.5; if (d < pr + 2.5) h = Math.min(h, lerp(h, WL - 1.6, smooth(clamp((pr + 2.5 - d) / 3, 0, 1)))); }
   if (!MAP.river) return h;
   // river: deep channel, shallow at the two fords
@@ -166,27 +202,47 @@ function addMine(x, z, amt) {
 const mirror = (fn, x, z, ...a) => { fn(x, z, ...a); fn(SIZE - x, SIZE - z, ...a); };
 function berryPatch(x, z, n) { let k = 0; for (let t = 0; t < 60 && k < n; t++) { const a = t * 2.4, d = .6 + t * .09; if (addBerry(x + Math.cos(a) * d, z + Math.sin(a) * d)) k++; } }
 // per-base starting resources (mirrored so it's fair)
-mirror(addMine, 36, 112, 2500); mirror(addMine, 14, 90, 2000);
-for (const [x, z] of [[33, 96], [SIZE - 33, SIZE - 96]]) berryPatch(x, z, 7);
-mirror(addMine, 66, 44, 3000);
-for (const [x, z] of [[58, 92], [SIZE - 58, SIZE - 92]]) berryPatch(x, z, 6);
+const H = (fn, x, z, ...a) => mirror(fn, ...home(x, z), ...a), F = (fn, x, z, ...a) => mirror(fn, ...sc([x, z]), ...a);
+H(addMine, 36, 112, 2500); H(addMine, 14, 90, 2000);
+for (const [x, z] of [home(33, 96)]) { berryPatch(x, z, 7); berryPatch(SIZE - x, SIZE - z, 7); }
+F(addMine, 66, 44, 3000); F(addMine, 20, 38, 2500); F(addMine, 46, 84, 2500); F(addMine, 84, 112, 3000);
+for (const [x, z] of [home(52, 92), sc([46, 70])]) { berryPatch(x, z, 6); berryPatch(SIZE - x, SIZE - z, 6); }
 // stone quarries: one by each town, more out in the field
-mirror(addQuarry, 44, 114, 1500); mirror(addQuarry, 12, 70, 1800); mirror(addQuarry, 72, 96, 2200);
+H(addQuarry, 44, 114, 1500); F(addQuarry, 12, 70, 1800); F(addQuarry, 72, 96, 2200); F(addQuarry, 30, 46, 2000);
 const groves = MAP.groves;
-if (MAP.hillGold) { mirror(addMine, 50, 28, 2500); mirror(addMine, 28, 50, 2000); } // extra gold up in the hills
+if (MAP.hillGold) { F(addMine, 50, 28, 2500); F(addMine, 28, 50, 2000); } // extra gold up in the hills
+if (MAP.sea) for (const [ix, iz, ir] of MAP.sea.isles) { mirror(addMine, ix + ir * .3, iz - ir * .3, 3500); if (ir < 10) mirror(addQuarry, ix - ir * .35, iz + ir * .35, 2500); } // rich islands: worth a fleet
+// gold, stone, berries and deer all over the land, so gatherers have to venture out (sometimes close to the enemy).
+// Every spot is mirrored onto the other half, so both sides get the same chances.
+{
+  const spots = [], far = (x, z) => !nearBase(x, z, 24) && !nearBase(SIZE - x, SIZE - z, 24) && distToRoad(x, z) > 4 && Math.hypot(x - (SIZE - x), z - (SIZE - z)) > 16;
+  for (const [kind, n, amt] of [['g', 10, 2200], ['s', 9, 1800], ['f', 12, 6], ['d', 6, 3]]) for (let k = 0, t = 0; k < n && t < 600; t++) {
+    const x = rr(16, SIZE - 16), z = rr(16, SIZE - 16);
+    if (!far(x, z) || !cellFree0(x | 0, z | 0) || !cellFree0(SIZE - x | 0, SIZE - z | 0) || heightAt(x, z) > 9) continue;
+    if (spots.some(([a, b]) => Math.min(Math.hypot(x - a, z - b), Math.hypot(SIZE - x - a, SIZE - z - b)) < 20)) continue;
+    spots.push([x, z]); k++;
+    if (kind === 'g') mirror(addMine, x, z, amt); else if (kind === 's') mirror(addQuarry, x, z, amt);
+    else if (kind === 'f') { berryPatch(x, z, amt); berryPatch(SIZE - x, SIZE - z, amt); } else mirror(addHerd, x, z, amt);
+  }
+}
 for (const [gx, gz, gr] of groves) for (let k = 0; k < gr * gr * 1.7; k++) {
   const a = R() * TAU, d = Math.sqrt(R()) * gr, x = gx + Math.cos(a) * d, z = gz + Math.sin(a) * d;
   if (!nearBase(x, z, 13) && !nearBase(SIZE - x, SIZE - z, 13)) mirror(addTree, x, z);
 }
-for (let k = 0; k < MAP.scatter; k++) { const x = rr(6, 122), z = rr(6, 122); if (z > SIZE - x) continue; if (!nearBase(x, z, 14) && !nearBase(SIZE - x, SIZE - z, 14)) mirror(addTree, x, z); }
+for (let k = 0; k < MAP.scatter; k++) { const x = rr(6, SIZE - 6), z = rr(6, SIZE - 6); if (z > SIZE - x) continue; if (!nearBase(x, z, 14) && !nearBase(SIZE - x, SIZE - z, 14)) mirror(addTree, x, z); }
 // fish shoals along the river (only fishing boats can catch them; they don't block boats)
 for (const [px, pz, pr] of MAP.ponds) for (let k = 0; k < 2; k++) resources.push({ id: nextResId++, kind: 'res', rt: 'f', fish: true, x: px + (k ? .35 : -.35) * pr, z: pz + (k ? -.3 : .3) * pr, amt: 250, max: 250, r: 1.2, cells: [], alive: true });
-if (MAP.river) for (const sv of [52, 92, 108, 148, 164, 204]) {
-  const dxz = -Math.SQRT2 * Math.sin((sv - 128) * .045) * 6, x = (sv + dxz) / 2, z = (sv - dxz) / 2;
+if (MAP.river) for (const s0 of [40, 52, 72, 92, 108, 148, 164, 184, 204, 216]) { // s0 = x + z along the river (design units)
+  const sv = s0 * K, dxz = -Math.SQRT2 * Math.sin((sv - SIZE) / K * .045) * 6 * K, x = (sv + dxz) / 2, z = (sv - dxz) / 2;
   resources.push({ id: nextResId++, kind: 'res', rt: 'f', fish: true, x, z, amt: 250, max: 250, r: 1.2, cells: [], alive: true });
 }
 // deer: a herd near each town, more roaming the wilds (mirrored so it's fair)
-mirror(addHerd, 40, 92, 4); mirror(addHerd, 16, 86, 3); mirror(addHerd, 50, 72, 4); mirror(addHerd, 30, 120, 3);
+H(addHerd, 40, 92, 4); H(addHerd, 16, 86, 3); F(addHerd, 50, 72, 4); H(addHerd, 30, 120, 3); F(addHerd, 24, 58, 4); F(addHerd, 70, 112, 4); F(addHerd, 40, 32, 3);
+if (MAP.sea) for (let k = 0, t = 0; k < 16 && t < 800; t++) { // fish all over the sea
+  const x = rr(20, SIZE - 20), z = rr(20, SIZE - 20); if (heightAt(x, z) > WL - 1.4 || heightAt(SIZE - x, SIZE - z) > WL - 1.4) continue;
+  if (resources.some(r => r.fish && Math.hypot(r.x - x, r.z - z) < 14)) continue; k++;
+  for (const [fx, fz] of [[x, z], [SIZE - x, SIZE - z]]) resources.push({ id: nextResId++, kind: 'res', rt: 'f', fish: true, x: fx, z: fz, amt: 300, max: 300, r: 1.2, cells: [], alive: true });
+}
 for (const r of resources) r.y = r.fish ? WL : heightAt(r.x, r.z);
 /** Deer graze and wander; a hunted deer bolts away from the hunter. Dead deer lie still until eaten. */
 export function updateAnimals(dt, t) {
@@ -418,14 +474,15 @@ export function buildSky() {
         gl_FragColor = vec4(c, 1.0); }`,
   });
   const m = new THREE.Mesh(new THREE.SphereGeometry(320, 24, 12), mat);
-  m.frustumCulled = false; m.renderOrder = -1;
+  m.frustumCulled = false; m.renderOrder = -1; m.position.set(SIZE / 2, 0, SIZE / 2); // the camera always stays inside the dome
   return m;
 }
 
 // ---------------- distant mountains (so the world doesn't end at the map edge) ----------------
 export function buildDistant(scene) {
   const g = new THREE.Group(), r = mulberry32(31);
-  for (const [R, H, hue, seg] of [[175, 26, .58, 120], [225, 44, .6, 140], [290, 70, .62, 160]]) {
+  for (const [R0, H, hue, seg] of [[175, 26, .58, 120], [225, 44, .6, 140], [290, 70, .62, 160]]) {
+    const R = R0 + SIZE / 2 - 64; // rings stay just outside the map
     const geo = new THREE.CylinderGeometry(R, R, 1, seg, 4, true), p = geo.attributes.position, col = new Float32Array(p.count * 3), c = new THREE.Color();
     const ph = r() * 10;
     for (let i = 0; i < p.count; i++) {
@@ -704,6 +761,29 @@ export function syncAnimals(t) {
   });
   deerMesh.instanceMatrix.needsUpdate = true;
 }
+// ---- map tiles: big instanced sets (trees, rocks, ferns, grass) are split into 64 m squares, so the camera only draws
+// the squares it can actually see. That is what keeps the big maps smooth on phones.
+const TILE = 64, TN = Math.ceil(SIZE / TILE);
+const tileOf = (x, z) => clamp(z / TILE | 0, 0, TN - 1) * TN + clamp(x / TILE | 0, 0, TN - 1);
+/** Split one instanced mesh into one per tile. Returns, for each old instance number, [its tile's mesh, its new number]. */
+function splitTiles(m) {
+  const n = m.count, by = new Map(), where = new Array(n), parent = m.parent;
+  for (let i = 0; i < n; i++) { m.getMatrixAt(i, _m); const t = tileOf(_m.elements[12], _m.elements[14]); let a = by.get(t); if (!a) by.set(t, a = []); where[i] = [a, a.length]; a.push(i); }
+  const meshOf = new Map();
+  for (const a of by.values()) {
+    const p = new THREE.InstancedMesh(m.geometry, m.material, a.length);
+    p.castShadow = m.castShadow; p.receiveShadow = m.receiveShadow; p.layers.mask = m.layers.mask; p.renderOrder = m.renderOrder;
+    a.forEach((i, j) => { m.getMatrixAt(i, _m); p.setMatrixAt(j, _m); if (m.instanceColor) { m.getColorAt(i, _c); p.setColorAt(j, _c); } });
+    p.computeBoundingSphere(); parent?.add(p); meshOf.set(a, p);
+  }
+  m.removeFromParent();
+  return where.map(([a, j]) => [meshOf.get(a), j]);
+}
+/** Re-point resources (trees, bushes) at their tile meshes after splitting, so felling a tree still hides the right one. */
+function retile(items) {
+  const done = new Map(), get = m => done.get(m) || done.set(m, splitTiles(m)).get(m);
+  for (const it of items) { if (!it.inst) continue; const ms = it.inst.meshes || [it.inst.mesh], i = it.inst.i, sp = ms.map(get); it.inst = { meshes: sp.map(x => x[i][0]), i: sp[0][i][1] }; }
+}
 export function buildResources(scene, Q) {
   if (animals.length) { deerMesh = new THREE.InstancedMesh(deerGeo(), M.vc, animals.length); deerMesh.castShadow = Q.shadow > 0; deerMesh.frustumCulled = false; scene.add(deerMesh); animals.forEach((a, i) => { a.inst = { mesh: deerMesh, i }; }); syncAnimals(0); }
   const shadows = Q.shadow > 0;
@@ -742,6 +822,7 @@ export function buildResources(scene, Q) {
     berries.forEach((b, i) => { _q.setFromAxisAngle(UP, i * 2.1); _m.compose(_v.set(b.x, b.y - .05, b.z), _q, _s.set(1, 1, 1)); bushes.setMatrixAt(i, _m); b.inst = { mesh: bushes, i }; });
     for (const m of [...kinds, bushes]) { m.castShadow = shadows; m.receiveShadow = shadows; scene.add(m); }
   }
+  retile([...trees, ...berries]);
   // stone quarries and gold mines: a heap of photo-scanned boulders (pale for stone, dark for gold) with cut blocks / gold nuggets
   const pileMat = NAT.ok && { s: NAT.rocks[0].mat.clone(), g: NAT.rocks[0].mat.clone() };
   if (pileMat) { pileMat.s.color.setRGB(1.35, 1.3, 1.2); pileMat.g.color.setRGB(.72, .7, .68); }
@@ -761,13 +842,13 @@ export function buildResources(scene, Q) {
   }
   // decoration: rocks, grass, ferns, fallen logs and stumps (not obstacles)
   const r = mulberry32(99), rocks = [], tufts = [];
-  for (let k = 0; k < 320; k++) {
-    const x = 5 + r() * 118, z = 5 + r() * 118, h = heightAt(x, z);
+  for (let k = 0; k < 320 * K * K; k++) {
+    const x = 5 + r() * (SIZE - 10), z = 5 + r() * (SIZE - 10), h = heightAt(x, z);
     if (h < WL + .3 || nearBase(x, z, 10) || distToRoad(x, z) < 2.5) continue; rocks.push([x, z, .12 + r() * r() * .7]);
   }
-  const want = Q.grass;
+  const want = Q.grass * K * K; // the same thickness of grass on a bigger map (only the tiles on screen are drawn)
   for (let k = 0; k < want * 3 && tufts.length < want; k++) {
-    const x = 4 + r() * 120, z = 4 + r() * 120, h = heightAt(x, z), cx = x | 0, cz = z | 0;
+    const x = 4 + r() * (SIZE - 8), z = 4 + r() * (SIZE - 8), h = heightAt(x, z), cx = x | 0, cz = z | 0;
     if (h < WL + .6 || h > 9 || blocked[cz * N + cx] === 1 || distToRoad(x, z) < 2.2 || nearBase(x, z, 6)) continue;
     if (FOREST && FOREST[cz * HN + cx] > .55 && r() < .7) continue; // shady forest floor: ferns instead of meadow grass
     tufts.push([x, z]);
@@ -781,6 +862,7 @@ export function buildResources(scene, Q) {
       _q.setFromAxisAngle(UP, r() * TAU); _m.compose(_v.set(x, heightAt(x, z) - sc * .12, z), _q, _s.set(sc, sc * (.8 + r() * .5), sc * (.85 + r() * .3)));
       m.setMatrixAt(i, _m); _c.setHSL(.1, .05 + r() * .1, .8 + r() * .3); m.setColorAt(i, _c);
     });
+    rm.forEach(splitTiles);
     // fallen logs lying at the edge of the woods
     const logs = [];
     for (const t of trees) if (hash2(t.z * 4.1, t.x * 6.3) < .035) { const a = r() * TAU, d = 1.3 + r() * .8, x = t.x + Math.cos(a) * d, z = t.z + Math.sin(a) * d; if (heightAt(x, z) > WL + .4 && distToRoad(x, z) > 2.5) logs.push([x, z, r() * TAU]); }
@@ -789,7 +871,7 @@ export function buildResources(scene, Q) {
       const s = .7 + r() * .35, th = 2.1 + r() * .6, dx = Math.cos(yaw) * 1.2 * s, dz = -Math.sin(yaw) * 1.2 * s, tilt = Math.atan2(heightAt(x + dx, z + dz) - heightAt(x - dx, z - dz), 2.4 * s);
       _q.setFromEuler(new THREE.Euler(0, yaw, tilt, 'YXZ')); _m.compose(_v.set(x, heightAt(x, z) - .06, z), _q, _s.set(s, s * th, s * th)); lm.setMatrixAt(i, _m);
     });
-    lm.castShadow = shadows; lm.receiveShadow = true; scene.add(lm);
+    lm.castShadow = shadows; lm.receiveShadow = true; scene.add(lm); splitTiles(lm);
     // stumps: one for every tree that gets cut down, and a few where the land round each town was cleared
     stumpMesh = new THREE.InstancedMesh(NAT.stump.geo, NAT.stump.mat, trees.length + 40); stumpMesh.count = 0;
     stumpMesh.castShadow = shadows; stumpMesh.receiveShadow = true; stumpMesh.frustumCulled = false; scene.add(stumpMesh);
@@ -814,12 +896,13 @@ export function buildResources(scene, Q) {
       _q.setFromAxisAngle(UP, r() * TAU); _m.compose(_v.set(x, heightAt(x, z) - .02, z), _q, _s.set(s, s * (.8 + r() * .4), s)); m.setMatrixAt(i, _m);
       _c.setHSL(.06 * (r() - .5), .25 * r(), .78 + r() * .35); m.setColorAt(i, _c);
     });
+    kinds.forEach(splitTiles);
   }
   if (!NAT.ok) {
     const rockGeo = shadeAO(bake(jitter(P.ico(1, 1), .18, 5), 0x8a857c), -.6, .8, .6);
     const rockMesh = new THREE.InstancedMesh(rockGeo, M.stone, rocks.length);
     rocks.forEach(([x, z, s], i) => { _q.setFromEuler(new THREE.Euler(r() * 3, r() * 3, 0)); _m.compose(_v.set(x, heightAt(x, z) - s * .15, z), _q, _s.set(s, s * .55, s * (.8 + r() * .4))); rockMesh.setMatrixAt(i, _m); _c.setHSL(.08, .05 + r() * .08, .75 + r() * .35); rockMesh.setColorAt(i, _c); });
-    rockMesh.castShadow = shadows; rockMesh.receiveShadow = true; scene.add(rockMesh);
+    rockMesh.castShadow = shadows; rockMesh.receiveShadow = true; scene.add(rockMesh); splitTiles(rockMesh);
   }
   if (tufts.length) {
     // every 8th tuft is in flower (4 colours)
@@ -830,7 +913,7 @@ export function buildResources(scene, Q) {
       const m = i % 8 === 0 ? fl[(i >> 3) % 4] : plain, s = .6 + r() * .9;
       _q.setFromAxisAngle(UP, r() * 6); _m.compose(_v.set(x, heightAt(x, z) - .03, z), _q, _s.set(s, s * (.7 + r() * .6), s)); m.setMatrixAt(m.count++, _m);
     });
-    for (const m of [plain, ...fl]) { m.receiveShadow = shadows; m.layers.set(1); scene.add(m); }
+    for (const m of [plain, ...fl]) { m.receiveShadow = shadows; m.layers.set(1); scene.add(m); splitTiles(m); }
   }
 }
 
