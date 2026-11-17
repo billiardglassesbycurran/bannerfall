@@ -35,5 +35,11 @@ None yet. Models made with Tripo (tripo.com) go here with the account/plan they 
   Erika Archer With Bow/Arrow, Peasant Man, Brute (berserkers, villagers) and Heraklios (light cavalry riders), and motion-captured clips (sword & shield, great sword, longbow, rifle, farming,
   sitting). Converted with `tools/blender/mixamo.py` into `assets/anim/mx_*.glb`. **Not CC0**: Mixamo's terms let them be used
   royalty-free inside a game, but not redistributed as standalone assets — please don't reuse these files outside Bannerfall.
+- **God mode creatures:** Mixamo characters Warrok W Kurniawan (Troll), Demon T Wiezzorek (Demon) and Skeletonzombie
+  T Avelange (Skeleton) — same Mixamo terms as above (`assets/anim/mx_warrok|mx_demon|mx_skeleton.glb`).
+- **Dragon:** "Animated Dragon Three Motion Loops" by **LasquetiSpice** (https://sketchfab.com/LasquetiSpice), from
+  https://sketchfab.com/3d-models/animated-dragon-three-motion-loops-eca98cf6cd084c1596cecf716e110c29 — licensed under
+  **Creative Commons Attribution 4.0** (http://creativecommons.org/licenses/by/4.0/). Reduced to ~6,500 triangles with
+  `tools/blender/mixamo.py creature` → `assets/anim/creature_dragon.glb`.
 - **Ultimate Animated Animal Pack** by Quaternius (quaternius.com), CC0. Horse and Deer with their walk/gallop/idle/death
   clips in `assets/anim/animal_*.glb` (slimmed with `tools/kaykit.py --animals`; licence text in `assets/anim/LICENSE-Quaternius.txt`).

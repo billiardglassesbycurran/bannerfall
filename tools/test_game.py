@@ -170,6 +170,19 @@ def main():
         check(not err_box(page) and not errors, 'animated: no errors ' + (err_box(page) + ' '.join(errors))[:300])
         page.context.browser.close()
 
+        print('God mode')
+        page, errors = open_game(p, base + 'index.html?anim=1', 'play=skirmish,1&god', **desk)
+        r = page.evaluate("""async () => { const a = window.bannerfall, g = a.game, A = await import(new URL('src/anim.js', location.href).href); await A.loadLazy();
+          const h = g.blds.find(b => b.type === 'hall' && b.team === 0); g.cheat(0, 'res', true); g.cheat(0, 'build', true); g.cheatAge(0);
+          const kinds = ['dragon', 'troll', 'demon', 'skeleton', 'warwagon', 'battlecar'], n = kinds.map((t, i) => g.cheatSpawn(0, t, h.x + 5 + i * 2, h.z - 6, 1));
+          const e = g.blds.find(b => b.type === 'hall' && b.team === 1); for (const u of g.units) if (u.team === 0 && u.d.god) g.command([u], e, e.x, e.z);
+          for (let i = 0; i < 300; i++) { g.update(.05); a.ai.update(.05); if (i % 10 === 0) g.syncVisuals(.05, -1); }
+          return { on: g.god.on, spawned: n.reduce((s, x) => s + x, 0), res: g.T[0].w, age: g.T[0].age, dragon: !!g.units.find(u => u.type === 'dragon')?.batch.anim, btn: !document.getElementById('bGod').classList.contains('hide') }; }""")
+        check(r['on'] and r['spawned'] == 6 and r['res'] > 50000 and r['age'] >= 1 and r['dragon'] and r['btn'], f'God mode: cheats work, dragon and monsters summon and fight {r}')
+        page.wait_for_timeout(1000); page.screenshot(path=str(OUT / 'godmode.png'))
+        check(not err_box(page) and not errors, 'god mode: no errors ' + (err_box(page) + ' '.join(errors))[:300])
+        page.context.browser.close()
+
         print('Online play (two tabs, same-computer test link)')
         H, herr = open_game(p, base + 'index.html?loop=1', '', viewport={'width': 1000, 'height': 600})
         G = H.context.new_page(); gerr = []; G.on('pageerror', lambda e: gerr.append(str(e))); G.goto(base + 'index.html?loop=1')
@@ -198,7 +211,7 @@ def main():
         page, errors = open_game(p, base, 'play=skirmish,1,chinese,franks', viewport={'width': 740, 'height': 360}, has_touch=True, is_mobile=True, device_scale_factor=2)
         page.evaluate("() => { const a = window.bannerfall; a.select(a.game.units.filter(u => u.team === 0 && u.type === 'peasant')); a.hud.sig = ''; a.hud.updateCard(); }")
         page.wait_for_timeout(300)
-        boxes = page.evaluate("[...document.querySelectorAll('#bottom .btn, #bottom .cbtn, #top .btn')].map(b => { const r = b.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top), Math.round(r.right), Math.round(r.bottom), Math.round(r.width), Math.round(r.height), b.id || b.textContent.slice(0, 12)]; })")
+        boxes = page.evaluate("[...document.querySelectorAll('#bottom .btn, #bottom .cbtn, #top .btn')].filter(b => b.getClientRects().length).map(b => { const r = b.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top), Math.round(r.right), Math.round(r.bottom), Math.round(r.width), Math.round(r.height), b.id || b.textContent.slice(0, 12)]; })")
         check(all(b[0] >= -1 and b[1] >= -1 and b[2] <= 741 and b[3] <= 361 for b in boxes), 'all buttons fit on a phone screen')
         small = [b for b in boxes if b[4] < 44 and b[5] < 44]
         check(not small, 'buttons are big enough to tap' + (f' (too small: {small})' if small else ''))

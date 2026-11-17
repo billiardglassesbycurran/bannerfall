@@ -65,6 +65,13 @@ export class FX {
   smoke(x, y, z, dark = .3, big = 1) { const v = dark + R(-.05, .05); this.soft.add(x + R(-.2, .2), y, z + R(-.2, .2), R(-.1, .1), R(.6, 1.0), R(-.1, .1), R(2.5, 4), .5 * big, 2.6 * big, v, v, v * 1.02, .55, 0, .3); }
   chimney(x, y, z) { this.soft.add(x, y, z, R(-.05, .05), R(.4, .6), R(-.05, .05), R(2.5, 3.5), .25, 1.4, .75, .74, .72, .35, 0, .2); }
   fire(x, y, z, big = 1) { this.glow.add(x + R(-.3, .3) * big, y, z + R(-.3, .3) * big, R(-.1, .1), R(1.2, 2.0), R(-.1, .1), R(.4, .8), .9 * big, .2, 1.0, R(.35, .55), .08, .9, 0, 1); }
+  /** A dragon's breath: a roaring cone of flame from the jaws to the target. */
+  breath(x, y, z, tx, ty, tz) {
+    const dx = tx - x, dy = ty - y, dz = tz - z, d = Math.hypot(dx, dy, dz) || 1, sp = 24;
+    for (let i = 0; i < 46; i++) { const k = R(.75, 1.15), life = d / sp * R(.85, 1.1);
+      this.glow.add(x, y, z, dx / d * sp * k + R(-1.6, 1.6), dy / d * sp * k + R(-1, 1.4), dz / d * sp * k + R(-1.6, 1.6), life, R(.3, .6), R(1.4, 2.6), 1, R(.35, .75), R(.05, .2), .95, -1.5, .4); }
+    for (let i = 0; i < 10; i++) this.soft.add(tx + R(-1, 1), ty, tz + R(-1, 1), R(-.3, .3), R(.8, 1.6), R(-.3, .3), R(1.5, 2.5), .8, 3, .2, .18, .16, .5, 0, .3);
+  }
   ember(x, y, z) { this.glow.add(x, y, z, R(-.5, .5), R(1, 2.5), R(-.5, .5), R(.8, 1.4), .12, .05, 1, .6, .2, 1, .5, .5); }
   sparks(x, y, z, n = 6) { for (let i = 0; i < n; i++) this.glow.add(x, y, z, R(-2, 2), R(.5, 3), R(-2, 2), R(.15, .35), .14, .04, 1, R(.75, .95), .4, 1, 9, 2); }
   dust(x, y, z, n = 10, spread = 1.5, tint = [.55, .48, .38]) { for (let i = 0; i < n; i++) { const a = R(0, 6.28), s = R(.5, 1) * spread; this.soft.add(x + Math.cos(a) * .3, y + .2, z + Math.sin(a) * .3, Math.cos(a) * s, R(.2, .9), Math.sin(a) * s, R(1, 2), .6, 2.2, tint[0], tint[1], tint[2], .5, -.1, 1.5); } }

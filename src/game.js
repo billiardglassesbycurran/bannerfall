@@ -43,6 +43,7 @@ export class Game {
     this.T = [0, 1].map(() => ({ f: 200, w: 200, g: 100, s: 100, pop: 0, cap: 0, hallLost: false, age: mode === 'battle' ? 2 : 0, techs: new Set(), carry: 10, gm: { f: 1, w: 1, g: 1, s: 1 }, fish: 1, farm: 1, bldHp: 1 }));
     for (const t of [0, 1]) this.figures?.setAge?.(t, this.T[t].age);
     this.time = 0; this.over = null; this.hero = null; this.heroRespawn = 0;
+    this.god = { on: false, T: [{}, {}] }; // God mode: cheats (only when chosen on the setup screen; online, only if every player agreed)
     this.toast = () => {}; this.onEnd = () => {};
     this.hash = new Map();
   }
@@ -93,6 +94,25 @@ export class Game {
     this.pay(b.team, t.cost); b.queue.push({ tech: key, t: 0 }); return 'ok';
   }
   /** Apply a finished technology to the team (and to every existing unit/building). */
+  // ---------- God mode ----------
+  cheatOn(team, key) { return !!this.god?.on && !!this.god.T[team]?.[key]; }
+  /** Switch a cheat on/off for a side: res (infinite resources), build (instant building & training), pop (no population limit), hero (invincible Commander). */
+  cheat(team, key, val) {
+    if (!this.god?.on || !this.god.T[team]) return;
+    this.god.T[team][key] = !!val;
+    if (key === 'res' && val) for (const r of ['f', 'w', 'g', 's']) this.T[team][r] = Math.max(this.T[team][r] || 0, 99999);
+  }
+  /** Jump to the next age at once. */
+  cheatAge(team) {
+    if (!this.god?.on) return; const T = this.T[team], k = Object.keys(TECH).find(k => TECH[k].toAge === T.age + 1);
+    if (k) { this.applyTech(team, k); if (team === 0) this.toast(`Advanced to the ${['Stone', 'Bronze', 'Iron', 'Castle'][T.age] || 'next'} Age!`); }
+  }
+  /** Drop n units of any type (including dragons and war machines) at a spot. */
+  cheatSpawn(team, type, x, z, n = 1) {
+    if (!this.god?.on || !UD[type]) return 0; let k = 0;
+    for (let i = 0; i < n; i++) { const a = i * 2.4, d = n > 1 ? .8 + i * .25 : 0; if (this.spawnUnit(team, type, x + Math.cos(a) * d, z + Math.sin(a) * d)) k++; }
+    this.recount?.(); return k;
+  }
   applyTech(team, key) {
     const t = TECH[key], e = t.eff || {}, T = this.T[team]; T.techs.add(key);
     if (t.toAge) { T.age = t.toAge; this.figures?.setAge?.(team, T.age); }
@@ -392,6 +412,7 @@ export class Game {
   // ---------------- damage ----------------
   damage(t, dmg, src) {
     if (!t.alive) return;
+    if (t.d?.hero && this.cheatOn(t.team, 'hero')) return; // God mode: invincible Commander
     let m = 1; if (src?.d?.vsHorse && t.d.horse) m = 3;
     if (t.kind === 'bld' && src?.d?.ranged) m = src.d.vsBld || .3;
     if (t.kind === 'unit' && src?.d?.vsBld) m = .7; // catapults are clumsy against single soldiers
@@ -484,11 +505,13 @@ export class Game {
 
   // ---------------- projectiles ----------------
   shoot(src, t, dmg, from) {
-    const kind = src?.d?.stone ? 'stone' : src?.d?.bolt ? 'bolt' : 'arrow'; this.onShoot?.(src, kind);
-    const mesh = new THREE.Mesh(kind === 'stone' ? stoneGeo : kind === 'bolt' ? boltGeo : arrowGeo, M.vc); mesh.castShadow = kind === 'stone'; this.scene.add(mesh);
-    const f = from || new THREE.Vector3(src.x, src.y + (src.d?.horse ? 2.4 : src.d?.ship ? 1.8 : 1.5) * (src.scale || 1), src.z);
-    const d = Math.hypot(t.x - f.x, t.z - f.z), speed = kind === 'stone' ? 13 : kind === 'bolt' ? 30 : 22;
-    this.shots.push({ mesh, f, t, kind, homing: kind !== 'stone', tx: t.x, tz: t.z, ty: (t.kind === 'bld' ? t.y + 1.5 : t.y + 1.0), k: 0, dur: Math.max(.25, d / speed), dmg, src, team: src.team, arc: d * (kind === 'stone' ? .35 : kind === 'bolt' ? .04 : .12) });
+    const kind = src?.d?.fire ? 'fire' : src?.d?.stone ? 'stone' : src?.d?.bolt ? 'bolt' : 'arrow';
+    const f = from || new THREE.Vector3(src.x, src.y + (src.d?.fly ? 5.6 : src.d?.horse ? 2.4 : src.d?.ship ? 1.8 : 1.5) * (src.scale || 1), src.z);
+    if (kind === 'fire') f.addScaledVector(new THREE.Vector3(Math.sin(src.yaw), 0, Math.cos(src.yaw)), 2.2); // from the dragon's jaws
+    this.onShoot?.(src, kind, f, t);
+    const mesh = new THREE.Mesh(kind === 'stone' || kind === 'fire' ? stoneGeo : kind === 'bolt' ? boltGeo : arrowGeo, M.vc); mesh.castShadow = kind === 'stone'; mesh.visible = kind !== 'fire'; this.scene.add(mesh);
+    const d = Math.hypot(t.x - f.x, t.z - f.z), speed = kind === 'stone' ? 13 : kind === 'fire' ? 24 : kind === 'bolt' ? 30 : 22;
+    this.shots.push({ mesh, f, t, kind, homing: kind !== 'stone' && kind !== 'fire', tx: t.x, tz: t.z, ty: (t.kind === 'bld' ? t.y + 1.5 : t.y + 1.0), k: 0, dur: Math.max(.25, d / speed), dmg, src, team: src.team, arc: d * (kind === 'stone' ? .35 : kind === 'fire' ? 0 : kind === 'bolt' ? .04 : .12) });
   }
   /** Catapult stone lands: hurts everything nearby (friendly fire excluded) and any building it hits. */
   splash(s) {
@@ -507,7 +530,7 @@ export class Game {
       const k2 = Math.min(1, k + .02); q.set(s.f.x + (s.tx - s.f.x) * k2, s.f.y + (s.ty - s.f.y) * k2 + Math.sin(k2 * Math.PI) * s.arc, s.f.z + (s.tz - s.f.z) * k2);
       s.mesh.position.copy(p); s.mesh.lookAt(q);
       if (s.k >= 1) {
-        if (s.hunt) { if (!s.visual && hurtAnimal(s.hunt, s.dmg, s.src, this.time)) this.onHunt?.(s.hunt); } else if (s.visual) { if (s.kind === 'stone') this.onSplash?.(s.tx, s.tz); } else if (s.kind === 'stone') this.splash(s); else if (s.t.alive) this.damage(s.t, s.dmg, s.src);
+        if (s.hunt) { if (!s.visual && hurtAnimal(s.hunt, s.dmg, s.src, this.time)) this.onHunt?.(s.hunt); } else if (s.visual) { if (s.kind === 'stone') this.onSplash?.(s.tx, s.tz); } else if (s.kind === 'stone' || s.kind === 'fire') this.splash(s); else if (s.t.alive) this.damage(s.t, s.dmg, s.src);
         s.mesh.removeFromParent(); this.shots.splice(i, 1);
       }
     }
@@ -516,6 +539,12 @@ export class Game {
   // ---------------- movement ----------------
   goTo(u, x, z, reach, dt) {
     // returns true when arrived
+    if (u.d.fly) { // dragons fly straight over walls, woods and water
+      const dx = x - u.x, dz = z - u.z, d = Math.hypot(dx, dz); if (d <= (reach || .3) + .05) { u.path = null; return true; }
+      const sp = u.d.spd * dt; if (d <= sp) { u.x = x; u.z = z; } else { u.x += dx / d * sp; u.z += dz / d * sp; }
+      u.x = Math.max(1, Math.min(SIZE - 1, u.x)); u.z = Math.max(1, Math.min(SIZE - 1, u.z));
+      u.speedNow = u.d.spd; this.face(u, Math.atan2(dx, dz), dt); return false;
+    }
     if (!u.path || u.repath <= 0 || (u.goal && Math.hypot(u.goal.x - x, u.goal.z - z) > 1.5)) {
       u.path = findPath(u.x, u.z, x, z, reach, 14000, this.walkFor(u)); u.pi = 0; u.repath = 3 + Math.random(); u.goal = { x, z };
       if (!u.path.length) { u.path = null; return true; }
@@ -682,7 +711,7 @@ export class Game {
         if (this.edgeDist(u, b) <= (b.d.dock ? 2.4 : 1.0) || (u.near === b && this.edgeDist(u, b) < 3.2)) {
           u.path = null; this.face(u, Math.atan2(b.x - u.x, b.z - u.z), dt); if (u.swingT > .6) { u.swingT = 0; this.onWork?.(u, 'knock'); }
           b.nbNow = (b.nbNow || 0) + 1; // every builder adds their share, so more builders finish faster
-          const add = dt / b.d.time * (this.civ[u.team].build || 1); b.progress = Math.min(1, b.progress + add); b.hp = Math.min(b.maxHp, b.hp + add * b.maxHp);
+          const add = dt / b.d.time * (this.civ[u.team].build || 1) * (this.cheatOn(u.team, 'build') ? 40 : 1); b.progress = Math.min(1, b.progress + add); b.hp = Math.min(b.maxHp, b.hp + add * b.maxHp);
           if (b.progress >= 1) { b.built = true; if (b.mesh.isMesh) b.mesh.geometry = buildingGeo(b.type, b.team, { ...this.look(b.team), conn: this.wallConn(b) }); this.onBuilt?.(b); this.recount(); if (b.team === 0 && (!b.d.wall || b.d.gate)) this.toast(`${b.d.name} complete.`); }
           this.setBuildVisual(b);
         } else if (this.goTo(u, b.x, b.z, b.size / 2 + (b.d.dock ? 1.8 : .6), dt)) u.near = b; // as close as we can get
@@ -711,11 +740,12 @@ export class Game {
     }
     const q = b.queue[0];
     if (q) {
-      if (q.tech) { q.t += dt / TECH[q.tech].time; if (q.t >= 1) { b.queue.shift(); this.applyTech(b.team, q.tech); } return; }
-      if (q.t < 1) q.t += dt / this.stat(b.team, q.type).time;
+      const fast = this.cheatOn(b.team, 'build') ? 40 : 1;
+      if (q.tech) { q.t += dt / TECH[q.tech].time * fast; if (q.t >= 1) { b.queue.shift(); this.applyTech(b.team, q.tech); } return; }
+      if (q.t < 1) q.t += dt / this.stat(b.team, q.type).time * fast;
       if (q.t >= 1) {
         const T = this.T[b.team];
-        if (T.pop >= T.cap) { if (b.team === 0 && this.time - (this.lastPopWarn || 0) > 8) { this.lastPopWarn = this.time; this.toast('Population limit reached — build more Houses.'); } }
+        if (T.pop >= T.cap && !this.cheatOn(b.team, 'pop')) { if (b.team === 0 && this.time - (this.lastPopWarn || 0) > 8) { this.lastPopWarn = this.time; this.toast('Population limit reached — build more Houses.'); } }
         else {
           b.queue.shift();
           const side = b.team === 0 ? 1 : -1;
@@ -736,6 +766,7 @@ export class Game {
     if (this.puppet) return this.puppetUpdate(dt);
     if (this.over && this.over !== 'continue') { /* keep animating */ }
     this.time += dt;
+    if (this.god?.on) for (const t of [0, 1]) if (this.god.T[t].res) for (const r of ['f', 'w', 'g', 's']) if (this.T[t][r] < 50000) this.T[t][r] = 99999;
     this.rebuildHash();
     if ((this.moraleT = (this.moraleT || 0) + dt) >= 1) { this.moraleT = 0; this.moraleTick(); this.envNews(); }
     if (this.cycle) stepEnv(this.env, dt);
@@ -747,7 +778,7 @@ export class Game {
     for (const u of this.units) {
       if (!u.alive || u.boarded) continue;
       this.unitsNear(u.x, u.z, 1.5, o => {
-        if (o.id <= u.id || !o.alive || !!o.d.ship !== !!u.d.ship) return;
+        if (o.id <= u.id || !o.alive || !!o.d.ship !== !!u.d.ship || u.d.fly || o.d.fly) return;
         const dx = o.x - u.x, dz = o.z - u.z, d2 = dx * dx + dz * dz, r = (u.d.rad + o.d.rad) * .95;
         if (d2 < r * r && d2 > 1e-6) {
           const d = Math.sqrt(d2), push = (r - d) * .5, ux = dx / d * push, uz = dz / d * push;
@@ -802,12 +833,13 @@ export class Game {
       if (u.d.ship) { tilt = Math.sin(this.time * 1.1 + u.id) * .035; y += Math.sin(this.time * 1.6 + u.id) * .04 - (u.type === 'fishboat' ? .12 : .28); if (u.dead) { tilt += u.deathT * .2; y -= u.deathT * .7; } } // rocking / sinking
       else if (u.dead) { tilt = -Math.min(1, u.deathT * 2.5) * Math.PI / 2 * .95; y -= .12 * Math.min(1, u.deathT) + Math.max(0, u.deathT - 37) * .6; }
       if (u.yOver != null) y = u.yOver; // standing on a ship's deck or a building floor
+      if (u.d.fly) { y = u.y + (u.dead ? Math.max(0, 5 - u.deathT * 6) : 5 + Math.sin(this.time * 1.7 + u.id) * .35); tilt = u.dead ? Math.min(1, u.deathT) * .6 : 0; } // in the air (a slain dragon crashes down)
       if (u.d.ranged && !u.d.ship) { // archers raise the bow while engaging and draw in time with their shots
         const t = u.task, engaged = u.aimHold || (t.type === 'attack' && t.t.alive && this.reachDist(u, t.t) <= u.d.rng + .5);
         u.aimK = (u.aimK || 0) + ((engaged ? 1 : 0) - (u.aimK || 0)) * Math.min(1, dt * 6);
         u.drawK = clamp(1 - u.cd / u.d.cd, 0, 1);
       }
-      u.batch.set(u.slot, { x: u.x, y, z: u.z, yaw: u.yaw, scale: u.scale, s: Math.sin(u.phase) * .7 * k, swing: sw, tilt, hidden: u.id === hideId || !!u.boarded || (u.fowHidden = u.team !== 0 && !!this.fow && !this.fow.see(u.x, u.z)), aim: u.aimK || 0, draw: u.drawK || 0, dt, spd: u.speedNow, swT: u.swingT, dead: u.dead, dT: u.deathT, work: u.task.type === 'gather' || u.task.type === 'build' || u.task.type === 'farm' || u.task.type === 'repair' });
+      u.batch.set(u.slot, { x: u.x, y, z: u.z, yaw: u.yaw, scale: u.scale, s: Math.sin(u.phase) * .7 * k, swing: sw, tilt, hidden: u.id === hideId || !!u.boarded || (u.fowHidden = u.team !== 0 && !!this.fow && !this.fow.see(u.x, u.z)), aim: u.aimK || 0, draw: u.drawK || 0, fl: u.d.fly ? this.time * (u.speedNow > .1 ? 6 : 3.5) + u.id : 0, dt, spd: u.speedNow, swT: u.swingT, dead: u.dead, dT: u.deathT, work: u.task.type === 'gather' || u.task.type === 'build' || u.task.type === 'farm' || u.task.type === 'repair' });
       if (u.d.ship) {
         if (!u.wake && u.alive) { u.wake = new THREE.Mesh(wakeGeo, wakeMaterial().clone()); this.scene.add(u.wake); }
         if (u.wake) {

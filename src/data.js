@@ -22,6 +22,13 @@ export const UD = {
   warship:   { age: 1, name: 'Warship', plural: 'Warships', cls: 'ship', hp: 230, spd: 3.3, dmg: 9, rng: 9.5, cd: 1.5, arm: 2, cost: { w: 120, g: 50 }, time: 22, rad: 1.3, acq: 11, ship: 1, ranged: 1, desc: 'Archers on a fast galley; attacks ships and the shore' },
   healer:    { age: 1, name: 'Healer', plural: 'Healers', cls: 'civ', hp: 45, spd: 2.8, dmg: 0, rng: 0, cd: 1, arm: 0, cost: { g: 90 }, time: 16, rad: .4, acq: 0, heal: 4, desc: 'Heals wounded troops near them (4 hit points a second)' },
   hero:      { name: 'Commander', plural: 'Commanders', cls: 'hero', hp: 620, spd: 3.6, dmg: 28, rng: 1.6, cd: .85, arm: 4, cost: null, time: 0, rad: .5, acq: 10, hero: 1, melee: 1, scale: 1.15, desc: 'Your hero. Soldiers near the Commander fight harder and rally' },
+  // God mode only (spawned from the God panel, never trained)
+  dragon:    { name: 'Dragon', plural: 'Dragons', cls: 'monster', hp: 1600, spd: 5.2, dmg: 48, rng: 7, cd: 1.3, arm: 6, cost: null, time: 0, rad: 1.4, acq: 13, ranged: 1, fire: 1, splash: 2.6, vsBld: 2.5, fly: 1, god: 1, desc: 'Flies over everything and breathes fire on troops and buildings' },
+  troll:     { name: 'Troll', plural: 'Trolls', cls: 'monster', hp: 950, spd: 3.0, dmg: 46, rng: 2.3, cd: 1.6, arm: 5, cost: null, time: 0, rad: .9, acq: 10, melee: 1, scale: 1.85, god: 1, desc: 'A hulking brute with a giant axe' },
+  demon:     { name: 'Demon', plural: 'Demons', cls: 'monster', hp: 1150, spd: 3.4, dmg: 40, rng: 2.5, cd: 1.3, arm: 6, cost: null, time: 0, rad: 1.0, acq: 11, melee: 1, scale: 2.1, god: 1, desc: 'A towering horned beast with savage claws' },
+  skeleton:  { name: 'Skeleton', plural: 'Skeletons', cls: 'inf', hp: 70, spd: 3.2, dmg: 10, rng: 1.35, cd: 1.0, arm: 1, cost: null, time: 0, rad: .42, acq: 9, melee: 1, god: 1, desc: 'Risen dead: weak alone, frightening in numbers' },
+  warwagon:  { name: 'War Wagon', plural: 'War Wagons', cls: 'siege', hp: 650, spd: 4.0, dmg: 16, rng: 9, cd: 1.1, arm: 6, cost: null, time: 0, rad: 1.1, acq: 11, ranged: 1, bolt: 1, god: 1, desc: 'An armoured cart with a mounted ballista' },
+  battlecar: { name: 'Battle Car', plural: 'Battle Cars', cls: 'siege', hp: 520, spd: 7.5, dmg: 6, rng: 10, cd: .2, arm: 4, cost: null, time: 0, rad: 1.0, acq: 12, ranged: 1, bolt: 1, god: 1, desc: 'A very fast car with a rapid-fire crossbow gun. Not exactly medieval' },
   herohorse: { name: 'Commander', plural: 'Commanders', cls: 'hero', hp: 620, spd: 5.6, dmg: 28, rng: 1.9, cd: .85, arm: 4, cost: null, time: 0, rad: .7, acq: 10, hero: 1, melee: 1, horse: 1, scale: 1.1, desc: 'Your Commander on horseback' },
 };
 

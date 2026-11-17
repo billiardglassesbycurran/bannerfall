@@ -190,7 +190,35 @@ def clips(out, pairs):
     print(f'MIXAMO clips {out}: {len(pairs)} clips, {os.path.getsize(out) // 1024} KB')
 
 
-if MODE == 'char':
+def creature(inp, out, faces, tex):
+    """Any rigged, animated creature (.glb/.gltf, e.g. a dragon from Sketchfab): fewer triangles, smaller textures, animation kept."""
+    fresh(); bpy.ops.import_scene.gltf(filepath=inp)
+    meshes = [o for o in bpy.context.scene.objects if o.type == 'MESH']; total = sum(len(p.vertices) - 2 for o in meshes for p in o.data.polygons); after = 0
+    for o in meshes:
+        tris = sum(len(p.vertices) - 2 for p in o.data.polygons); want = max(200, faces * tris / total)
+        if tris > want:
+            bpy.context.view_layer.objects.active = o
+            mod = o.modifiers.new('decimate', 'DECIMATE'); mod.ratio = want / tris; mod.use_collapse_triangulate = True
+            while o.modifiers.find('decimate') > 0: bpy.ops.object.modifier_move_up(modifier='decimate')
+            bpy.ops.object.modifier_apply(modifier='decimate')
+        after += sum(len(p.vertices) - 2 for p in o.data.polygons)
+    for m in bpy.data.materials:  # the game only uses the colour texture (with its cut-out alpha): drop the rest
+        if not m.use_nodes: continue
+        keep = {l.from_node for l in m.node_tree.links if l.to_socket.name in ('Base Color', 'Alpha') and l.from_node.type == 'TEX_IMAGE'}
+        for n in list(m.node_tree.nodes):
+            if n.type == 'TEX_IMAGE' and n not in keep: m.node_tree.nodes.remove(n)
+    for im in bpy.data.images:
+        if im.users and im.has_data and max(im.size) > tex: im.scale(tex, tex * im.size[1] // im.size[0])
+    bpy.ops.export_scene.gltf(filepath=out, export_format='GLB', export_image_format='AUTO', export_animations=True,
+                              export_force_sampling=True, export_optimize_animation_size=True, export_skins=True, export_yup=True)
+    print(f'MIXAMO creature {out}: {total} -> {after} triangles, {os.path.getsize(out) // 1024} KB')
+
+
+if MODE == 'creature':
+    import argparse
+    ap = argparse.ArgumentParser(); ap.add_argument('inp'); ap.add_argument('out'); ap.add_argument('--faces', type=int, default=6000); ap.add_argument('--tex', type=int, default=1024)
+    a = ap.parse_args(argv[1:]); creature(a.inp, a.out, a.faces, a.tex)
+elif MODE == 'char':
     import argparse
     ap = argparse.ArgumentParser(); ap.add_argument('inp'); ap.add_argument('out'); ap.add_argument('--faces', type=int, default=3500); ap.add_argument('--tex', type=int, default=1024)
     a = ap.parse_args(argv[1:]); char(a.inp, a.out, a.faces, a.tex)

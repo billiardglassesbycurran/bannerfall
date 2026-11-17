@@ -21,7 +21,7 @@
 </script>
 <script>
   // ===== Game version: bump on every change you publish (see CLAUDE.md). =====
-  window.BF_VERSION = '0.33.1';
+  window.BF_VERSION = '0.34.0';
   // Every game file is loaded as file.js?v=VERSION so phones never mix old and new files from the browser cache.
   // (On localhost a timestamp is used instead, so edits show up immediately while developing.)
   (function () {
@@ -57,6 +57,7 @@
     <div id="clock">0:00</div>
     <div id="info"></div>
     <span id="ver"></span>
+    <button class="btn sm hide" id="bGod" title="God mode">&#9889;</button>
     <button class="btn sm" id="bMap" title="Show or hide the minimap">&#128506;</button>
     <button class="btn sm" id="bPause">&#10074;&#10074;</button>
   </div>
@@ -73,7 +74,20 @@
       </div>
     <div id="card"></div>
   </div>
-  <div id="place" class="hide"><span id="ptxt">Tap the map to place</span><button class="btn" id="pok">&#10003;</button><button class="btn" id="pno">&#10005;</button></div>
+  <div id="godp" class="hide">
+  <div class="gh"><b>&#9889; God mode</b><button class="btn sm" id="godX" title="Close">&#10005;</button></div>
+  <div class="gsec">Cheats</div>
+  <label class="set"><span>Endless resources</span><input type="checkbox" data-cheat="res"></label>
+  <label class="set"><span>Instant building &amp; training</span><input type="checkbox" data-cheat="build"></label>
+  <label class="set"><span>No population limit</span><input type="checkbox" data-cheat="pop"></label>
+  <label class="set"><span>Invincible Commander</span><input type="checkbox" data-cheat="hero"></label>
+  <label class="set"><span>Reveal the whole map</span><input type="checkbox" data-cheat="reveal"></label>
+  <div class="row"><button class="btn" id="godAge">&#9733; Next age now</button></div>
+  <div class="gsec">Summon <small>pick, then tap the map</small></div>
+  <div class="row" id="godN"><button class="btn sb on" data-n="1">&times;1</button><button class="btn sb" data-n="5">&times;5</button><button class="btn sb" data-n="10">&times;10</button></div>
+  <div id="godU"></div>
+</div>
+<div id="place" class="hide"><span id="ptxt">Tap the map to place</span><button class="btn" id="pok">&#10003;</button><button class="btn" id="pno">&#10005;</button></div>
 </div>
 
 <!-- ============ 1st / 3rd person HUD ============ -->
@@ -144,6 +158,7 @@
     <div class="row" id="civs"><span class="lbl">Your people</span></div>
     <div id="civInfo"></div>
     <div class="row"><span class="lbl">Enemy</span><button class="btn sb" data-d="0">Squire<small>easy</small></button><button class="btn sb" data-d="1">Knight<small>normal</small></button><button class="btn sb" data-d="2">Warlord<small>hard</small></button></div>
+    <label class="set godset" id="godRow"><span>&#9889; <b>God mode</b><small>Cheats: endless resources, instant building, dragons, trolls, war machines… Online: only if every player ticks it.</small></span><input type="checkbox" id="godOn"></label>
     <div class="row setupgo"><button class="btn" id="bBack">&#8592; Back</button><button class="btn go" id="bStart">&#9876; Begin</button></div>
   </div>
 </div>

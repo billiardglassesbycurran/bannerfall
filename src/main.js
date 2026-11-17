@@ -8,7 +8,7 @@ import { Tutorial } from './tutorial.js';
 import { Field } from './battle.js';
 import { Atmosphere, isNight, DAY } from './sky.js';
 import { Link, HostSync, GuestSync, newCode } from './net.js';
-import { initIcons, symbolHtml } from './icons.js';
+import { initIcons, symbolHtml, portrait } from './icons.js';
 import { MISSIONS, progress, saveProgress } from './campaign.js';
 import { saveGame, loadSave, applySave, saveInfo, clearSave } from './save.js';
 import { Sound } from './audio.js';
@@ -22,7 +22,7 @@ import { initMaterials, U } from './geo.js';
 import { groundTextures } from './textures.js';
 import { loadAssets } from './assets.js';
 import { loadModels } from './gltfmodels.js';
-import { loadAnim, ANIM, AnimBatch } from './anim.js';
+import { loadAnim, loadLazy, ANIM, AnimBatch } from './anim.js';
 import { loadNature } from './nature.js';
 import { cloudTexture } from './textures.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -194,7 +194,7 @@ app.order = (ent, x, z) => {
 };
 app.setPending = p => {
   app.pending = p; hud.sig = ''; hud.updateCard(); $('place').classList.remove('hide'); $('pok').classList.toggle('hide', !(p.type === 'place' && isTouch));
-  $('ptxt').textContent = p.type === 'place' && LINE[p.btype] ? (isTouch ? `Press and drag to draw the ${p.btype} (or tap the start, then ✓)` : `Drag to draw the ${p.btype} (or click the start, then the end)`) : p.type === 'place' && (p.btype === 'gate' || p.btype === 'walltower') ? (isTouch ? 'Tap a piece of your wall (or open ground), then ✓' : 'Click a piece of your wall (or open ground)') : p.type === 'place' ? (isTouch ? 'Tap the map to position, then ✓' : 'Click to place (Shift: place several)') : p.type === 'amove' ? 'Tap where to attack' : p.type === 'patrol' ? 'Tap the far end of the patrol' : p.type === 'repair' ? 'Tap a damaged building' : p.type === 'unload' ? 'Tap the shore to land your troops' : 'Tap the rally point';
+  $('ptxt').textContent = p.type === 'place' && LINE[p.btype] ? (isTouch ? `Press and drag to draw the ${p.btype} (or tap the start, then ✓)` : `Drag to draw the ${p.btype} (or click the start, then the end)`) : p.type === 'place' && (p.btype === 'gate' || p.btype === 'walltower') ? (isTouch ? 'Tap a piece of your wall (or open ground), then ✓' : 'Click a piece of your wall (or open ground)') : p.type === 'place' ? (isTouch ? 'Tap the map to position, then ✓' : 'Click to place (Shift: place several)') : p.type === 'amove' ? 'Tap where to attack' : p.type === 'patrol' ? 'Tap the far end of the patrol' : p.type === 'repair' ? 'Tap a damaged building' : p.type === 'unload' ? 'Tap the shore to land your troops' : p.type === 'spawn' ? `Tap the map to summon ${godN > 1 ? godN + ' ' + UD[p.unit].plural : 'a ' + UD[p.unit].name} · ✕ when done` : 'Tap the rally point';
 };
 app.cancelPending = () => { clearLineGhosts(); app.pending = null; if (ghost) { ghost.removeFromParent(); ghost = null; } $('place').classList.add('hide'); hud.sig = ''; hud.updateCard(); };
 
@@ -269,6 +269,7 @@ app.pendingAt = (x, z, ent, shift) => {
     const peas = app.sel.filter(e => e.kind === 'unit' && e.type === 'peasant' && e.alive);
     if (ent && ent.kind === 'bld' && ent.team === 0 && ent.built && ent.hp < ent.maxHp) { for (const u of peas) g.setTask(u, { type: 'repair', b: ent }); showMarker(x, z, 0x9dff8a); }
     else app.toast('Pick one of your damaged buildings.', 2);
+  } else if (p.type === 'spawn') { const t = p.unit, n = godN; loadLazy().then(() => app.game === g && g.cheatSpawn(0, t, x, z, n)); showMarker(x, z, 0xffe066); app.sfx('horn'); return; // keep summoning until ✕
   } else if (p.type === 'unload') { g.setTask(p.ship, { type: 'unload', x, z }); showMarker(x, z, 0x8ab4ff);
   } else if (p.type === 'rally') { p.b.rally = ent && ent.kind === 'res' ? { x, z, res: ent } : { x, z }; app.toast('Rally point set.', 2); showMarker(x, z, 0x8ab4ff); }
   app.cancelPending();
@@ -308,9 +309,10 @@ app.hint = () => {
 };
 
 // ---------------- modes ----------------
-function setupGame(mode, diff, civ = 'franks', enemyCiv) {
+function setupGame(mode, diff, civ = 'franks', enemyCiv, god) {
   const tut = mode === 'tutorial'; if (tut) { mode = 'skirmish'; diff = 0; }
   const mis = mode === 'campaign' ? MISSIONS[app.missionId || 0] : null; if (mis) { mode = 'skirmish'; diff = mis.diff; }
+  if (god === undefined) god = !!app.cfg.god && !tut && !mis; // God mode: never in the tutorial or campaign
   app.campaign = null;
   app.game?.fow?.dispose(); app.game?.rings?.dispose();
   if (app.game?.field) for (const f of app.game.field.flags) f.mesh.removeFromParent();
@@ -322,6 +324,8 @@ function setupGame(mode, diff, civ = 'franks', enemyCiv) {
     if (setTeamColors(mine, theirs)) figures.reset(); } // each people fights under its own colour: banners, shields, tabards, rings, minimap
   const g = new Game({ scene, figures, Q, mode, diff, civs: [civ, enemyCiv] });
   app.game = g; g.toast = (m, s) => hud.toast(m, s);
+  g.god.on = !!god; godReset();
+  if (god) loadLazy(); // dragon, troll, demon and skeleton models (only God-mode games download them)
   g.onEnd = res => setTimeout(() => showEnd(res), 1600);
   g.onUnitDeath = u => {
     if (app.sel.includes(u)) app.select(app.sel.filter(e => e !== u));
@@ -334,7 +338,10 @@ function setupGame(mode, diff, civ = 'franks', enemyCiv) {
     if (melee) { const metal = (t.d.arm || 0) >= 2; if (metal && Math.random() < .6) fx.sparks(t.x, y, t.z, 5); app.sfx(metal ? 'clang' : 'thud', t.x, t.z, .7); }
     else if (t.kind === 'bld') fx.dust(t.x, t.y + .5, t.z, 3, .8);
   };
-  g.onShoot = (src, kind) => { if (kind === 'stone') app.sfx('thud', src.x, src.z, .6); else if (Math.random() < .5) app.sfx('arrow', src.x, src.z, .5); };
+  g.onShoot = (src, kind, f, t) => {
+    if (kind === 'fire' && f && t) { fx.breath(f.x, f.y, f.z, t.x, (t.y ?? f.y - 6) + 1, t.z); app.sfx('collapse', src.x, src.z, .35); return; } // dragon fire
+    if (kind === 'stone') app.sfx('thud', src.x, src.z, .6); else if (Math.random() < .5) app.sfx('arrow', src.x, src.z, .5);
+  };
   g.onSplash = (x, z) => { const h = heightAt(x, z); if (h < WL) { fx.splash(x, WL, z, 16); app.sfx('splash', x, z); } else { fx.dust(x, h, z, 14, 2.2); app.sfx('stone', x, z); } };
   g.onDestroyed = b => { fx.dust(b.x, b.y, b.z, 30, b.size * .9, [.42, .38, .34]); for (let i = 0; i < 8; i++) fx.smoke(b.x, b.y + 1, b.z, .25, 1.5); app.sfx('collapse', b.x, b.z); };
   g.onBuilt = b => { fx.dust(b.x, b.y, b.z, 16, b.size * .6); if (b.team === 0) app.sfx('chime'); };
@@ -510,6 +517,7 @@ function refreshMenu() {
   const c = CIVS[app.cfg.civ];
   $('civInfo').innerHTML = `<b>${c.name}</b> — ${c.motto} Unique unit: <b>${UD[c.unique.type].name}</b><br>` + c.pros.map(p => `<span class="pro">+ ${p}</span>`).join(' · ') + ' · ' + c.cons.map(p => `<span class="con">− ${p}</span>`).join(' · ');
   for (const b of document.querySelectorAll('[data-mode]')) b.classList.toggle('on', b.dataset.mode === app.cfg.mode);
+  $('godRow').classList.toggle('hide', app.cfg.mode === 'campaign' || app.cfg.mode === 'tutorial'); $('godOn').checked = !!app.cfg.god;
   for (const b of document.querySelectorAll('[data-d]')) b.classList.toggle('on', +b.dataset.d === app.cfg.diff);
   for (const b of document.querySelectorAll('[data-q]')) b.classList.toggle('on', b.dataset.q === qLevel);
   $('modeDesc').textContent = MODES[app.cfg.mode].desc;
@@ -578,11 +586,46 @@ onBtn('bStart', () => {
 });
 refreshMenu();
 
+// ---------------- God mode (cheats; see Game.cheat*) ----------------
+const GOD_UNITS = ['dragon', 'troll', 'demon', 'skeleton', 'warwagon', 'battlecar', 'knight', 'sword', 'archer', 'catapult', 'crusader', 'legion'];
+app.godUI = {}; let godN = 1;
+function godReset() {
+  app.godUI = {}; godN = 1; const on = !!app.game?.god?.on;
+  $('bGod').classList.toggle('hide', !on); $('godp').classList.add('hide');
+  for (const el of document.querySelectorAll('[data-cheat]')) el.checked = false;
+  for (const b of document.querySelectorAll('#godN [data-n]')) b.classList.toggle('on', b.dataset.n === '1');
+  if (on) app.toast?.('⚡ God mode is on. Tap ⚡ at the top for cheats.', 3);
+}
+function godUnits() {
+  const box = $('godU'); box.innerHTML = '';
+  for (const t of GOD_UNITS) {
+    const b = document.createElement('button'); b.className = 'btn'; const url = portrait('u:' + t, 0, app.game?.civKeys?.[0] || 'franks', app.game?.look ? app.game.look(0) : { age: 2 });
+    b.innerHTML = (url ? `<img class="bi" src="${url}" alt="">` : '') + `<span>${UD[t].name}</span>`; b.title = UD[t].desc || '';
+    b.addEventListener('click', e => { e.stopPropagation(); app.setPending({ type: 'spawn', unit: t }); $('godp').classList.add('hide'); });
+    box.appendChild(b);
+  }
+}
+onBtn('bGod', () => { const p = $('godp'); const show = p.classList.contains('hide'); p.classList.toggle('hide', !show); if (show) godUnits(); });
+onBtn('godX', () => $('godp').classList.add('hide'));
+$('godp').addEventListener('pointerdown', e => e.stopPropagation());
+for (const el of document.querySelectorAll('[data-cheat]')) el.addEventListener('change', () => {
+  const k = el.dataset.cheat, g = app.game; if (!g?.god?.on) return; app.godUI[k] = el.checked;
+  if (k === 'reveal') { // only your own view (in online games too)
+    if (!g.fow) return; if (el.checked) { g.fow.was = g.fow.on; g.fow.on = false; g.fow.dispose(); } else if (g.fow.was) { g.fow.on = true; FOW.on.value = 1; g.fow.refresh(); }
+    return;
+  }
+  g.cheat(0, k, el.checked);
+  app.toast(`${el.parentElement.textContent.trim()}: ${el.checked ? 'on' : 'off'}`, 1.5);
+});
+onBtn('godAge', () => { if (app.game?.god?.on) app.game.cheatAge(0); });
+for (const b of document.querySelectorAll('#godN [data-n]')) b.addEventListener('click', e => { e.stopPropagation(); godN = +b.dataset.n; for (const o of document.querySelectorAll('#godN [data-n]')) o.classList.toggle('on', o === b); });
+$('godOn').addEventListener('change', e => { app.cfg.god = e.target.checked; try { localStorage.setItem('bf.cfg', JSON.stringify(app.cfg)); } catch { /* ignore */ } });
+
 // ---------------- online play (see net.js) ----------------
 const onlineMsg = html => { $('onlineMsg').innerHTML = html; $('onlineMsg').classList.remove('hide'); };
-function startOnline(role, link, civs) {
+function startOnline(role, link, civs, god = false) {
   app.multi = { role, link };
-  setupGame('skirmish', 1, civs[0], civs[1]);
+  setupGame('skirmish', 1, civs[0], civs[1], god);
   app.multi.sync = role === 'host' ? new HostSync(app, link) : new GuestSync(app, link);
   app.toast(role === 'host' ? 'Your friend has joined. Destroy their Town Hall!' : 'Connected! Destroy your friend\'s Town Hall!', 4);
   link.on('close', () => {
@@ -602,9 +645,13 @@ onBtn('bHost', async () => {
   onlineMsg(`Your code: <b>${code}</b><br>Tell your friend to pick Online, type this code and press Join. Waiting…`);
   link.on('hello', m => {
     if (m.ver !== window.BF_VERSION) { link.send({ k: 'bad', msg: `Versions differ (host ${window.BF_VERSION}, you ${m.ver}). Both reload the game page.` }); return; }
-    link.guestCiv = CIVS[m.civ] ? m.civ : 'romans'; link.send({ k: 'map', map: MAP.id, seed: MAP.seed });
+    link.guestCiv = CIVS[m.civ] ? m.civ : 'romans'; link.guestGod = !!m.god; link.send({ k: 'map', map: MAP.id, seed: MAP.seed });
   });
-  link.on('ready', () => { link.send({ k: 'start', civs: [link.guestCiv, app.cfg.civ] }); if (isTouch) goFullscreen(); startOnline('host', link, [app.cfg.civ, link.guestCiv]); });
+  link.on('ready', () => {
+    const god = !!app.cfg.god && link.guestGod, asked = !!app.cfg.god || link.guestGod; // God mode only if both players ticked it
+    link.send({ k: 'start', civs: [link.guestCiv, app.cfg.civ], god, asked }); if (isTouch) goFullscreen(); startOnline('host', link, [app.cfg.civ, link.guestCiv], god);
+    if (asked && !god) app.toast('God mode is off: both players have to tick it.', 4);
+  });
 });
 async function joinGame(code) {
   code = (code || '').trim().toUpperCase(); if (code.length < 5) { onlineMsg('Type the 5-letter code your friend sees.'); return; }
@@ -615,8 +662,8 @@ async function joinGame(code) {
     if (m.map !== MAP.id || (m.map === 'random' && m.seed !== MAP.seed)) { try { localStorage.setItem('bf.map', m.map); localStorage.setItem('bf.mapSeed', String(m.seed)); } catch { /* ignore */ } link.close(); reloadTo('join=' + code); return; }
     link.send({ k: 'ready' }); onlineMsg('Starting…');
   });
-  link.on('start', m => { if (isTouch) goFullscreen(); startOnline('guest', link, m.civs); });
-  link.send({ k: 'hello', ver: window.BF_VERSION, civ: app.cfg.civ });
+  link.on('start', m => { if (isTouch) goFullscreen(); startOnline('guest', link, m.civs, !!m.god); if (m.asked && !m.god) app.toast('God mode is off: both players have to tick it.', 4); });
+  link.send({ k: 'hello', ver: window.BF_VERSION, civ: app.cfg.civ, god: !!app.cfg.god });
 }
 onBtn('bJoin', () => joinGame($('joinCode').value));
 $('joinCode').addEventListener('keydown', e => { if (e.key === 'Enter') joinGame(e.target.value); });
@@ -745,6 +792,6 @@ const mh = /mission=(\d)(?:,(\w+))?/.exec(location.hash);
 if (mh && MISSIONS[+mh[1]]) { app.cfg = { ...app.cfg, mode: 'campaign', mission: +mh[1], civ: mh[2] || app.cfg.civ || 'franks' }; history.replaceState(null, '', location.pathname + location.search); startMission(+mh[1], app.cfg.civ); }
 const m = /play=(\w+),(\d)(?:,(\w+))?(?:,(\w+))?/.exec(location.hash);
 if (location.hash === '#resume' && loadSave()) { const d = loadSave(); app.cfg = { mode: d.mode, diff: d.diff, civ: d.civs[0], map: MAP.id }; setupGame(d.mode, d.diff, d.civs[0], d.civs[1]); applySave(app, d); app.toast('Welcome back! Your game has been restored.', 3); history.replaceState(null, '', location.pathname + location.search); }
-else if (m && MODES[m[1]]) { app.cfg = { mode: m[1], diff: +m[2], civ: m[3] || 'franks' }; setupGame(m[1], +m[2], m[3], m[4]); }
+else if (m && MODES[m[1]]) { app.cfg = { mode: m[1], diff: +m[2], civ: m[3] || 'franks', god: app.cfg.god || /[?&#]god/.test(location.href), map: app.cfg.map }; setupGame(m[1], +m[2], m[3], m[4]); }
 else if (!app.bootSetup) showHome();
 window.bannerfall = app; // handy for debugging in the browser console

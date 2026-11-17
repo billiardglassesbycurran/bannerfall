@@ -209,6 +209,19 @@ label.set { display:flex; align-items:center; justify-content:space-between; gap
 label.set input[type=range] { width:46%; accent-color:#d8b45a; touch-action:pan-x; }
 label.set input[type=checkbox] { width:24px; height:24px; accent-color:#d8b45a; }
 label.set input:disabled { opacity:.35; }
+/* God mode: the setup tick box, and the in-game panel (a drawer on the right) */
+.godset { max-width:520px; width:100%; gap:12px; padding:6px 10px; border:1px dashed rgba(255,210,90,.45); border-radius:10px; background:rgba(60,40,10,.35); }
+.godset span { display:flex; flex-direction:column; text-align:left; } .godset small { font-size:11px; opacity:.75; }
+#bGod { color:#ffe066; text-shadow:0 0 8px rgba(255,200,60,.7); }
+#godp { position:fixed; top:calc(42px + var(--st)); right:calc(8px + var(--sr)); bottom:calc(128px + var(--sb)); width:min(300px, 60vw); overflow:auto; z-index:8; padding:8px 10px;
+  background:linear-gradient(180deg, rgba(40,28,10,.94), rgba(18,12,6,.94)); border:1px solid #e8c46a; border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,.6), 0 0 18px rgba(255,200,60,.18); font-size:13px; }
+#godp .gh { display:flex; align-items:center; justify-content:space-between; color:#ffe066; font-size:15px; margin-bottom:2px; }
+#godp .gsec { margin:8px 0 2px; color:var(--gold2); font-size:11px; letter-spacing:.12em; text-transform:uppercase; border-top:1px solid rgba(216,180,90,.3); padding-top:6px; }
+#godp .gsec small { text-transform:none; letter-spacing:0; opacity:.7; }
+#godp label.set { min-height:36px; font-size:13px; }
+#godU { display:grid; grid-template-columns:repeat(3, 1fr); gap:5px; margin-top:4px; }
+#godU .btn { min-width:0; min-height:58px; padding:3px; font-size:11px; flex-direction:column; } #godU .btn.on { border-color:#ffe066; box-shadow:0 0 0 2px rgba(255,224,102,.45); }
+#godU .btn .bi { width:28px; height:28px; }
 #civs .btn[data-civ] { position:relative; padding-left:24px; }
 #civs .btn[data-civ]::before { content:''; position:absolute; left:8px; top:50%; width:11px; height:11px; margin-top:-6px; border-radius:50%; background:var(--sw); border:1px solid rgba(255,255,255,.6); box-shadow:0 0 0 1px #000; }
 .lookh { margin:10px 0 2px; color:var(--gold2); font-size:15px; letter-spacing:.06em; border-top:1px solid rgba(216,180,90,.25); padding-top:8px; }

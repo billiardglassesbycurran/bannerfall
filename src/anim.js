@@ -20,6 +20,11 @@ const MODELS = {
   paladin: { file: 'mx_paladin.glb', mixamo: 1, bright: 2.1, team: [[.62, .9, .12, .5, 1], [.05, .15, .35, .9, 1]] }, // purple tabard and sash; gilt trim
   mxarcher: { file: 'mx_archer.glb', mixamo: 1, bright: 1.6, team: [[0, 1, 0, .2, .9, .2]] },                 // dark leather, dyed
   mxpeasant: { file: 'mx_peasant.glb', mixamo: 1, team: [[.03, .1, .35, .62, .85]] },              // striped trousers
+  // God mode only: loaded when a God-mode game starts (lazy), so ordinary players never download them
+  warrok: { file: 'mx_warrok.glb', mixamo: 1, lazy: 1, team: [] },        // troll
+  demon: { file: 'mx_demon.glb', mixamo: 1, lazy: 1, team: [] },          // demon
+  skeleton: { file: 'mx_skeleton.glb', mixamo: 1, lazy: 1, team: [] },    // skeleton warriors
+  dragon: { file: 'creature_dragon.glb', animal: 1, lazy: 1, height: 4.0 }, // "Animated Dragon Three Motion Loops" by LasquetiSpice (CC-BY)
   brute: { file: 'mx_brute.glb', mixamo: 1, team: [[0, 1, 0, .2, .9, .17]] },                         // bare-chested, tattooed; trousers dyed
   heraklios: { file: 'mx_heraklios.glb', mixamo: 1, bright: 1.3, team: [] },                         // fur-and-iron steppe warrior
   // animals (CC0, Quaternius): their own skeleton and clips, flat colours instead of a texture
@@ -53,6 +58,13 @@ Object.assign(KINDS, {
   repeater: { model: 'mxarcher', look: 'lacquer', parts: ['Body', 'Helmet', 'Extra'], show: [], gear: ['xbow'], ranged: 'xbow', clips: XB },
   peasant: { model: 'brute', hide: ['Weapon'], show: [], gear: ['axe'], clips: { idle: 'xb_idle', walk: 'xb_walk', run: 'bow_run', death: 'ss_death', attack: 'gs_attack', work: 'gs_attack' }, atk: { from: .3, rate: 1.3, len: .6 } },
 });
+// God mode monsters
+Object.assign(KINDS, {
+  troll: { model: 'warrok', show: [], gear: ['bigaxe'], clips: { ...GS, attack: 'gs_slash' }, atk: { from: .3, rate: 1.1, len: .8 } },
+  demon: { model: 'demon', show: [], clips: { ...GS, attack: 'gs_attack' }, atk: { from: .3, rate: 1.2, len: .7 } },
+  skeleton: { model: 'skeleton', show: [], gear: ['axe'], clips: { ...SS, attack: 'ss_atk2' }, atk: { from: .35, rate: 1.3, len: .7 } },
+  dragon: { model: 'dragon', show: [], clips: { idle: 'Flying', walk: 'Flying', run: 'Flying', death: 'Flying' }, noAttack: 1, pace: { walk: 2.6, run: 99, runAt: 99 } },
+});
 // animals: pace = ground speed each clip was made for, runAt = speed where walking turns into a gallop
 const BEAST = { idle: 'Idle', walk: 'Walk', run: 'Gallop', death: 'Death' };
 const HORSE = { model: 'horse', show: [], clips: BEAST, noAttack: 1, pace: { walk: 1.9, run: 6.2, runAt: 3.2 }, cloth: 1 };
@@ -81,17 +93,33 @@ export function animWanted() {
   try { const v = JSON.parse(localStorage.getItem('bf.settings') || '{}').animOn; return v === undefined ? ANIM_DEFAULT : !!v; } catch { return ANIM_DEFAULT; }
 }
 
+const LAZY = {};
+/** Load and bake the God-mode creatures (dragon, troll, demon, skeleton) the first time a God-mode game starts. */
+export function loadLazy() {
+  if (!ANIM.on || !LAZY.get) return Promise.resolve(false);
+  return LAZY.p || (LAZY.p = (async () => {
+    const ids = Object.keys(MODELS).filter(id => MODELS[id].lazy);
+    const models = await Promise.all(ids.map(id => LAZY.get(MODELS[id].file).catch(e => { console.warn('God-mode model missing', id, e); return null; })));
+    ids.forEach((id, i) => {
+      if (!models[i]) return; const M = MODELS[id], names = [...new Set(Object.values(KINDS).filter(k => k.model === id).flatMap(k => Object.values(k.clips)))];
+      const own = {}; if (M.animal) for (const c of models[i].animations) own[c.name] = c;
+      try { ANIM.rigs[id] = bake(models[i], M.animal ? own : LAZY.mxAll, names, { ...M, clipHips: LAZY.mxHips }); ANIM.rigs[id].id = id; } catch (e) { console.warn('Could not prepare', id, e); }
+    });
+    return true;
+  })());
+}
 /** Load the characters + clips and bake them. Safe to call when switched off (does nothing). */
 export async function loadAnim(pbr) {
   ANIM.pbr = pbr; if (!animWanted()) return;
   try {
     const loader = new GLTFLoader(), v = window.BF_VERSION || '', base = new URL('../assets/anim/', import.meta.url).href.split('?')[0];
     const cache = {}, get = f => cache[f] || (cache[f] = fetch(`${base}${f}?v=${v}`).then(r => { if (!r.ok) throw new Error(`${f}: ${r.status}`); return r.arrayBuffer(); }).then(b => loader.parseAsync(b, base)));
-    const need = [...new Set(Object.values(KINDS).map(k => k.model))], kk = need.some(id => !MODELS[id].mixamo && !MODELS[id].animal), mx = need.some(id => MODELS[id].mixamo);
+    const need = [...new Set(Object.values(KINDS).map(k => k.model))].filter(id => !MODELS[id].lazy), kk = need.some(id => !MODELS[id].mixamo && !MODELS[id].animal), mx = need.some(id => MODELS[id].mixamo);
     const [clipFiles, mxClips, models] = await Promise.all([kk ? Promise.all(CLIP_FILES.map(get)) : [], mx ? get(MX_CLIPS) : null, Promise.all(need.map(id => get(MODELS[id].file)))]);
     const all = {}; for (const f of clipFiles) for (const c of f.animations) if (!all[c.name]) all[c.name] = c;
     const mxAll = {}; if (mxClips) for (const c of mxClips.animations) mxAll[c.name] = c;
     const mxHips = mxClips?.scene.getObjectByName('mixamorigHips')?.position.length() || 1; // hip height of the body the clips were made on
+    Object.assign(LAZY, { get, mxAll, mxHips });
     need.forEach((id, i) => {
       const names = [...new Set(Object.values(KINDS).filter(k => k.model === id).flatMap(k => Object.values(k.clips)))], M = MODELS[id];
       const own = {}; if (M.animal) for (const c of models[i].animations) own[c.name] = c;
@@ -189,7 +217,7 @@ function bake(gltf, all, names, M = {}) {
   for (let i = 0; i < data.length; i += 16) { m.fromArray(data, i).premultiply(N); data.set(m.elements, i); }
   const tex = new THREE.DataTexture(data, W, rows, THREE.RGBAFormat, THREE.FloatType);
   tex.minFilter = tex.magFilter = THREE.NearestFilter; tex.generateMipmaps = false; tex.needsUpdate = true;
-  const rig = { parts, attach, table, uBones: { value: tex }, boneIdx, bind, map: parts[0].material.map || null, nmap: M.mixamo ? parts[0].material.normalMap || null : null, nscale: parts[0].material.normalScale?.clone() || new THREE.Vector2(1, 1), teamMaps: {}, nB, W, data, sc, lo, raw: { back, wide }, hips: hipsName, mixamo: !!M.mixamo };
+  const rig = { parts, attach, table, uBones: { value: tex }, boneIdx, bind, map: parts[0].material.map || null, nmap: M.mixamo ? parts[0].material.normalMap || null : null, alphaTest: parts[0].material.alphaTest || 0, double: parts[0].material.side === THREE.DoubleSide, nscale: parts[0].material.normalScale?.clone() || new THREE.Vector2(1, 1), teamMaps: {}, nB, W, data, sc, lo, raw: { back, wide }, hips: hipsName, mixamo: !!M.mixamo };
   for (const n in drift) if (drift[n] > .05) table[n].pace = drift[n] * sc / table[n].dur; // ground speed the clip was captured at (game units / s)
   rig.seatY = (back - lo) * sc; // saddle height in game units (animals)
   /** Height of a bone's joint in a given baked row (game units). */
@@ -201,7 +229,7 @@ function bake(gltf, all, names, M = {}) {
 function teamMap(rig, teamColor, look) {
   if (!rig.map?.image) return rig.map;
   const key = teamColor + (look || ''); if (rig.teamMaps[key]) return rig.teamMaps[key];
-  const S = 256, cv = document.createElement('canvas'); cv.width = cv.height = S; const cx = cv.getContext('2d', { willReadFrequently: true });
+  const S = rig.map.image.width >= 1024 ? 512 : 256, cv = document.createElement('canvas'); cv.width = cv.height = S; const cx = cv.getContext('2d', { willReadFrequently: true });
   cx.drawImage(rig.map.image, 0, 0, S, S); const img = cx.getImageData(0, 0, S, S), d = img.data;
   const th = {}; new THREE.Color(teamColor).getHSL(th, THREE.SRGBColorSpace); const c = new THREE.Color(), hsl = {}, rules = MODELS[rig.id]?.team || [];
   for (let i = 0; i < d.length; i += 4) {
@@ -340,7 +368,7 @@ export class AnimBatch {
     this.rows = new THREE.InstancedBufferAttribute(new Float32Array(cap), 1); this.rows.setUsage(THREE.DynamicDrawUsage); geo.setAttribute('aRow', this.rows);
     const map = teamMap(rig, teamColor, def.look), look = def.look === 'gold' ? { roughness: .42, metalness: .45 } : { roughness: .62, metalness: .08 };
     if (def.look === 'bronze') Object.assign(look, { roughness: .5, metalness: .35 });
-    const mat = patch(ANIM.pbr ? new THREE.MeshStandardMaterial({ map, vertexColors: true, ...look, ...(rig.nmap ? { normalMap: rig.nmap, normalScale: rig.nscale.clone().multiplyScalar(.9) } : {}) }) : new THREE.MeshLambertMaterial({ map, vertexColors: true }), false, rig);
+    const mat = patch(ANIM.pbr ? new THREE.MeshStandardMaterial({ map, vertexColors: true, ...look, ...(rig.alphaTest ? { alphaTest: rig.alphaTest, side: rig.double ? THREE.DoubleSide : THREE.FrontSide } : {}), ...(rig.nmap ? { normalMap: rig.nmap, normalScale: rig.nscale.clone().multiplyScalar(.9) } : {}) }) : new THREE.MeshLambertMaterial({ map, vertexColors: true }), false, rig);
     const m = this.mesh = new THREE.InstancedMesh(geo, mat, cap); m.count = 0; m.frustumCulled = false; m.castShadow = shadows; m.receiveShadow = false;
     if (shadows) { rig.depthMat = rig.depthMat || patch(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }), true, rig); m.customDepthMaterial = rig.depthMat; }
     m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); scene.add(m); this.meshes = [m];

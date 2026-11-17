@@ -413,6 +413,52 @@ function catapultParts(team) {
   box(arm, C.wood, 0, 0, -.8, .12, .12, 1.7); arm.add(P.cyl(.2, .15, .14, 10), C.dwood, 0, .05, -1.6); arm.add(P.ball(.15, 8, 6), 0x7a766e, 0, .15, -1.6);
   return [{ ...b.split(), pivot: [0, 0, 0], anim: null }, { ...arm.split(), pivot: [0, .9, .2], anim: 'cat' }];
 }
+// ---------------- God mode: dragon, war wagon, battle car ----------------
+/** A big winged dragon (stand-in until a model file is present): scaled body, long neck and tail, horned head; wings flap. */
+function dragonParts(team) {
+  const b = new Builder(), sc = 0x5a2418, dk = 0x2e120c, belly = 0xb08a5a, horn = 0xd8d0b8, tc = TEAM[team];
+  b.add(P.ball(1, 14, 10), sc, 0, 0, 0, 0, 0, 0, .95, .85, 1.9);                       // body
+  b.add(P.ball(1, 12, 8), belly, 0, -.3, .1, 0, 0, 0, .75, .6, 1.6);
+  for (let i = 0; i < 5; i++) b.add(P.cyl(.42 - i * .05, .5 - i * .05, .7, 9), sc, 0, .35 + i * .28, 1.6 + i * .42, -.75 + i * .1, 0, 0); // neck rising forward
+  b.add(P.ball(1, 10, 8), sc, 0, 1.75, 3.55, 0, 0, 0, .42, .38, .7);                  // head
+  b.add(P.cone(.3, .9, 8), dk, 0, 1.6, 4.25, Math.PI / 2, 0, 0);                        // snout
+  for (const s of [-1, 1]) { b.add(P.cone(.08, .6, 6), horn, s * .22, 2.15, 3.3, -.9, 0, s * .3); b.add(P.ball(.06, 6, 4), 0xffb030, s * .26, 1.85, 3.85); } // horns, glowing eyes
+  for (let i = 0; i < 7; i++) b.add(P.cone(.45 - i * .055, .75, 8), sc, 0, -.05 - i * .05, -1.6 - i * .62, -Math.PI / 2 + .08, 0, 0); // tail
+  b.add(P.cone(.28, .55, 4), dk, 0, -.4, -6.0, -Math.PI / 2, Math.PI / 4, 0, 1, 1, .3);    // tail spade
+  for (let i = 0; i < 9; i++) b.add(P.cone(.09, .35, 4), dk, 0, .8 - Math.abs(i - 3) * .05, 1.4 - i * .55, 0, 0, 0);   // spine ridge
+  for (const s of [-1, 1]) for (const z of [-.8, .9]) { b.add(P.cyl(.16, .12, 1.1, 7), sc, s * .62, -.85, z, .3, 0, 0); b.add(P.cone(.1, .25, 5), horn, s * .62, -1.45, z + .25, Math.PI / 2, 0, 0); }
+  box(b, tc, 0, .95, -.2, .5, .05, .7);                                               // a saddle cloth in the team colour
+  const wing = s => { const w = new Builder();
+    for (let i = 0; i < 4; i++) { const a = .25 + i * .32, L = 4.2 - i * .55; w.add(P.cyl(.06, .1, L, 5), dk, s * Math.cos(a) * L / 2, Math.sin(a) * L * .25, -i * .55, 0, 0, s * (Math.PI / 2 - a)); }
+    const g = new THREE.BufferGeometry(), v = []; const pts = [[0, 0, .6], [s * 4.1, .9, .2], [s * 3.6, .6, -1.0], [s * 3.0, .3, -1.9], [s * 2.0, .1, -2.4], [0, 0, -1.4]];
+    for (let i = 1; i < pts.length - 1; i++) v.push(...pts[0], ...pts[i], ...pts[i + 1]);
+    g.setAttribute('position', new THREE.Float32BufferAttribute(v, 3)); g.computeVertexNormals(); w.add(g, 0x7a2e1c, 0, 0, 0);
+    const back = g.clone(); const p = back.attributes.position; for (let i = 0; i < p.count; i += 3) { const x = p.getX(i + 1), y = p.getY(i + 1), z = p.getZ(i + 1); p.setXYZ(i + 1, p.getX(i + 2), p.getY(i + 2), p.getZ(i + 2)); p.setXYZ(i + 2, x, y, z); } back.computeVertexNormals(); w.add(back, 0x6a2618, 0, 0, 0);
+    return { ...w.split(), pivot: [s * .6, .55, .5], anim: s < 0 ? 'wingL' : 'wingR', axis: 'z' }; };
+  return [{ ...b.split(), pivot: [0, 0, 0], anim: null }, wing(-1), wing(1)];
+}
+/** An armoured war wagon with a ballista on top: no horses, it rolls by itself (God mode). */
+function warwagonParts(team) {
+  const b = new Builder(), tc = TEAM[team];
+  box(b, C.dwood, 0, .75, 0, 1.5, .5, 2.6); for (const s of [-1, 1]) { box(b, tc, s * .78, 1.15, 0, .08, .6, 2.5); box(b, C.dsteel, s * .8, .9, 0, .06, .12, 2.6); }
+  for (const z of [-1.3, 1.3]) box(b, tc, 0, 1.15, z, 1.5, .6, .08);
+  for (const [x, z] of [[-.85, -.9], [.85, -.9], [-.85, .9], [.85, .9]]) { b.add(P.cyl(.42, .42, .14, 14), C.dwood, x, .42, z, 0, 0, Math.PI / 2); b.m(P.cyl(.1, .1, .16, 8), C.dsteel, x, .42, z, 0, 0, Math.PI / 2); }
+  box(b, C.wood, 0, 1.55, .2, .14, .5, .14); box(b, C.wood, 0, 1.85, .4, .16, .12, 1.7); box(b, C.wood, 0, 1.9, 1.0, 1.6, .1, .1, 0, 0, 0);
+  b.m(P.cone(.06, .3, 6), C.steel, 0, 1.85, 1.35, Math.PI / 2, 0, 0); box(b, C.dsteel, 0, 1.1, 1.35, 1.3, .2, .05);
+  b.add(P.cyl(.025, .025, 1.6, 5), C.wood, -.6, 2.0, -1.1); box(b, tc, -.38, 2.6, -1.1, .45, .3, .02);
+  return [{ ...b.split(), pivot: [0, 0, 0], anim: null }];
+}
+/** A battle car: a modern open-top car with a rapid-fire crossbow gun on a roll bar. Deliberately out of place (God mode). */
+function battlecarParts(team) {
+  const b = new Builder(), tc = TEAM[team], tyre = 0x1c1c1c;
+  box(b, tc, 0, .65, 0, 1.6, .45, 3.0); box(b, tc, 0, .95, .9, 1.55, .25, 1.0); box(b, 0x222428, 0, .62, 1.52, 1.4, .3, .08);
+  box(b, 0x9fb4c4, 0, 1.25, .3, 1.4, .45, .06, -.5, 0, 0); for (const s of [-1, 1]) { box(b, 0x2a2a2a, s * .6, 1.0, -.2, .5, .1, .5); box(b, 0xffe9a0, s * .55, .72, 1.52, .25, .14, .04); }
+  for (const [x, z] of [[-.85, -1.0], [.85, -1.0], [-.85, 1.0], [.85, 1.0]]) { b.add(P.cyl(.4, .4, .32, 14), tyre, x, .4, z, 0, 0, Math.PI / 2); b.m(P.cyl(.18, .18, .34, 10), C.steel, x, .4, z, 0, 0, Math.PI / 2); }
+  for (const s of [-1, 1]) b.m(P.cyl(.04, .04, 1.0, 6), C.dsteel, s * .6, 1.3, -.9); b.m(P.cyl(.04, .04, 1.2, 6), C.dsteel, 0, 1.8, -.9, 0, 0, Math.PI / 2);
+  b.m(P.box, C.dsteel, 0, 2.0, -.7, 0, 0, 0, .3, .25, .5); for (const s of [-1, 1]) b.m(P.cyl(.035, .035, .9, 6), C.steel, s * .07, 2.0, -.15, Math.PI / 2, 0, 0);
+  box(b, C.wood, 0, 2.05, -.4, .9, .06, .06);
+  return [{ ...b.split(), pivot: [0, 0, 0], anim: null }];
+}
 // ---------------- ships ----------------
 /** A real boat hull: pointed bow and stern, rounded bilge, sheer line rising at both ends. UVs follow the planks. */
 function hullGeo(L, W, D, sheer, yOff) {
@@ -545,6 +591,9 @@ function figureParts(team, kind, style) {
   const d = UD[kind];
   if (d.ship) return shipParts(team, kind);
   if (kind === 'catapult') return catapultParts(team);
+  if (kind === 'dragon') return dragonParts(team);
+  if (kind === 'warwagon') return warwagonParts(team);
+  if (kind === 'battlecar') return battlecarParts(team);
   if (d.horse) {
     const heavy = kind === 'knight' || kind === 'crusader' || kind === 'khanguard' || kind === 'herohorse';
     const coat = kind === 'crusader' ? 0xd8d0c0 : kind === 'lightcav' || kind === 'horsearcher' ? 0x7a5634 : C.horse;
@@ -591,10 +640,11 @@ class FigureBatch {
           : -.3 + s * .35 - strike * 1.7 + (sw > .5 ? .3 * strike : 0); break;
         case 'hA': a = s * 1.2; break; case 'hB': a = -s * 1.2; break;
         case 'cat': a = .25 + strike * 1.65; break;
+        case 'wingL': a = -Math.sin(o.fl || 0) * .75 - .15; break; case 'wingR': a = Math.sin(o.fl || 0) * .75 + .15; break;
       }
       let mtx = _root;
       if (p.anim) {
-        _pm.makeTranslation(p.pivot[0], p.pivot[1], p.pivot[2]).multiply(_rx.makeRotationX(a));
+        _pm.makeTranslation(p.pivot[0], p.pivot[1], p.pivot[2]).multiply(p.axis === 'z' ? _rx.makeRotationZ(a) : _rx.makeRotationX(a));
         if (p.counter) { const h = p.counter; _pm.multiply(_rx.makeTranslation(h[0], h[1], h[2])).multiply(_rx.makeRotationX(-a * .95)).multiply(_rx.makeTranslation(-h[0], -h[1], -h[2])); } // keep the weapon level
         _pm.premultiply(_root); mtx = _pm;
       }
@@ -608,7 +658,7 @@ class FigureBatch {
  * hA/hB, cat) is its own child object with its pivot at the joint, so it can be animated in another program.
  */
 export function figureGroup(team, kind, style = 'franks') {
-  if (ANIM.on && (ANIM.kinds[kind] || ANIM.mounts[kind])) return animFigure(kind, TEAM[team]);
+  if (ANIM.on && ((ANIM.kinds[kind] && ANIM.rigs[ANIM.kinds[kind].model]) || ANIM.mounts[kind])) return animFigure(kind, TEAM[team]);
   const root = new THREE.Group(); root.name = kind;
   figureParts(team, kind, style).forEach((p, n) => {
     const node = p.anim ? new THREE.Group() : root;
@@ -631,8 +681,8 @@ export class Figures {
   get(team, kind) {
     const k = team + kind; let b = this.batches.get(k);
     if (!b && ANIM.on && ANIM.mounts[kind]) { b = new MountBatch(this.scene, team, kind, kind === 'herohorse' ? 4 : 120, this.shadows, TEAM[team]); this.batches.set(k, b); } // rider on an animated horse
-    if (!b && ANIM.on && ANIM.kinds[kind]) { b = new AnimBatch(this.scene, team, kind, 200, this.shadows, TEAM[team]); this.batches.set(k, b); } // animated model (see anim.js)
-    if (!b) { b = new FigureBatch(this.scene, team, kind, kind === 'hero' || kind === 'herohorse' ? 4 : UD[kind].ship || kind === 'catapult' ? 40 : 200, this.shadows, this.styles[team]); this.batches.set(k, b); b.setTint(AGE_TINT[this.ages[team]] ?? 0xffffff); }
+    if (!b && ANIM.on && ANIM.kinds[kind] && ANIM.rigs[ANIM.kinds[kind].model]) { b = new AnimBatch(this.scene, team, kind, 200, this.shadows, TEAM[team]); this.batches.set(k, b); } // animated model (see anim.js)
+    if (!b) { b = new FigureBatch(this.scene, team, kind, kind === 'hero' || kind === 'herohorse' ? 4 : UD[kind].ship || kind === 'catapult' || UD[kind].god ? 40 : 200, this.shadows, this.styles[team]); this.batches.set(k, b); b.setTint(AGE_TINT[this.ages[team]] ?? 0xffffff); }
     return b;
   }
   flush() { for (const b of this.batches.values()) b.flush(); }

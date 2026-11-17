@@ -111,6 +111,12 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
   Team rings: `TeamRings` in models.js (instanced ring per team under every land unit, `RINGS.on` = Settings `rings`).
   Downloads: the owner signs in to mixamo.com in the browser pane; the pane can't save files, so read the export job's
   `/monitor` response (network log) for the one-time S3 link and curl it. KayKit `char_*`/`rig_*` files are now unused.
+- **God mode** (v0.34): setup tick box (`app.cfg.god`, `#god` in the URL); online only if both players ticked it (hello/start carry
+  `god`). `game.god = { on, T: [{res, build, pop, hero}, …] }`; `cheat/cheatAge/cheatSpawn` (also in net.js `RPC`, team-swapped);
+  reveal is local (fog off). ⚡ button → `#godp` panel; summoning = pending `spawn`. God-only units in `UD` (`god: 1`): dragon (`fly`:
+  straight-line flight 5 m up, `fire` breath = splash shot + `fx.breath`), troll, demon, skeleton (Mixamo), warwagon, battlecar
+  (procedural parts in models.js; `dragonParts` is the stand-in if the model can't load). Their models are `lazy` in anim.js:
+  `loadLazy()` runs only when a God-mode game starts. Dragon = Sketchfab CC-BY (credit in CREDITS.md); `mixamo.py creature` mode.
 - `src/battle.js` — Battle mode field: 3 capturable banners, reserves + reinforcement waves, army breaks if all banners held.
 - `src/path.js` — A* pathfinding on the grid (pass a walk function: `cellWalk` for land, `navCell` for ships). `src/ai.js` — enemy AI for Skirmish, Battle, Survival.
   Skirmish AI (Knight/Warlord): counters the player's army (`counterW`), gathers at a rally point and attacks only when
