@@ -140,7 +140,7 @@ export class HUD {
           const go = rt => () => { let k = 0; for (const u of peas) { const r = rt === 'f' ? (g.blds.find(b => b.alive && b.built && b.team === 0 && b.type === 'farm' && (!b.farmer || !b.farmer.alive || b.farmer.task.b !== b)) || g.nearestRes(u.x, u.z, 'f', 60)) : g.nearestRes(u.x, u.z, rt, 70); if (r) { if (r.kind === 'bld') g.farm(u, r); else g.gather(u, r); k++; } } if (!k) a.toast('None nearby.', 1.5); };
           btns.push({ grp: 'Gather', label: 'Food', sub: 'gather', on: go('f') }, { grp: 'Gather', label: 'Wood', sub: 'chop', on: go('w') }, { grp: 'Gather', label: 'Gold', sub: 'mine', on: go('g') }, { grp: 'Gather', label: 'Stone', sub: 'quarry', on: go('s') });
           btns.push({ grp: 'Build', label: 'Economy', sub: 'build &#9654;', on: () => { this.page = 'eco'; } }, { grp: 'Build', label: 'Military', sub: 'build &#9654;', on: () => { this.page = 'mil'; } }, { grp: 'Build', label: 'Defences', sub: 'build &#9654;', on: () => { this.page = 'def'; } });
-          btns.push({ grp: 'Build', label: 'Repair', sub: 'pick building', on: () => a.setPending({ type: 'repair' }) });
+          btns.push({ grp: 'Build', label: 'Repair', sub: 'pick one', on: () => a.setPending({ type: 'repair' }) });
           if (peas.some(u => u.carry)) btns.push({ grp: 'Orders', label: 'Return', sub: 'goods', on: () => { for (const u of peas) if (u.carry) g.setTask(u, { type: 'return' }); } });
         }
         if (mil.length || ships.some(u => u.d.dmg > 0)) {
@@ -178,7 +178,7 @@ export class HUD {
           btns.push({ grp: 'Trade', cost: { g: pb }, label: `Buy ${nm}`, sub: `100 for <i class="ic g"></i>${pb}`, dis: T.g < pb, on: () => { g.trade(0, rt, true); a.sfx?.('chime'); } });
           btns.push({ grp: 'Trade', cost: { [rt]: 100 }, label: `Sell ${nm}`, sub: `100 → <i class="ic g"></i>${ps}`, dis: (T[rt] || 0) < 100, on: () => { g.trade(0, rt, false); a.sfx?.('chime'); } });
         }
-        if (b.type === 'hall' && g.mode !== 'battle') btns.push({ grp: 'Actions', label: b.cargo?.length ? 'All Clear' : 'Bell', sub: b.cargo?.length ? `${b.cargo.length} inside` : 'peasants hide', on: () => { const n = g.ringBell(0); a.toast(n < 0 ? 'All clear! Back to work.' : n ? `${n} peasants run for the Town Hall!` : 'No peasants nearby.', 2); } });
+        if (b.type === 'hall' && g.mode !== 'battle') btns.push({ grp: 'Actions', label: b.cargo?.length ? 'All Clear' : 'Bell', sub: b.cargo?.length ? `${b.cargo.length} inside` : 'hide all', on: () => { const n = g.ringBell(0); a.toast(n < 0 ? 'All clear! Back to work.' : n ? `${n} peasants run for the Town Hall!` : 'No peasants nearby.', 2); } });
         if (b.d.trains) btns.push({ grp: 'Actions', label: 'Rally', sub: 'point', on: () => a.setPending({ type: 'rally', b }) });
       }
       if (b.type !== 'hall' || g.blds.filter(o => o.alive && o.team === 0 && o.type === 'hall').length > 1) btns.push({ grp: 'Actions', label: this.confirmDel === b.id ? 'Sure?' : 'Demolish', sub: this.confirmDel === b.id ? 'tap again' : '', on: () => { if (this.confirmDel === b.id) { g.kill(b); a.select([]); this.confirmDel = null; } else { this.confirmDel = b.id; setTimeout(() => { this.confirmDel = null; this.sig = ''; }, 3000); } } });

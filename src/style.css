@@ -59,16 +59,16 @@ html, body { margin:0; height:100%; overflow:hidden; overscroll-behavior:none; b
 #card .grp { display:flex; flex-direction:column; gap:2px; }
 #card .grp + .grp { border-left:1px solid rgba(216,180,90,.28); padding-left:7px; }
 #card .cap { font-size:9px; letter-spacing:.12em; text-transform:uppercase; color:var(--gold2); opacity:.8; height:11px; line-height:11px; white-space:nowrap; padding-left:1px; }
-#card .gb { display:grid; grid-auto-flow:column; grid-template-rows:repeat(2,45px); grid-auto-columns:58px; gap:4px; }
-#card .btn { min-width:0; min-height:0; padding:2px; font-size:11.5px; }
+#card .gb { display:grid; grid-auto-flow:column; grid-template-rows:repeat(2,45px); grid-auto-columns:minmax(58px,max-content); gap:4px; } /* a column widens when a cost needs room */
+#card .btn { min-width:58px; min-height:0; padding:2px 5px; font-size:11.5px; }
 /* button pictures: a portrait of the unit/building or a drawn symbol, above the name */
 .btn .bi { display:block; width:22px; height:22px; margin:0 auto 1px; flex:none; object-fit:contain; pointer-events:none; }
 .btn .bi.sym { color:var(--gold2); } .btn .bi.sym svg { width:100%; height:100%; display:block; }
 .btn.dis .bi { opacity:.5; filter:grayscale(.6); }
 #card .btn .bl, #quick .btn { line-height:1.05; }
-#card .btn .bl { display:block; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:10.5px; }
+#card .btn .bl { display:block; white-space:nowrap; font-size:10.5px; }
 @media (min-width:1000px) and (min-height:600px) { #card .btn .bl { font-size:12px; } }
-#card .btn .cost { margin-top:1px; }
+#card .btn .cost { margin-top:1px; max-width:none; overflow:visible; }
 @media (min-width:1000px) and (min-height:600px) { .btn .bi { width:28px; height:28px; } }
 /* army-wide shortcuts (Army, Idle, Box, Play as, Commander): a small floating group at the right edge, apart from the commands */
 #quick { position:fixed; right:calc(8px + var(--sr)); bottom:calc(126px + var(--sb)); display:grid; grid-template-columns:repeat(2,50px); grid-auto-rows:46px; gap:5px; z-index:5; direction:rtl; }
@@ -81,7 +81,7 @@ html, body { margin:0; height:100%; overflow:hidden; overscroll-behavior:none; b
 
 @media (min-width:1000px) and (min-height:600px) {
   #bottom { height:calc(150px + var(--sb)); } #mini { width:176px; height:176px; } #miniw.bottom { bottom:calc(158px + var(--sb)); }
-  #card .gb { grid-template-rows:repeat(2,58px); grid-auto-columns:72px; gap:5px; } #card .btn { font-size:13px; } #card .cap { font-size:10px; height:13px; line-height:13px; }
+  #card .gb { grid-template-rows:repeat(2,58px); grid-auto-columns:minmax(72px,max-content); gap:5px; } #card .btn { min-width:72px; } #card .btn { font-size:13px; } #card .cap { font-size:10px; height:13px; line-height:13px; }
   #place { bottom:calc(160px + var(--sb)); } #selp { font-size:13px; } #quick { bottom:calc(160px + var(--sb)); grid-template-columns:repeat(2,58px); grid-auto-rows:52px; } #quick .btn { font-size:11px; }
 }
 
