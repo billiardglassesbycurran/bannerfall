@@ -34,7 +34,7 @@ P.customProgramCacheKey = function () { return this._userObc ? this._userObc.toS
 
 /** Sight range (cells) by unit/building. */
 export function sightOf(e) {
-  if (e.kind === 'bld') return e.type === 'tower' ? 14 : e.size / 2 + (e.type === 'hall' ? 9 : 5);
+  if (e.kind === 'bld') return e.type === 'outpost' ? 21 : e.type === 'tower' ? 14 : e.size / 2 + (e.type === 'hall' ? 9 : 5);
   const d = e.d; if (d.hero) return 13; if (e.type === 'lightcav') return 16; if (e.type === 'peasant') return 7;
   return (d.acq || 6) + (d.horse ? 4 : 2);
 }

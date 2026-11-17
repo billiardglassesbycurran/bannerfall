@@ -118,7 +118,15 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
   scouting, towers by its gold, storehouses by wood/gold, rebalances workers; Warlord rings the bell. Squire stays simple.
 - `src/rts.js` — aerial camera, picking, selection, touch/mouse orders. `src/pov.js` — 1st/3rd person: strike, Follow me,
   Act button (G: board/steer/leave ships, enter/leave buildings — rooms from `interiorGeo` in models.js), Mount (M).
-- `src/hud.js` — resource bar, selection panel, command card, minimap, health bars, toasts.
+- `src/hud.js` — resource bar, selection panel (portrait + HP bar, `head()`), command card, minimap, health bars, toasts.
+  Command card buttons carry `grp` ('Gather', 'Build', 'Orders', 'Train', 'Research', 'Actions', 'Trade', 'Commander'...) and are
+  drawn as captioned sections, two buttons high; `SHORT` keeps names short. The army shortcuts (`#quick`) float at the right edge.
+- Team colours follow the people: `CIV_COLOR` (Franks blue, Romans red, Chinese yellow, Norse green, Mongols orange; a mirror match
+  makes the enemy purple). `setTeamColors(mine, theirs)` in models.js edits `TEAM`, `RING_COL`, `TEAM_CSS` in place; `figures.reset()`
+  rebuilds unit batches when colours change. The owner wants colours tied to the people, not "Blue team" style names or a picker.
+- Line building: `LINE` in main.js (wall, fence) — press-and-drag (`app.lineDrag`, rts.js pointer mode 'line') or tap start + end.
+  New buildings v0.33: Fence (`BD.fence`, wall-like, split rails), Outpost (sight 21, fow.js), Well (`d.mend`: nearby buildings self-repair).
+- Main menu: crest SVG + gold title + glassy buttons (`.mbtn`, `.primary`), CSS embers, golden-hour cinematic camera (`MENU_ENV`).
 - `window.bannerfall` exposes app state for debugging; `#play=skirmish,1` in the URL skips the menu (mode, difficulty 0-2).
 
 ## Tools on this Mac (art pipeline + tests)

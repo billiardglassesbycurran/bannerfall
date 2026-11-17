@@ -40,7 +40,10 @@ export const BD = {
   stable:   { age: 1, name: 'Stable', hp: 750, size: 4, cost: { w: 150, g: 50 }, time: 26, trains: ['lightcav', 'knight', 'horsearcher'], req: 'barracks', arm: 2, desc: 'Trains cavalry (needs a Barracks)' },
   workshop: { age: 2, name: 'Siege Workshop', hp: 700, size: 4, cost: { w: 200, g: 60 }, time: 28, trains: ['catapult'], req: 'range', arm: 2, desc: 'Builds catapults (needs an Archery Range)' },
   smith:    { age: 1, name: 'Blacksmith', hp: 650, size: 3, cost: { w: 120 }, time: 22, arm: 2, desc: 'Researches better weapons and armour' },
-  wall:     { name: 'Wall', hp: 420, size: 1, cost: { w: 4 }, time: 3, arm: 6, wall: 1, desc: 'Blocks enemies. Tap the start, then the end, to build a whole line' },
+  wall:     { name: 'Wall', hp: 420, size: 1, cost: { w: 4 }, time: 3, arm: 6, wall: 1, desc: 'Blocks enemies. Press and drag to draw a whole line (or tap the start, then the end)' },
+  fence:    { name: 'Fence', hp: 140, size: 1, cost: { w: 2 }, time: 1.5, arm: 2, wall: 1, fence: 1, desc: 'Cheap wooden fence: slows raiders and pens in your fields. Press and drag to draw a line' },
+  outpost:  { name: 'Outpost', hp: 300, size: 1, cost: { w: 25 }, time: 10, arm: 2, desc: 'Tall wooden lookout: sees very far through the fog of war. No attack' },
+  well:     { name: 'Well', hp: 450, size: 2, cost: { w: 40, s: 40 }, time: 18, arm: 4, mend: 8, desc: 'Fresh water for the town: your buildings within 8 tiles slowly repair themselves' },
   walltower: { age: 1, name: 'Wall Tower', hp: 900, size: 1, cost: { w: 20, s: 60 }, time: 14, arm: 7, wall: 1, wtower: 1, atk: { dmg: 8, rng: 10, cd: 1.6 }, desc: 'A tower in your wall line that shoots arrows. Place it on your own wall (or open ground)' },
   gate:     { name: 'Gate', hp: 700, size: 1, cost: { w: 25 }, time: 8, arm: 6, wall: 1, gate: 1, desc: 'Your troops pass, enemies can\'t. Place it on your own wall' },
   castle:   { age: 3, name: 'Castle', hp: 5000, size: 6, cost: { w: 400, s: 650, g: 300 }, time: 90, trains: ['knight', 'crossbow'], pop: 15, drop: 0, atk: { dmg: 18, rng: 13, cd: .9 }, arm: 8, one: 1, desc: 'The mightiest building: 5000 hit points, rains arrows, trains your unique unit, knights and crossbowmen. One per side' },
@@ -48,9 +51,9 @@ export const BD = {
   dock:     { name: 'Dock', hp: 900, size: 3, cost: { w: 150 }, time: 22, trains: ['fishboat', 'transport', 'warship'], drop: 1, dock: 1, arm: 2, desc: 'Build on the shore. Builds ships, stores fish' },
 };
 export const BUILD_LIST = ['house', 'farm', 'store', 'barracks', 'range', 'stable', 'workshop', 'smith', 'tower', 'dock'];
-export const BUILD_ECO = ['house', 'farm', 'mill', 'lumber', 'mining', 'store', 'dock', 'market', 'smith'];
+export const BUILD_ECO = ['house', 'farm', 'mill', 'lumber', 'mining', 'store', 'dock', 'market', 'smith', 'well'];
 export const BUILD_MIL = ['barracks', 'range', 'stable', 'workshop', 'temple', 'castle'];
-export const BUILD_DEF = ['wall', 'gate', 'walltower', 'tower'];
+export const BUILD_DEF = ['wall', 'fence', 'gate', 'walltower', 'tower', 'outpost'];
 
 // ---------------- ages & technologies ----------------
 export const AGES = ['Stone Age', 'Bronze Age', 'Iron Age', 'Castle Age'];

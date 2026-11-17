@@ -6,13 +6,13 @@ import { BD, DIFF, MODES, CIVS, CIV_LIST, UD, TECH, AGES } from './data.js';
 import { FX } from './effects.js';
 import { Tutorial } from './tutorial.js';
 import { Field } from './battle.js';
-import { Atmosphere, isNight } from './sky.js';
+import { Atmosphere, isNight, DAY } from './sky.js';
 import { Link, HostSync, GuestSync, newCode } from './net.js';
 import { initIcons, symbolHtml } from './icons.js';
 import { MISSIONS, progress, saveProgress } from './campaign.js';
 import { saveGame, loadSave, applySave, saveInfo, clearSave } from './save.js';
 import { Sound } from './audio.js';
-import { Figures, ghostObject, RINGS } from './models.js';
+import { Figures, ghostObject, RINGS, COLORS, CIV_COLOR, setTeamColors } from './models.js';
 import { Game } from './game.js';
 import { AI } from './ai.js';
 import { RTSView } from './rts.js';
@@ -125,6 +125,9 @@ const app = {
 };
 app.scene = scene; app.renderer = renderer;
 initIcons(renderer); // button pictures are rendered from the real models
+for (const el of document.querySelectorAll('#home [data-sym]')) el.innerHTML = symbolHtml(el.dataset.sym); // menu button pictures
+{ const v = document.getElementById('homever'); if (v) v.textContent = 'v' + (window.BF_VERSION || ''); }
+{ const e = document.querySelector('#home .embers'); if (e) for (let i = 0; i < 26; i++) { const s = document.createElement('i'); s.style.left = (Math.random() * 100).toFixed(1) + '%'; s.style.animationDelay = (-Math.random() * 14).toFixed(1) + 's'; s.style.animationDuration = (9 + Math.random() * 9).toFixed(1) + 's'; s.style.setProperty('--dx', ((Math.random() - .5) * 120).toFixed(0) + 'px'); s.style.setProperty('--sz', (2 + Math.random() * 3).toFixed(1) + 'px'); e.appendChild(s); } } // rising embers
 for (const [id, k] of [['bAll', 'helmet'], ['bIdle', 'zzz'], ['bBox', 'box'], ['bLead', 'crown']]) { const el = $(id); if (el) el.innerHTML = symbolHtml(k) + el.innerHTML.replace(/^(&#\d+;|[\u2500-\u2bff\u{1F300}-\u{1FAFF}])\s*/u, ''); }
 const fx = new FX(scene), sound = new Sound();
 const atmo = new Atmosphere({ scene, sun, hemi, renderer, base: { sun: sun.intensity, hemi: hemi.intensity }, low: qLevel === 'low', sound });
@@ -191,7 +194,7 @@ app.order = (ent, x, z) => {
 };
 app.setPending = p => {
   app.pending = p; hud.sig = ''; hud.updateCard(); $('place').classList.remove('hide'); $('pok').classList.toggle('hide', !(p.type === 'place' && isTouch));
-  $('ptxt').textContent = p.type === 'place' && p.btype === 'wall' ? (isTouch ? 'Tap where the wall starts, then ✓' : 'Click where the wall starts') : p.type === 'place' && (p.btype === 'gate' || p.btype === 'walltower') ? (isTouch ? 'Tap a piece of your wall (or open ground), then ✓' : 'Click a piece of your wall (or open ground)') : p.type === 'place' ? (isTouch ? 'Tap the map to position, then ✓' : 'Click to place (Shift: place several)') : p.type === 'amove' ? 'Tap where to attack' : p.type === 'patrol' ? 'Tap the far end of the patrol' : p.type === 'repair' ? 'Tap a damaged building' : p.type === 'unload' ? 'Tap the shore to land your troops' : 'Tap the rally point';
+  $('ptxt').textContent = p.type === 'place' && LINE[p.btype] ? (isTouch ? `Press and drag to draw the ${p.btype} (or tap the start, then ✓)` : `Drag to draw the ${p.btype} (or click the start, then the end)`) : p.type === 'place' && (p.btype === 'gate' || p.btype === 'walltower') ? (isTouch ? 'Tap a piece of your wall (or open ground), then ✓' : 'Click a piece of your wall (or open ground)') : p.type === 'place' ? (isTouch ? 'Tap the map to position, then ✓' : 'Click to place (Shift: place several)') : p.type === 'amove' ? 'Tap where to attack' : p.type === 'patrol' ? 'Tap the far end of the patrol' : p.type === 'repair' ? 'Tap a damaged building' : p.type === 'unload' ? 'Tap the shore to land your troops' : 'Tap the rally point';
 };
 app.cancelPending = () => { clearLineGhosts(); app.pending = null; if (ghost) { ghost.removeFromParent(); ghost = null; } $('place').classList.add('hide'); hud.sig = ''; hud.updateCard(); };
 
@@ -202,12 +205,13 @@ app.startPlace = type => {
   ghost = ghostObject(type, app.game.look(0), ghostMats[0]); scene.add(ghost);
   const p = rts.pickGround(innerWidth / 2, innerHeight * .42); if (p) moveGhost(p.x, p.z);
 };
+const LINE = { wall: 1, fence: 1 }; // buildings drawn as a line (press and drag, or tap start + end)
 /** Cells of a wall line from a to b, stepping only sideways or forwards so there are no diagonal gaps. */
 function wallCells(a, b) {
   const out = [[a.cx, a.cz]], ldx = b.cx - a.cx, ldz = b.cz - a.cz, L = Math.hypot(ldx, ldz) || 1, n = Math.abs(ldx) + Math.abs(ldz);
   const off = ([cx, cz]) => Math.abs((cx - a.cx) * ldz - (cz - a.cz) * ldx) / L; // distance from the straight line
   let x = a.cx, z = a.cz;
-  for (let i = 0; i < n && out.length < 48; i++) {
+  for (let i = 0; i < n && out.length < 80; i++) {
     const c = []; if (x !== b.cx) c.push([x + Math.sign(ldx), z]); if (z !== b.cz) c.push([x, z + Math.sign(ldz)]);
     [x, z] = c.length > 1 && off(c[1]) < off(c[0]) ? c[1] : c[0]; out.push([x, z]);
   }
@@ -218,32 +222,32 @@ function clearLineGhosts() { for (const m of lineGhosts) m.removeFromParent(); l
 function showWallLine(p) {
   clearLineGhosts(); if (!p.a) return;
   const cells = wallCells(p.a, { cx: p.cx, cz: p.cz }); p.cells = cells;
-  let w = app.game.T[0].w; const cost = BD.wall.cost.w;
+  let w = app.game.T[0].w; const cost = BD[p.btype].cost.w;
   for (const [cx, cz] of cells) {
-    const ok = app.game.canPlace('wall', cx, cz) && w >= cost; if (ok) w -= cost;
-    const m = ghostObject('wall', { ...app.game.look(0), conn: 5 }, ghostMats[ok ? 0 : 1]); m.position.set(cx + .5, heightAt(cx + .5, cz + .5) + .05, cz + .5); scene.add(m); lineGhosts.push(m);
+    const ok = app.game.canPlace(p.btype, cx, cz) && w >= cost; if (ok) w -= cost;
+    const m = ghostObject(p.btype, { ...app.game.look(0), conn: 5 }, ghostMats[ok ? 0 : 1]); m.position.set(cx + .5, heightAt(cx + .5, cz + .5) + .05, cz + .5); scene.add(m); lineGhosts.push(m);
   }
-  $('ptxt').textContent = `${cells.length} wall pieces · ${cells.length * cost} wood` + (isTouch ? ' · tap to move the end, then ✓' : ' · click to build');
+  $('ptxt').textContent = `${cells.length} ${p.btype} pieces · ${cells.length * cost} wood` + (p.drag ? ' · let go to build' : isTouch ? ' · tap to move the end, then ✓' : ' · click to build');
 }
 function moveGhost(x, z) {
   const p = app.pending; if (!p || p.type !== 'place' || !ghost) return;
   const s = BD[p.btype].size; p.cx = Math.round(x - s / 2); p.cz = Math.round(z - s / 2);
   ghost.position.set(p.cx + s / 2, BD[p.btype].dock ? WL + .02 : heightAt(p.cx + s / 2, p.cz + s / 2) + .05, p.cz + s / 2);
   p.ok = app.game.canPlace(p.btype, p.cx, p.cz) || ((p.btype === 'gate' || p.btype === 'walltower') && !!app.game.gateSpot(0, p.cx, p.cz));
-  if (p.btype === 'wall') { ghost.visible = !p.a; if (p.a) showWallLine(p); } const gm = ghostMats[p.ok ? 0 : 1]; if (ghost.isMesh) ghost.material = gm; else ghost.traverse(o => { if (o.isMesh) o.material = gm; });
+  if (LINE[p.btype]) { ghost.visible = !p.a; if (p.a) showWallLine(p); } const gm = ghostMats[p.ok ? 0 : 1]; if (ghost.isMesh) ghost.material = gm; else ghost.traverse(o => { if (o.isMesh) o.material = gm; });
 }
 function confirmPlace(keep) {
   const p = app.pending; if (!p || p.type !== 'place') return;
   const builders = app.sel.filter(e => e.kind === 'unit' && e.type === 'peasant' && e.alive);
   const d = BD[p.btype];
-  if (p.btype === 'wall') { // first tap = start of the line, second = build the whole line
+  if (LINE[p.btype]) { // first tap = start of the line, second = build the whole line (or press, drag and let go)
     if (!p.a) { p.a = { cx: p.cx, cz: p.cz }; showWallLine(p); return; }
     const cells = p.cells || [[p.cx, p.cz]], made = [];
-    for (const [cx, cz] of cells) { const b = app.game.startBuilding(0, 'wall', cx, cz, []); if (b) made.push(b); }
-    if (!made.length) { app.toast(app.game.afford(0, d.cost) ? "Can't build a wall there." : 'Not enough wood.', 2); return; }
+    for (const [cx, cz] of cells) { const b = app.game.startBuilding(0, p.btype, cx, cz, []); if (b) made.push(b); }
+    if (!made.length) { app.toast(app.game.afford(0, d.cost) ? `Can't build a ${p.btype} there.` : 'Not enough wood.', 2); clearLineGhosts(); p.a = null; p.cells = null; if (ghost) ghost.visible = true; return; }
     builders.forEach((u, i) => app.game.build(u, made[Math.min(made.length - 1, Math.floor(i * made.length / Math.max(1, builders.length)))]));
-    app.toast(`${made.length} wall piece${made.length > 1 ? 's' : ''} placed${made.length < cells.length ? ` (${cells.length - made.length} skipped: blocked or not enough wood)` : ''}.`, 3);
-    clearLineGhosts(); p.a = null; p.cells = null; if (!keep) app.cancelPending(); else ghost.visible = true;
+    app.toast(`${made.length} ${p.btype} piece${made.length > 1 ? 's' : ''} placed${made.length < cells.length ? ` (${cells.length - made.length} skipped: blocked or not enough wood)` : ''}.`, 3);
+    clearLineGhosts(); p.a = null; p.cells = null; if (!keep) app.cancelPending(); else { ghost.visible = true; app.setPending(p); }
     return;
   }
   if (!app.game.afford(0, d.cost)) { app.toast('Not enough resources.', 2); app.cancelPending(); return; }
@@ -268,6 +272,16 @@ app.pendingAt = (x, z, ent, shift) => {
   } else if (p.type === 'unload') { g.setTask(p.ship, { type: 'unload', x, z }); showMarker(x, z, 0x8ab4ff);
   } else if (p.type === 'rally') { p.b.rally = ent && ent.kind === 'res' ? { x, z, res: ent } : { x, z }; app.toast('Rally point set.', 2); showMarker(x, z, 0x8ab4ff); }
   app.cancelPending();
+};
+/** Press-and-drag line building (walls, fences): 'start' where the finger/mouse went down, 'move' while dragging, 'end' on release. */
+app.lineDrag = (phase, sx, sy) => {
+  const p = app.pending; if (!p || p.type !== 'place' || !LINE[p.btype]) return false;
+  const g = rts.pickGround(sx, sy);
+  if (phase === 'start') { if (!g) return false; moveGhost(g.x, g.z); p.a = { cx: p.cx, cz: p.cz }; p.drag = true; showWallLine(p); return true; }
+  if (phase === 'move') { if (g) moveGhost(g.x, g.z); return true; }
+  if (g) moveGhost(g.x, g.z); p.drag = false;
+  confirmPlace(true); // stay in drawing mode so you can draw the next stretch; ✕ (or Esc / right-click) when done
+  return true;
 };
 app.hoverAt = (sx, sy) => { if (app.pending?.type === 'place') { const p = rts.pickGround(sx, sy); if (p) moveGhost(p.x, p.z); } };
 $('pok').addEventListener('click', e => { e.stopPropagation(); confirmPlace(false); });
@@ -304,6 +318,8 @@ function setupGame(mode, diff, civ = 'franks', enemyCiv) {
   if (!CIVS[civ]) civ = 'franks';
   if (!CIVS[enemyCiv]) { const others = CIV_LIST.filter(c => c !== civ); enemyCiv = others[Math.floor(Math.random() * others.length)]; }
   figures.styles = [CIVS[civ].style, CIVS[enemyCiv].style];
+  { const mine = CIV_COLOR[civ] || 'blue', theirs = CIV_COLOR[enemyCiv] === mine ? 'purple' : CIV_COLOR[enemyCiv] || 'red';
+    if (setTeamColors(mine, theirs)) figures.reset(); } // each people fights under its own colour: banners, shields, tabards, rings, minimap
   const g = new Game({ scene, figures, Q, mode, diff, civs: [civ, enemyCiv] });
   app.game = g; g.toast = (m, s) => hud.toast(m, s);
   g.onEnd = res => setTimeout(() => showEnd(res), 1600);
@@ -487,6 +503,7 @@ const modesEl = $('modes');
 for (const [k, m] of Object.entries(MODES)) { const b = document.createElement('button'); b.className = 'btn'; b.dataset.mode = k; b.textContent = m.name; modesEl.appendChild(b); }
 const civsEl = $('civs');
 for (const k of CIV_LIST) { const b = document.createElement('button'); b.className = 'btn'; b.dataset.civ = k; b.textContent = CIVS[k].name; civsEl.appendChild(b); b.addEventListener('click', () => { app.cfg.civ = k; refreshMenu(); }); }
+for (const b of document.querySelectorAll('[data-civ]')) b.style.setProperty('--sw', '#' + COLORS[CIV_COLOR[b.dataset.civ]].c.toString(16).padStart(6, '0')); // each people's colour
 function refreshMenu() {
   if (!CIVS[app.cfg.civ]) app.cfg.civ = 'franks';
   for (const b of document.querySelectorAll('[data-civ]')) b.classList.toggle('on', b.dataset.civ === app.cfg.civ);
@@ -665,6 +682,7 @@ addEventListener('resize', resize); resize();
 // ---------------- loop ----------------
 const clock = new THREE.Clock();
 let menuYaw = 0;
+const MENU_ENV = { tod: DAY * .625, weather: 'clear', cloud: .15, rain: 0, mist: .35 }; // late-afternoon gold with a little valley mist
 renderer.setAnimationLoop(() => {
   const real = Math.min(clock.getDelta(), 1 / 20), dt = app.paused ? 0 : real, t = clock.elapsedTime;
   const g = app.game;
@@ -672,7 +690,10 @@ renderer.setAnimationLoop(() => {
   updateViewOffset();
   if (app.mode === 'pov') pov.update(dt);
   else if (app.mode === 'rts') rts.update(real);
-  else { menuYaw += real * .05; rts.yaw = menuYaw; rts.dist = rts.distT = 75; rts.lookAt(64, 64); rts.update(real); }
+  else { // main menu: a slow, low cinematic sweep over the valley at golden hour
+    menuYaw += real * .035; rts.yawGoal = null; rts.yaw = menuYaw + Math.PI * .25; rts.pitch = .6; rts.dist = rts.distT = 46;
+    rts.lookAt(64 + Math.cos(menuYaw * .7) * 16, 64 + Math.sin(menuYaw * .7) * 16); rts.update(real);
+  }
   if (g) g.syncVisuals(dt, pov.first && pov.unit ? pov.unit.id : -1);
   if (deerBatch) { const gt = g ? g.time : t; animals.forEach((a, i) => deerBatch.set(i, { x: a.x, y: a.y ?? heightAt(a.x, a.z), z: a.z, yaw: a.yaw, scale: 1, dt, spd: a.moving ? (a.spd || .9) : 0, dead: a.hp <= 0, dT: a.hp <= 0 ? gt - (a.deadAt ?? gt - 9) : 0, hidden: !a.alive })); deerBatch.flush(); }
   else syncAnimals(t);
@@ -681,7 +702,7 @@ renderer.setAnimationLoop(() => {
   fx.update(dt);
   const f = app.mode === 'pov' && pov.unit ? pov.unit : rts.focus; // keep the sharp-shadow area centred on the action
   { const k = g && g.time - (app.lastFight ?? -99) < 9 ? 1 : 0; if (k !== app.musicK) { app.musicK = k; sound.setIntensity?.(k); } }
-  atmo.update(dt, g?.cycle ? g.env : null, camera, f); SUN_DIR.copy(atmo.dir);
+  atmo.update(dt, app.mode === 'rts' || app.mode === 'pov' ? (g?.cycle ? g.env : null) : MENU_ENV, camera, f); SUN_DIR.copy(atmo.dir);
   sun.target.position.set(f.x, 0, f.z); sun.position.copy(sun.target.position).addScaledVector(SUN_DIR, 110);
   if (marker.visible) { markerT += real; marker.scale.setScalar(1 + markerT * 1.5); marker.material.opacity = 1 - markerT / .7; if (markerT > .7) marker.visible = false; }
   hud.update(real);

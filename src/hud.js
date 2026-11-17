@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { UD, BD, BUILD_ECO, BUILD_MIL, BUILD_DEF, TECH, AGES } from './data.js';
 import { ABIL, RANKS } from './game.js';
 import { portrait, iconHtml, techSymbol, actionSymbol, symbolHtml } from './icons.js';
+import { TEAM_CSS } from './models.js';
 import { N, SIZE, resources, minimapColors, heightAt, WL } from './world.js';
 
 const $ = id => document.getElementById(id);
@@ -13,6 +14,11 @@ export const costHtml = c => !c ? '' : ['f', 'w', 'g', 's'].filter(k => c[k]).ma
 export const missing = (T, c) => ['f', 'w', 'g', 's'].filter(k => (c?.[k] || 0) > (T[k] || 0)).map(k => `${Math.ceil(c[k] - (T[k] || 0))} more ${({ f: 'food', w: 'wood', g: 'gold', s: 'stone' })[k]}`).join(', ');
 const TASK = { patrol: 'Patrolling', garrison: 'Running to the Town Hall', repair: 'Repairing', board: 'Boarding ship', unload: 'Sailing to land troops', idle: 'Idle', move: 'Moving', amove: 'Attacking', attack: 'Fighting', follow: 'Following', build: 'Building', farm: 'Farming', return: 'Carrying to storage' };
 const RN = { f: 'food', w: 'wood', g: 'gold', s: 'stone' };
+// button names short enough to fit (the full name is in the tooltip and the selection panel)
+const SHORT = { Crossbowman: 'Crossbow', 'Light Cavalry': 'Light Cav', 'Horse Archer': 'H. Archer', 'Fishing Boat': 'Fisher', 'Transport Ship': 'Transport', 'Lumber Camp': 'Lumber', 'Mining Camp': 'Mining', Storehouse: 'Store',
+  'Archery Range': 'Range', 'Siege Workshop': 'Siege', Blacksmith: 'Smith', 'Wall Tower': 'W. Tower', Watchtower: 'Tower', 'Bronze Age': 'Bronze', 'Castle Age': 'Castle', 'Town Watch': 'Watch', Wheelbarrow: 'Barrow',
+  'Stone Walls': 'St. Walls', 'Castle Walls': 'C. Walls', 'Fortified Hall': 'Fortify', 'Double-Bit Axe': 'Axe', 'Gold Mining': 'Gold Mine', 'Heavy Plough': 'Plough', 'Iron Casting': 'Casting', 'Bodkin Arrows': 'Bodkin',
+  'Chain Mail': 'Chainmail', 'Plate Armour': 'Plate', 'Veteran Infantry': 'Veterans', 'Elite Guard': 'Elite', 'Royal Bowmen': 'R. Bowmen', 'Blast Furnace': 'Furnace', 'Guard Towers': 'Guard Tw.', "Khan's Guard": 'Khan Guard' };
 
 export class HUD {
   constructor(app) {
@@ -65,6 +71,7 @@ export class HUD {
     const bb = document.getElementById('battlebar'), F = this.a.game?.field, CT = this.a.game?.castleText?.(), show = (!!F || !!CT) && this.a.mode === 'rts'; bb.classList.toggle('hide', !show); document.body.classList.toggle('battle', show); if (F) bb.innerHTML = F.hudText(); else if (CT) bb.innerHTML = CT;
     const sel = this.a.sel, name = $('selname'), desc = $('seldesc'), q = $('selq');
     q.innerHTML = '';
+    this.head(sel[0], sel.length);
     if (!sel.length) { name.textContent = this.a.game.mode === 'battle' ? 'Select your soldiers' : 'Nothing selected'; desc.innerHTML = this.a.hint(); return; }
     const e = sel[0];
     if (e.kind === 'res' && e.animal) { name.textContent = e.hp > 0 ? 'Deer' : 'Deer (hunted)'; desc.textContent = e.hp > 0 ? 'Send peasants to hunt it for meat (food). Deer run when hunted.' : `${Math.ceil(e.amt)} meat left. Peasants gather it fast.`; return; }
@@ -96,88 +103,103 @@ export class HUD {
     desc.textContent = Object.entries(counts).map(([k, c]) => `${c} ${c > 1 ? UD[k].plural : UD[k].name}`).join(', ') + (mil.length ? ` · Morale ${Math.round(mil.reduce((s, u) => s + u.morale, 0) / mil.length)}%` + (fl ? ` · ${fl} fleeing` : '') : '');
   }
 
+  /** Picture and health bar of what's selected (one unit/building, or the first of a group). */
+  head(e, n) {
+    const pic = $('selpic'), hp = $('selhp'), g = this.a.game;
+    const key = !e ? null : e.kind === 'unit' ? 'u:' + e.type : e.kind === 'bld' ? 'b:' + e.type : null;
+    const url = key ? portrait(key, e.team || 0, g.civKeys?.[e.team || 0] || 'franks', g.look ? g.look(e.team || 0) : { age: 1 }) : null;
+    pic.classList.toggle('hide', !url); if (url && pic.dataset.k !== key + (e.team || 0)) { pic.src = url; pic.dataset.k = key + (e.team || 0); }
+    const show = !!e && (e.kind === 'unit' || e.kind === 'bld') && n === 1; hp.classList.toggle('hide', !show);
+    if (show) { const k = Math.max(0, Math.min(1, e.hp / (e.maxHp || 1))); hp.firstChild.style.width = (k * 100).toFixed(1) + '%'; hp.classList.toggle('mid', k < .6 && k >= .3); hp.classList.toggle('low', k < .3); }
+  }
+
   // ---------------- command card ----------------
   updateCard() {
     { const f = this.a.sel.find(e => e.kind === 'unit' && e.team === 0 && e.alive), el = document.getElementById('bRide'); if (el) { const n = f ? (f.d.hero ? 'Commander' : f.d.name) : 'selected'; if (el.dataset.n !== n) { el.dataset.n = n; el.innerHTML = `${symbolHtml('eye')}Play as<small>${n}</small>`; el.classList.toggle('dis', !f); } } }
     const a = this.a, g = a.game, sel = a.sel, card = $('card'), btns = [];
     const T = g.T[0], touch = a.isTouch;
     const mine = sel.filter(e => e.alive !== false && e.team === 0);
-    const short = n => n.replace('Storehouse', 'Store').replace('Watchtower', 'Tower').replace('Archery Range', 'Range').replace('Siege Workshop', 'Siege').replace('Light Cavalry', 'Light Cav').replace('Crossbowman', 'Crossbow').replace('Fishing Boat', 'Fisher').replace('Transport Ship', 'Transport').replace('Blacksmith', 'Smith');
+    const short = n => SHORT[n] || n;
     const ageName = n => AGES[n].replace(' Age', '');
-    const back = () => btns.push({ label: '&#9664;', sub: 'back', on: () => { this.page = null; } });
+    const back = () => btns.push({ grp: btns[0]?.grp, label: '&#9664;', sub: 'back', on: () => { this.page = null; } });
     // what kind of thing is selected decides the panel; pages keep it to 10 buttons
-    if (a.pending) btns.push({ label: '&#10005;', sub: 'cancel', on: () => a.cancelPending() });
+    if (a.pending) btns.push({ grp: 'Placing', label: '&#10005;', sub: 'cancel', on: () => a.cancelPending() });
     else if (!mine.length && sel[0]?.kind === 'res' && !sel[0].fish && g.mode !== 'battle') {
       const r = sel[0];
-      for (const n of [1, 3, 5]) btns.push({ label: `+${n}`, sub: n === 1 ? 'peasant' : 'peasants', on: () => { const k = g.sendPeasants(0, r, n); a.toast(k ? `${k} peasant${k > 1 ? 's' : ''} sent.` : 'No free peasants.', 1.5); } });
+      for (const n of [1, 3, 5]) btns.push({ grp: 'Send', label: `+${n}`, sub: n === 1 ? 'peasant' : 'peasants', on: () => { const k = g.sendPeasants(0, r, n); a.toast(k ? `${k} peasant${k > 1 ? 's' : ''} sent.` : 'No free peasants.', 1.5); } });
     } else if (mine.length && mine[0].kind === 'unit') {
       const peas = mine.filter(u => u.type === 'peasant'), mil = mine.filter(u => u.type !== 'peasant' && !u.d.ship), ships = mine.filter(u => u.d.ship);
       if (peas.length && g.mode !== 'battle' && (this.page === 'eco' || this.page === 'mil' || this.page === 'def')) {
         for (const t of { eco: BUILD_ECO, mil: BUILD_MIL, def: BUILD_DEF }[this.page]) {
           const d = BD[t], req = d.req && !g.has(0, d.req), old = !g.ageOK(0, d);
-          btns.push({ ic: 'b:' + t, cost: d.cost, label: short(d.name), sub: old ? ageName(d.age) + ' Age' : req ? 'needs ' + short(BD[d.req].name) : costHtml(d.cost), dis: old || req || !g.afford(0, d.cost) || (d.one && g.blds.some(b => b.alive && b.team === 0 && b.type === t)), why: d.one && g.blds.some(b => b.alive && b.team === 0 && b.type === t) ? 'You already have one.' : old ? `Requires the ${AGES[d.age]}.` : req ? `Requires a ${BD[d.req].name}.` : null, on: () => { a.startPlace(t); this.page = null; }, tip: d.desc });
+          btns.push({ grp: 'Build ' + { eco: 'economy', mil: 'military', def: 'defences' }[this.page], ic: 'b:' + t, cost: d.cost, label: short(d.name), sub: old ? ageName(d.age) + ' Age' : req ? 'needs ' + short(BD[d.req].name) : costHtml(d.cost), dis: old || req || !g.afford(0, d.cost) || (d.one && g.blds.some(b => b.alive && b.team === 0 && b.type === t)), why: d.one && g.blds.some(b => b.alive && b.team === 0 && b.type === t) ? 'You already have one.' : old ? `Requires the ${AGES[d.age]}.` : req ? `Requires a ${BD[d.req].name}.` : null, on: () => { a.startPlace(t); this.page = null; }, tip: d.desc });
         }
         back();
       } else {
         if (peas.length && g.mode !== 'battle') {
           const go = rt => () => { let k = 0; for (const u of peas) { const r = rt === 'f' ? (g.blds.find(b => b.alive && b.built && b.team === 0 && b.type === 'farm' && (!b.farmer || !b.farmer.alive || b.farmer.task.b !== b)) || g.nearestRes(u.x, u.z, 'f', 60)) : g.nearestRes(u.x, u.z, rt, 70); if (r) { if (r.kind === 'bld') g.farm(u, r); else g.gather(u, r); k++; } } if (!k) a.toast('None nearby.', 1.5); };
-          btns.push({ label: 'Food', sub: 'gather', on: go('f') }, { label: 'Wood', sub: 'chop', on: go('w') }, { label: 'Gold', sub: 'mine', on: go('g') }, { label: 'Stone', sub: 'quarry', on: go('s') });
-          btns.push({ label: 'Build', sub: 'economy &#9654;', on: () => { this.page = 'eco'; } }, { label: 'Build', sub: 'military &#9654;', on: () => { this.page = 'mil'; } }, { label: 'Build', sub: 'defences &#9654;', on: () => { this.page = 'def'; } });
-          btns.push({ label: 'Repair', sub: 'pick building', on: () => a.setPending({ type: 'repair' }) });
-          if (peas.some(u => u.carry)) btns.push({ label: 'Return', sub: 'goods', on: () => { for (const u of peas) if (u.carry) g.setTask(u, { type: 'return' }); } });
+          btns.push({ grp: 'Gather', label: 'Food', sub: 'gather', on: go('f') }, { grp: 'Gather', label: 'Wood', sub: 'chop', on: go('w') }, { grp: 'Gather', label: 'Gold', sub: 'mine', on: go('g') }, { grp: 'Gather', label: 'Stone', sub: 'quarry', on: go('s') });
+          btns.push({ grp: 'Build', label: 'Economy', sub: 'build &#9654;', on: () => { this.page = 'eco'; } }, { grp: 'Build', label: 'Military', sub: 'build &#9654;', on: () => { this.page = 'mil'; } }, { grp: 'Build', label: 'Defences', sub: 'build &#9654;', on: () => { this.page = 'def'; } });
+          btns.push({ grp: 'Build', label: 'Repair', sub: 'pick building', on: () => a.setPending({ type: 'repair' }) });
+          if (peas.some(u => u.carry)) btns.push({ grp: 'Orders', label: 'Return', sub: 'goods', on: () => { for (const u of peas) if (u.carry) g.setTask(u, { type: 'return' }); } });
         }
         if (mil.length || ships.some(u => u.d.dmg > 0)) {
-          btns.push({ label: 'Attack', sub: 'move', on: () => a.setPending({ type: 'amove' }) });
-          btns.push({ label: 'Patrol', sub: 'pick point', on: () => a.setPending({ type: 'patrol' }) });
+          btns.push({ grp: 'Orders', label: 'Attack', sub: 'move', on: () => a.setPending({ type: 'amove' }) });
+          btns.push({ grp: 'Orders', label: 'Patrol', sub: 'pick point', on: () => a.setPending({ type: 'patrol' }) });
           const st = (mil[0] || ships[0]).stance || 'aggressive', next = { aggressive: 'defensive', defensive: 'hold', hold: 'aggressive' }[st];
-          btns.push({ label: { aggressive: 'Aggressive', defensive: 'Defensive', hold: 'Hold' }[st], sub: 'stance &#8635;', on: () => { for (const u of [...mil, ...ships]) u.stance = next; a.toast(`Stance: ${next === 'hold' ? 'hold ground (no chasing)' : next === 'defensive' ? 'defensive (chase a little, then return)' : 'aggressive (chase enemies)'}.`, 2); } });
-          const hero = mil.find(u => u.d.hero); if (hero) btns.push({ label: hero.d.horse ? 'Dismount' : 'Mount', sub: 'horse', on: () => g.setMount(hero, !hero.d.horse) });
-          if (hero) for (const [k, ab] of Object.entries(ABIL)) { const left = Math.ceil(g.abilityLeft(hero, k)); btns.push({ label: ab.name, sub: left ? left + 's' : 'ready', dis: left > 0, why: `${ab.name} is recharging (${left}s).`, tip: ab.desc, on: () => g.useAbility(hero, k) }); }
-          if (g.hero?.alive && mil.length && !mil.includes(g.hero)) btns.push({ label: 'Follow', sub: 'commander', on: () => { mil.forEach((u, i) => { const row = Math.floor(i / 6) + 1, col = (i % 6) - 2.5; g.setTask(u, { type: 'follow', leader: g.hero, off: { a: Math.atan2(col * 1.2, row * 1.4), d: Math.hypot(col * 1.2, row * 1.4) } }); }); } });
+          btns.push({ grp: 'Orders', label: { aggressive: 'Aggressive', defensive: 'Defensive', hold: 'Hold' }[st], sub: 'stance &#8635;', on: () => { for (const u of [...mil, ...ships]) u.stance = next; a.toast(`Stance: ${next === 'hold' ? 'hold ground (no chasing)' : next === 'defensive' ? 'defensive (chase a little, then return)' : 'aggressive (chase enemies)'}.`, 2); } });
+          const hero = mil.find(u => u.d.hero); if (hero) btns.push({ grp: 'Commander', label: hero.d.horse ? 'Dismount' : 'Mount', sub: 'horse', on: () => g.setMount(hero, !hero.d.horse) });
+          if (hero) for (const [k, ab] of Object.entries(ABIL)) { const left = Math.ceil(g.abilityLeft(hero, k)); btns.push({ grp: 'Commander', label: ab.name, sub: left ? left + 's' : 'ready', dis: left > 0, why: `${ab.name} is recharging (${left}s).`, tip: ab.desc, on: () => g.useAbility(hero, k) }); }
+          if (g.hero?.alive && mil.length && !mil.includes(g.hero)) btns.push({ grp: 'Orders', label: 'Follow', sub: 'commander', on: () => { mil.forEach((u, i) => { const row = Math.floor(i / 6) + 1, col = (i % 6) - 2.5; g.setTask(u, { type: 'follow', leader: g.hero, off: { a: Math.atan2(col * 1.2, row * 1.4), d: Math.hypot(col * 1.2, row * 1.4) } }); }); } });
         }
         const tr = ships.find(u => u.d.carry);
-        if (tr) { btns.push({ label: 'Unload', sub: 'pick shore', on: () => a.setPending({ type: 'unload', ship: tr }) }); btns.push({ label: 'Land', sub: 'here', on: () => g.unloadAt(tr, tr.x, tr.z) }); }
+        if (tr) { btns.push({ grp: 'Ship', label: 'Unload', sub: 'pick shore', on: () => a.setPending({ type: 'unload', ship: tr }) }); btns.push({ grp: 'Ship', label: 'Land', sub: 'here', on: () => g.unloadAt(tr, tr.x, tr.z) }); }
         const fishers = ships.filter(u => u.d.fisher);
-        if (fishers.length) btns.push({ label: 'Fish', sub: 'nearest shoal', on: () => { let k = 0; for (const u of fishers) { const r = g.nearestRes(u.x, u.z, 'f', 90, true); if (r) { g.gather(u, r); k++; } } if (!k) a.toast('No fish left nearby.', 2); } });
+        if (fishers.length) btns.push({ grp: 'Ship', label: 'Fish', sub: 'nearest shoal', on: () => { let k = 0; for (const u of fishers) { const r = g.nearestRes(u.x, u.z, 'f', 90, true); if (r) { g.gather(u, r); k++; } } if (!k) a.toast('No fish left nearby.', 2); } });
         // too many for one panel (mixed selections): drop the least-used buttons, always keep Stop
         for (const drop of ['Repair', 'Return', 'Patrol']) if (btns.length > 9) { const i = btns.findIndex(b => b.label === drop); if (i >= 0) btns.splice(i, 1); }
         if (btns.length > 9) btns.length = 9;
-        btns.push({ label: 'Stop', sub: '', on: () => { for (const u of mine) g.setTask(u, { type: 'idle' }); } });
+        btns.push({ grp: 'Orders', label: 'Stop', sub: '', on: () => { for (const u of mine) g.setTask(u, { type: 'idle' }); } });
       }
     } else if (mine.length && mine[0].kind === 'bld') {
       const b = mine[0];
       if (b.built) {
         for (const t of g.trainsFor(b)) {
           const d = g.stat(0, t), n = b.queue.filter(q => q.type === t).length, old = !g.ageOK(0, d);
-          btns.push({ ic: 'u:' + t, cost: d.cost, label: short(d.name), sub: old ? ageName(d.age) + ' Age' : costHtml(d.cost), dis: old || !g.afford(0, d.cost) || b.queue.length >= 5, why: old ? `Requires the ${AGES[d.age]}.` : b.queue.length >= 5 ? 'The queue is full (5).' : null, badge: n || '', on: () => { const r = g.train(b, t); if (r === 'cost') a.toast('Not enough resources.', 2); else if (r === 'full') a.toast('Queue is full.', 2); this.updateSel(); }, tip: d.desc });
+          btns.push({ grp: 'Train', ic: 'u:' + t, cost: d.cost, label: short(d.name), sub: old ? ageName(d.age) + ' Age' : costHtml(d.cost), dis: old || !g.afford(0, d.cost) || b.queue.length >= 5, why: old ? `Requires the ${AGES[d.age]}.` : b.queue.length >= 5 ? 'The queue is full (5).' : null, badge: n || '', on: () => { const r = g.train(b, t); if (r === 'cost') a.toast('Not enough resources.', 2); else if (r === 'full') a.toast('Queue is full.', 2); this.updateSel(); }, tip: d.desc });
         }
         for (const k of g.techsFor(b)) {
           const t = TECH[k], old = (t.age || 0) > T.age;
-          btns.push({ ic: 't:' + k, cost: t.cost, label: (t.toAge ? '&#9733; ' : '') + t.name.replace('Double-Bit ', '').replace(' Infantry', ''), sub: old ? ageName(t.age) + ' Age' : costHtml(t.cost), dis: old || !g.afford(0, t.cost) || b.queue.length >= 5, why: old ? `Requires the ${AGES[t.age]}.` : null, tech: 1, on: () => { const r = g.research(b, k); if (r === 'cost') a.toast('Not enough resources.', 2); else if (r === 'no') a.toast('Already advancing.', 2); this.updateSel(); }, tip: t.desc });
+          btns.push({ grp: 'Research', ic: 't:' + k, cost: t.cost, label: (t.toAge ? '&#9733; ' : '') + short(t.name), sub: old ? ageName(t.age) + ' Age' : costHtml(t.cost), dis: old || !g.afford(0, t.cost) || b.queue.length >= 5, why: old ? `Requires the ${AGES[t.age]}.` : null, tech: 1, on: () => { const r = g.research(b, k); if (r === 'cost') a.toast('Not enough resources.', 2); else if (r === 'no') a.toast('Already advancing.', 2); this.updateSel(); }, tip: t.desc });
         }
-        if (b.type === 'hall' && g.mode !== 'battle') { const pc = g.stat(0, 'peasant').cost, n = Math.min(5, 5 - b.queue.length), c5 = { f: (pc.f || 0) * Math.max(1, n) }; btns.push({ cost: c5, label: 'Peasant ×5', sub: costHtml(c5), dis: n <= 0 || !g.afford(0, c5), why: n <= 0 ? 'The queue is full (5).' : null, on: () => { let k = 0; for (let i = 0; i < n; i++) if (g.train(b, 'peasant') === 'ok') k++; a.toast(`${k} peasant${k === 1 ? '' : 's'} queued.`, 1.5); this.updateSel(); } }); }
+        if (b.type === 'hall' && g.mode !== 'battle') { const pc = g.stat(0, 'peasant').cost, n = Math.min(5, 5 - b.queue.length), c5 = { f: (pc.f || 0) * Math.max(1, n) }; btns.push({ grp: 'Train', cost: c5, label: 'Peasant ×5', sub: costHtml(c5), dis: n <= 0 || !g.afford(0, c5), why: n <= 0 ? 'The queue is full (5).' : null, on: () => { let k = 0; for (let i = 0; i < n; i++) if (g.train(b, 'peasant') === 'ok') k++; a.toast(`${k} peasant${k === 1 ? '' : 's'} queued.`, 1.5); this.updateSel(); } }); }
         if (b.d.market && g.mode !== 'battle') for (const rt of ['f', 'w', 's']) {
           const nm = { f: 'Food', w: 'Wood', s: 'Stone' }[rt], pb = g.tradePrice(0, rt, true), ps = g.tradePrice(0, rt, false);
-          btns.push({ cost: { g: pb }, label: `Buy ${nm}`, sub: `100 for <i class="ic g"></i>${pb}`, dis: T.g < pb, on: () => { g.trade(0, rt, true); a.sfx?.('chime'); } });
-          btns.push({ cost: { [rt]: 100 }, label: `Sell ${nm}`, sub: `100 → <i class="ic g"></i>${ps}`, dis: (T[rt] || 0) < 100, on: () => { g.trade(0, rt, false); a.sfx?.('chime'); } });
+          btns.push({ grp: 'Trade', cost: { g: pb }, label: `Buy ${nm}`, sub: `100 for <i class="ic g"></i>${pb}`, dis: T.g < pb, on: () => { g.trade(0, rt, true); a.sfx?.('chime'); } });
+          btns.push({ grp: 'Trade', cost: { [rt]: 100 }, label: `Sell ${nm}`, sub: `100 → <i class="ic g"></i>${ps}`, dis: (T[rt] || 0) < 100, on: () => { g.trade(0, rt, false); a.sfx?.('chime'); } });
         }
-        if (b.type === 'hall' && g.mode !== 'battle') btns.push({ label: b.cargo?.length ? 'All Clear' : '&#128276; Bell', sub: b.cargo?.length ? `${b.cargo.length} inside` : 'peasants hide', on: () => { const n = g.ringBell(0); a.toast(n < 0 ? 'All clear! Back to work.' : n ? `${n} peasants run for the Town Hall!` : 'No peasants nearby.', 2); } });
-        if (b.d.trains) btns.push({ label: 'Rally', sub: 'point', on: () => a.setPending({ type: 'rally', b }) });
+        if (b.type === 'hall' && g.mode !== 'battle') btns.push({ grp: 'Actions', label: b.cargo?.length ? 'All Clear' : 'Bell', sub: b.cargo?.length ? `${b.cargo.length} inside` : 'peasants hide', on: () => { const n = g.ringBell(0); a.toast(n < 0 ? 'All clear! Back to work.' : n ? `${n} peasants run for the Town Hall!` : 'No peasants nearby.', 2); } });
+        if (b.d.trains) btns.push({ grp: 'Actions', label: 'Rally', sub: 'point', on: () => a.setPending({ type: 'rally', b }) });
       }
-      if (b.type !== 'hall' || g.blds.filter(o => o.alive && o.team === 0 && o.type === 'hall').length > 1) btns.push({ label: this.confirmDel === b.id ? 'Sure?' : 'Demolish', sub: this.confirmDel === b.id ? 'tap again' : '', on: () => { if (this.confirmDel === b.id) { g.kill(b); a.select([]); this.confirmDel = null; } else { this.confirmDel = b.id; setTimeout(() => { this.confirmDel = null; this.sig = ''; }, 3000); } } });
+      if (b.type !== 'hall' || g.blds.filter(o => o.alive && o.team === 0 && o.type === 'hall').length > 1) btns.push({ grp: 'Actions', label: this.confirmDel === b.id ? 'Sure?' : 'Demolish', sub: this.confirmDel === b.id ? 'tap again' : '', on: () => { if (this.confirmDel === b.id) { g.kill(b); a.select([]); this.confirmDel = null; } else { this.confirmDel = b.id; setTimeout(() => { this.confirmDel = null; this.sig = ''; }, 3000); } } });
     }
     if (btns.length > 10) btns.length = 10;
+    // grouped into labelled sections (Gather / Build / Orders, Train / Research / Actions...), in the order they first appear
+    const order = []; for (const b of btns) if (!order.includes(b.grp || '')) order.push(b.grp || '');
+    btns.sort((x, y) => order.indexOf(x.grp || '') - order.indexOf(y.grp || ''));
     // only rebuild DOM when something changed
-    const sig = (this.page || '') + btns.map(b => b.label + b.sub + b.dis + b.badge).join('|');
+    const sig = (this.page || '') + btns.map(b => (b.grp || '') + b.label + b.sub + b.dis + b.badge).join('|');
     this.buttons = btns;
     if (sig === this.sig) return; this.sig = sig;
     card.innerHTML = '';
+    const secs = {};
+    for (const gname of order) { const s = document.createElement('div'); s.className = 'grp'; s.innerHTML = `<div class="cap">${gname}</div>`; const gb = document.createElement('div'); gb.className = 'gb'; s.appendChild(gb); card.appendChild(s); secs[gname] = gb; }
     btns.forEach((b, i) => {
       const el = document.createElement('button'); el.className = 'btn' + (b.dis ? ' dis' : '') + (b.tech ? ' tech' : '');
       el.innerHTML = `${this.pic(b)}<span class="bl">${b.label}</span><span class="cost">${b.sub || ''}</span>${b.badge ? `<span class="q">${b.badge}</span>` : ''}${!touch && HKL[i] ? `<span class="hk">${HKL[i]}</span>` : ''}`;
-      if (b.tip) el.title = b.tip;
+      el.title = (b.tip ? b.tip : '') || '';
       el.addEventListener('click', ev => { ev.stopPropagation(); this.press(b); });
-      card.appendChild(el);
+      secs[b.grp || ''].appendChild(el);
     });
   }
   /** The small picture on a button: a portrait of the unit/building, or a drawn symbol. */
@@ -200,9 +222,9 @@ export class HUD {
     const c = this.mctx, g = this.a.game, K = 2; c.drawImage(this.bg, 0, 0);
     for (const r of resources) if (r.alive && (r.rt === 'g' || r.rt === 's' || r.fish || r.animal)) { c.fillStyle = r.fish ? '#cfefff' : r.animal ? '#c08a50' : r.rt === 's' ? '#d8d4ca' : '#ffd84a'; c.beginPath(); c.arc(r.x * K, r.z * K, r.fish || r.animal ? 2 : 3, 0, 6.3); c.fill(); }
     const F = g.fow?.on ? g.fow : null;
-    for (const b of g.blds) if (b.alive && (!F || !b.team || F.explored(b.x, b.z))) { c.fillStyle = b.team ? '#d8402a' : '#3f72ff'; c.strokeStyle = 'rgba(0,0,0,.8)'; c.lineWidth = 1; c.fillRect(b.cx * K, b.cz * K, b.size * K, b.size * K); c.strokeRect(b.cx * K + .5, b.cz * K + .5, b.size * K - 1, b.size * K - 1); }
+    for (const b of g.blds) if (b.alive && (!F || !b.team || F.explored(b.x, b.z))) { c.fillStyle = (TEAM_CSS[b.team] || TEAM_CSS[1]).map; c.strokeStyle = 'rgba(0,0,0,.8)'; c.lineWidth = 1; c.fillRect(b.cx * K, b.cz * K, b.size * K, b.size * K); c.strokeRect(b.cx * K + .5, b.cz * K + .5, b.size * K - 1, b.size * K - 1); }
     for (const u of g.units) if (u.alive && !u.boarded && !u.fowHidden) {
-      c.fillStyle = u.selected ? '#ffffff' : u.team ? '#ff5a40' : '#7fa8ff'; c.strokeStyle = 'rgba(0,0,0,.85)'; c.lineWidth = 1;
+      c.fillStyle = u.selected ? '#ffffff' : (TEAM_CSS[u.team] || TEAM_CSS[1]).dot; c.strokeStyle = 'rgba(0,0,0,.85)'; c.lineWidth = 1;
       const r = u.d.ship ? 3 : 1.8; c.beginPath(); c.arc(u.x * K, u.z * K, r, 0, 6.3); c.fill(); c.stroke();
     }
     if (F) { // fog of war on the minimap: unexplored black, out of sight dimmed
@@ -262,6 +284,7 @@ export class HUD {
       const p = scr(b.x, b.y + (b.type === 'tower' ? 6.5 : b.size * .9 + 1), b.z); if (!p) continue; p[1] = Math.max(p[1], 64); // keep labels clear of the top bar
       const w = 50 * zoomK;
       if (!b.built) {
+        if (b.d.wall && !b.d.gate && !b.selected) { if (b.progress > 0) bar(p[0], p[1], w * .5, b.progress, '#ffd56a'); continue; } // wall/fence pieces: just a small bar once work starts, no label each
         const bw = Math.max(w, 64); bar(p[0], p[1], bw, b.progress, '#ffd56a');
         if (b.team === 0) {
           const nb = b.nb || 0, left = nb ? Math.ceil((1 - b.progress) * b.d.time / nb / (g.civ[0].build || 1)) : 0;

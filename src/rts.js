@@ -162,6 +162,8 @@ export class RTSView {
     const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
     const moved = Math.hypot(p.x - p.x0, p.y - p.y0);
     if (p.mode === 'multi') return this.multi();
+    if (!p.mode && moved > (p.type === 'touch' ? 10 : 6) && p.btn === 0 && !p.alt && this.a.lineDrag?.('start', p.x0, p.y0)) p.mode = 'line'; // drawing a wall / fence
+    if (p.mode === 'line') { this.a.lineDrag('move', p.x, p.y); return; }
     if (p.type === 'touch') {
       if (!p.mode && moved > 10) p.mode = (this.boxMode || performance.now() - p.t > 420) && !this.a.pending ? 'box' : 'pan';
       if (p.mode === 'pan') {
@@ -192,7 +194,8 @@ export class RTSView {
     this.ptrs.delete(e.pointerId);
     const touch = p.type === 'touch';
     if (p.mode === 'pan' && touch && this.ptrs.size === 0 && performance.now() - (p.lt || 0) < 80) { this.vel.x = p.vx || 0; this.vel.y = p.vy || 0; }
-    if (p.mode === 'box') { this.boxSelect(p.x0, p.y0, p.x, p.y, e.shiftKey); this.box.classList.add('hide'); }
+    if (p.mode === 'line') this.a.lineDrag('end', p.x, p.y);
+    else if (p.mode === 'box') { this.boxSelect(p.x0, p.y0, p.x, p.y, e.shiftKey); this.box.classList.add('hide'); }
     else if (!p.mode) this.tap(p.x, p.y, touch, p.btn, e.shiftKey, e.ctrlKey || e.metaKey);
     if (this.ptrs.size < 2) this.pinch = null;
     if (p.mode === 'multi') for (const q of this.ptrs.values()) q.mode = 'done';

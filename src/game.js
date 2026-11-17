@@ -330,7 +330,7 @@ export class Game {
   }
   cancelTrain(b, i) { const q = b.queue.splice(i, 1)[0]; if (q) this.pay(b.team, q.tech ? TECH[q.tech].cost : this.stat(b.team, q.type).cost, -1); }
   /** A gate can go on an empty cell or replace a piece of your own wall. */
-  gateSpot(team, cx, cz) { const o = bldAt[cz * N + cx]; return o && o.alive && o.team === team && o.type === 'wall' ? o : null; } // gates and wall towers can replace a wall piece
+  gateSpot(team, cx, cz) { const o = bldAt[cz * N + cx]; return o && o.alive && o.team === team && (o.type === 'wall' || o.type === 'fence') ? o : null; } // gates and wall towers can replace a wall piece
   startBuilding(team, type, cx, cz, builders) {
     const d = BD[type];
     if (d.one && this.blds.some(b => b.alive && b.team === team && b.type === type)) return null; // only one Castle each
@@ -694,6 +694,9 @@ export class Game {
 
   updateBuilding(b, dt) {
     if (!b.built) return;
+    if (b.d.mend && ((b.mendT = (b.mendT || 0) - dt) <= 0)) { // a well: nearby buildings of the same side slowly mend
+      b.mendT = 1; for (const o of this.blds) if (o.alive && o.built && o.team === b.team && o.hp < o.maxHp && Math.hypot(o.x - b.x, o.z - b.z) < b.d.mend + o.size / 2) o.hp = Math.min(o.maxHp, o.hp + Math.max(2, o.maxHp * .004));
+    }
     if (b.d.atk && (b.atkCd -= dt) <= 0) {
       const T0 = this.T[b.team], xr = (b.type === 'tower' && T0.techs.has('guardtower') ? 2 : 0) + (b.type === 'tower' && T0.techs.has('keeps') ? 1 : 0) + (T0.techs.has('fletching') ? 1 : 0) + (T0.techs.has('bodkin') ? 1 : 0);
       b.atkCd = .5; const e = this.nearestEnemy({ x: b.x, z: b.z, team: b.team }, b.d.atk.rng + xr + b.size / 2, false);

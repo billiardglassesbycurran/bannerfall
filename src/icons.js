@@ -1,7 +1,7 @@
 // Button pictures. Buildings and units get a small portrait rendered from their real 3D model (so the picture always
 // matches the game, made once and cached); actions and upgrades get small drawn symbols (inline SVG).
 import * as THREE from 'three';
-import { buildingMesh, figureGroup } from './models.js';
+import { buildingMesh, figureGroup, TEAM } from './models.js';
 import { UD } from './data.js';
 
 let R = null, scene = null, cam = null, rt = null;
@@ -16,7 +16,7 @@ export function initIcons(renderer) {
 }
 /** A portrait of a unit ('u:sword') or building ('b:barracks') as an image URL. */
 export function portrait(key, team = 0, style = 'franks', look = { age: 1 }) {
-  const ck = key + '|' + style + '|' + (look.age || 0); if (cache.has(ck)) return cache.get(ck);
+  const ck = key + '|' + style + '|' + (look.age || 0) + '|' + TEAM[team]; if (cache.has(ck)) return cache.get(ck);
   if (!R) return null;
   const [kind, type] = key.split(':'); let obj;
   try { obj = kind === 'u' ? figureGroup(team, type, style) : buildingMesh(type, team, false, look); } catch { cache.set(ck, null); return null; }
@@ -78,6 +78,13 @@ const P = {
   ship: '<path d="M3 15h18l-3 5H6zM12 15V3l7 9h-7"/>',
   unload: '<path d="M12 4v11M7 10l5 5 5-5M4 20h16"/>',
   stance: '<path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
+  swords: '<path d="M4 3l9 9M3 4l1-1M14 13l-2 2M11 13l-1 4-2-2M20 3l-9 9M21 4l-1-1M10 13l2 2M13 13l1 4 2-2M6 19l2-2M18 19l-2-2"/>',
+  castle: '<path d="M3 21V9h3V6h2v3h3V5h2v4h3V6h2v3h3v12z"/><path d="M10 21v-5h4v5M3 12h18"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',
+  book: '<path d="M4 5c3-1 6-1 8 1 2-2 5-2 8-1v14c-3-1-6-1-8 1-2-2-5-2-8-1z"/><path d="M12 6v14"/>',
+  gear: '<circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',
+  help: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 015 .5c0 1.6-2.5 2-2.5 3.5M12 17h.01"/>',
+  play: '<path d="M8 5l11 7-11 7z"/>',
 };
 const svg = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${P[k] || P.star}</svg>`;
 /** Symbol for an upgrade, by what it does. */
@@ -94,7 +101,7 @@ export function techSymbol(key, t) {
 export function actionSymbol(label, sub = '') {
   const L = label.replace(/<[^>]*>|&#\d+;/g, '').trim(), S = sub.replace(/<[^>]*>/g, '');
   const m = [[/^Attack/, 'attack'], [/^Patrol/, 'patrol'], [/^Stop/, 'stop'], [/^(Aggressive|Defensive|Hold)/, 'stance'], [/^Food/, 'wheat'], [/^Wood/, 'wood'], [/^Gold/, 'coin'], [/^Stone/, 'stone'],
-    [/^Build/, /econ/.test(S) ? 'house' : /milit/.test(S) ? 'sword' : 'wall'], [/^Repair/, 'hammer'], [/^Return/, 'unload'], [/^(Mount|Dismount)/, 'horse'], [/^War Cry/, 'horn'], [/^Charge/, 'horse'],
+    [/^Build/, /econ/.test(S) ? 'house' : /milit/.test(S) ? 'sword' : 'wall'], [/^Economy/, 'house'], [/^Military/, 'sword'], [/^Defences/, 'wall'], [/^Repair/, 'hammer'], [/^Return/, 'unload'], [/^(Mount|Dismount)/, 'horse'], [/^War Cry/, 'horn'], [/^Charge/, 'horse'],
     [/^Rally$/, /point/.test(S) ? 'flag' : 'heart'], [/^Rally/, 'flag'], [/^Follow/, 'flag'], [/Bell|All Clear/, 'bell'], [/^(Demolish|Sure)/, 'demolish'], [/^Buy/, 'coin'], [/^Sell/, 'scales'], [/^Fish/, 'fish'],
     [/^Unload/, 'unload'], [/^Board/, 'ship'], [/^\+\d/, 'people'], [/^Peasant ×/, 'people']];
   for (const [re, k] of m) if (re.test(L)) return k;

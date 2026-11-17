@@ -8,10 +8,33 @@ import { planksTexture, sailTexture, foamTexture } from './textures.js';
 import { GM, buildingParts } from './gltfmodels.js';
 import { ANIM, AnimBatch, MountBatch, animFigure } from './anim.js';
 
-export const TEAM = [0x2c50a8, 0xa62419];
+/** Team colours the player can pick (the enemy always gets a different one). c = cloth/banner colour, ring = the bright
+ *  ring under soldiers, map/dot = minimap buildings/units. TEAM / RING_COL / TEAM_CSS are edited in place by setTeamColors(). */
+export const COLORS = {
+  blue: { name: 'Blue', c: 0x2c50a8, ring: 0x4a8dff, map: '#3f72ff', dot: '#7fa8ff' },
+  red: { name: 'Red', c: 0xa62419, ring: 0xff4636, map: '#d8402a', dot: '#ff5a40' },
+  yellow: { name: 'Yellow', c: 0xc9a015, ring: 0xffd83a, map: '#e8c22a', dot: '#ffe066' },
+  green: { name: 'Green', c: 0x2e7a32, ring: 0x5be067, map: '#3fae4a', dot: '#8be08f' },
+  purple: { name: 'Purple', c: 0x6a2e9a, ring: 0xb46cff, map: '#9a4ee0', dot: '#c99aff' },
+  orange: { name: 'Orange', c: 0xc0621a, ring: 0xff9a3a, map: '#ec8a2a', dot: '#ffb46a' },
+};
+export const COLOR_LIST = Object.keys(COLORS);
+/** Each people (civilization) fights under its own colour. */
+export const CIV_COLOR = { franks: 'blue', romans: 'red', chinese: 'yellow', norse: 'green', mongols: 'orange' };
+export const TEAM = [COLORS.blue.c, COLORS.red.c];
 /** Team rings: a soft ring in the team colour on the ground under every soldier, so the two armies are easy to tell apart
  *  in a melee (like the coloured circles under units in classic RTS games). One instanced mesh per team. */
-export const RING_COL = [0x4a8dff, 0xff4636], RINGS = { on: true }; // RINGS.on: Settings switch
+export const RING_COL = [COLORS.blue.ring, COLORS.red.ring], RINGS = { on: true }; // RINGS.on: Settings switch
+export const TEAM_CSS = [{ map: COLORS.blue.map, dot: COLORS.blue.dot }, { map: COLORS.red.map, dot: COLORS.red.dot }];
+export const TEAM_KEYS = ['blue', 'red'];
+/** Set both sides' colours; returns true if anything changed. The enemy can't share the player's colour. */
+export function setTeamColors(mine, theirs) {
+  if (!COLORS[mine]) mine = 'blue';
+  if (!COLORS[theirs] || theirs === mine) theirs = mine === 'red' ? 'blue' : 'red';
+  if (TEAM_KEYS[0] === mine && TEAM_KEYS[1] === theirs) return false;
+  [mine, theirs].forEach((k, t) => { TEAM_KEYS[t] = k; TEAM[t] = COLORS[k].c; RING_COL[t] = COLORS[k].ring; TEAM_CSS[t] = { map: COLORS[k].map, dot: COLORS[k].dot }; });
+  return true;
+}
 export class TeamRings {
   constructor(scene, cap = 700) {
     const g = new THREE.RingGeometry(.52, .7, 32).rotateX(-Math.PI / 2), cv = new THREE.Matrix4();
@@ -432,7 +455,7 @@ function crew(b, tc, x, y, z, kind = 'sailor', ry = 0) {
 }
 const sailMats = new Map();
 function sailMat(team, style) {
-  const k = team + style; let m = sailMats.get(k);
+  const k = team + style + TEAM[team]; let m = sailMats.get(k);
   if (!m) {
     m = M.pbr ? new THREE.MeshStandardMaterial({ map: sailTexture(TEAM[team], team, style), side: THREE.DoubleSide, roughness: .85, vertexColors: true }) : new THREE.MeshLambertMaterial({ map: sailTexture(TEAM[team], team, style), side: THREE.DoubleSide, vertexColors: true });
     m.onBeforeCompile = sh => { sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', THREE.ShaderChunk.normal_fragment_begin.replace(/\*= faceDirection;/g, '*= 1.0;')); };
@@ -601,6 +624,8 @@ export function figureGroup(team, kind, style = 'franks') {
 export const AGE_TINT = [0x9a8a74, 0xe0a466, 0xffffff, 0xf2f6ff];
 export class Figures {
   constructor(scene, shadows) { this.scene = scene; this.shadows = shadows; this.batches = new Map(); this.styles = ['franks', 'franks']; this.ages = [2, 2]; }
+  /** Throw away every batch (e.g. the team colours changed): they are rebuilt on demand in the new colours. */
+  reset() { for (const b of this.batches.values()) for (const m of [...(b.meshes || []), ...(b.parts || []).map(p => p.mesh || p).filter(o => o?.isObject3D)]) m.removeFromParent?.(); this.batches.clear(); }
   /** Each age changes how soldiers' metal gear looks. */
   setAge(team, age) { this.ages[team] = age; for (const [k, b] of this.batches) if (k.startsWith(String(team))) b.setTint(AGE_TINT[age] ?? 0xffffff); }
   get(team, kind) {
@@ -683,6 +708,28 @@ function wallPiece(b, gate, conn, stone, tc, castle = false, wtower = false) {
 export function buildingGeo(kind, team, look = { age: 1 }) {
   const tc = TEAM[team], b = new Builder(), age = look.age || 0, roofC = age >= 1 ? C.tile : C.thatch;
   if (kind === 'wall' || kind === 'gate' || kind === 'walltower') { wallPiece(b, kind === 'gate', look.conn || 0, !!look.stone, tc, !!look.castle, kind === 'walltower'); return b.build(); }
+  if (kind === 'fence') { // split-rail fence: a post, and two rails toward each joined neighbour
+    const arms = [[1, 0], [0, 1], [-1, 0], [0, -1]].filter((_, k) => (look.conn || 0) & (1 << k)); if (!arms.length) arms.push([1, 0], [-1, 0]);
+    b.add(P.cyl(.06, .075, 1.15, 6), C.wood, 0, .57, 0); b.add(P.cone(.075, .12, 6), C.dwood, 0, 1.2, 0);
+    for (const [dx, dz] of arms) for (const y of [.42, .85]) box(b, C.wood, dx * .26, y, dz * .26, dx ? .56 : .06, .07, dz ? .56 : .06);
+    return b.build();
+  }
+  if (kind === 'outpost') { // a tall timber lookout on four legs, with a thatched cap and a team pennant
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) b.add(P.cyl(.06, .09, 4.2, 6), C.wood, sx * .32, 2.1, sz * .32, sz * .05, 0, -sx * .05);
+    for (const y of [1.2, 2.6]) { box(b, C.dwood, 0, y, .32, .7, .06, .06); box(b, C.dwood, 0, y, -.32, .7, .06, .06); box(b, C.dwood, .32, y, 0, .06, .06, .7); box(b, C.dwood, -.32, y, 0, .06, .06, .7); }
+    box(b, C.dwood, 0, 4.15, 0, 1.0, .1, 1.0); for (const s2 of [-1, 1]) { box(b, C.wood, 0, 4.45, s2 * .48, 1.0, .5, .05); box(b, C.wood, s2 * .48, 4.45, 0, .05, .5, 1.0); }
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) b.add(P.cyl(.04, .04, .9, 5), C.wood, sx * .45, 4.6, sz * .45);
+    b.add(P.cone(.85, .7, 4), C.thatch, 0, 5.4, 0, 0, Math.PI / 4, 0); flag(b, tc, 0, 5.75, 0, .7);
+    return b.build();
+  }
+  if (kind === 'well') { // round stone well with a little shingled roof, winch and bucket
+    b.add(P.cyl(.62, .68, .75, 14, true), C.stone, 0, .37, 0); b.add(P.cyl(.7, .7, .1, 14), C.dstone, 0, .78, 0); b.add(P.cyl(.5, .5, .04, 12), 0x2a3a48, 0, .55, 0);
+    for (const s2 of [-1, 1]) b.add(P.cyl(.05, .06, 1.5, 6), C.wood, s2 * .58, 1.45, 0);
+    b.add(P.cyl(.05, .05, 1.2, 6), C.dwood, 0, 1.75, 0, 0, 0, Math.PI / 2); b.add(P.cyl(.012, .012, .5, 4), 0x8a7a5a, 0, 1.5, 0); b.add(P.cyl(.1, .08, .16, 8), C.dwood, 0, 1.2, 0);
+    for (const s2 of [-1, 1]) box(b, C.tile, 0, 2.3, s2 * .32, 1.5, .06, .8, s2 * .62, 0, 0);
+    box(b, C.dstone, 0, .03, 0, 2, .06, 2); for (let i = 0; i < 5; i++) { const a = i * 1.3; box(b, C.stone, Math.cos(a) * .95, .08, Math.sin(a) * .95, .25, .1, .2); }
+    return b.build();
+  }
   const base = (s, h = .35, col = C.dstone) => box(b, col, 0, h / 2 - .5, 0, s, h + 1, s);
   if (kind === 'hall') {
     base(4.8, .4 + age * .1);
