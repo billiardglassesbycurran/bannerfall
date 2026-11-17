@@ -1,7 +1,7 @@
 // Bannerfall — entry point: renderer, lighting, menus, game modes, input routing and the main loop.
 import * as THREE from 'three';
 import { FOW, FogOfWar } from './fow.js'; // must load before any material is made
-import { MAP, MAP_LIST, SIZE, BASES, WL, syncAnimals, CLOUDS, buildDistant, buildTerrain, buildWater, buildSky, buildResources, buildBridge, buildFish, updateFish, heightAt } from './world.js';
+import { MAP, MAP_LIST, SIZE, BASES, WL, syncAnimals, animals, useAnimatedDeer, CLOUDS, buildDistant, buildTerrain, buildWater, buildSky, buildResources, buildBridge, buildFish, updateFish, heightAt } from './world.js';
 import { BD, DIFF, MODES, CIVS, CIV_LIST, UD, TECH, AGES } from './data.js';
 import { FX } from './effects.js';
 import { Tutorial } from './tutorial.js';
@@ -22,7 +22,7 @@ import { initMaterials, U } from './geo.js';
 import { groundTextures } from './textures.js';
 import { loadAssets } from './assets.js';
 import { loadModels } from './gltfmodels.js';
-import { loadAnim } from './anim.js';
+import { loadAnim, ANIM, AnimBatch } from './anim.js';
 import { cloudTexture } from './textures.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -84,6 +84,9 @@ if (MAP.bridge) buildBridge(scene, Q.shadow > 0);
 buildDistant(scene);
 buildFish(scene);
 const figures = new Figures(scene, Q.shadow > 0);
+// deer: animated when the animated models are on
+const deerBatch = ANIM.on && ANIM.rigs.deer && animals.length ? new AnimBatch(scene, 0, 'deer', animals.length, Q.shadow > 0, 0) : null;
+if (deerBatch) { useAnimatedDeer(); animals.forEach(() => deerBatch.alloc()); }
 
 // ---------------- film look: bloom, ambient-occlusion (PC), colour grading ----------------
 const GRADE = {
@@ -654,7 +657,8 @@ renderer.setAnimationLoop(() => {
   else if (app.mode === 'rts') rts.update(real);
   else { menuYaw += real * .05; rts.yaw = menuYaw; rts.dist = rts.distT = 75; rts.lookAt(64, 64); rts.update(real); }
   if (g) g.syncVisuals(dt, pov.first && pov.unit ? pov.unit.id : -1);
-  syncAnimals(t);
+  if (deerBatch) { const gt = g ? g.time : t; animals.forEach((a, i) => deerBatch.set(i, { x: a.x, y: a.y ?? heightAt(a.x, a.z), z: a.z, yaw: a.yaw, scale: 1, dt, spd: a.moving ? (a.spd || .9) : 0, dead: a.hp <= 0, dT: a.hp <= 0 ? gt - (a.deadAt ?? gt - 9) : 0, hidden: !a.alive })); deerBatch.flush(); }
+  else syncAnimals(t);
   water.userData.update(t); U.time.value = t; updateFish(t);
   if (g) emitEffects(dt);
   fx.update(dt);

@@ -3,6 +3,7 @@
 
 Run with:  python3 -I tools/kaykit.py <folder of the unzipped "KayKit Character Animations" pack>
            python3 -I tools/kaykit.py --chars <folder with Knight.glb, Rogue.glb, ...>   (KayKit Adventurers characters)
+           python3 -I tools/kaykit.py --animals <folder with Horse.gltf, Deer.gltf>      (Quaternius animated animals)
 
 Writes small files into assets/anim/: the mannequin body + only the chosen animation clips, per pack.
 The game (src/anim.js) loads them and plays them for whole armies at once.
@@ -31,12 +32,22 @@ CHARS = {
     'hooded': ('Rogue_Hooded.glb', [], ['2H_Crossbow', 'Rogue_Cape']),
     'barbarian': ('Barbarian.glb', [], ['1H_Axe', '2H_Axe', 'Barbarian_Round_Shield', 'Barbarian_Hat']),
 }
+ANIMALS = {'horse': ('Horse.gltf', ['Idle', 'Walk', 'Gallop', 'Death']), 'deer': ('Deer.gltf', ['Idle', 'Walk', 'Gallop', 'Death'])}
 CSIZE = {5120: 1, 5121: 1, 5122: 2, 5123: 2, 5125: 4, 5126: 4}
 NCOMP = {'SCALAR': 1, 'VEC2': 2, 'VEC3': 3, 'VEC4': 4, 'MAT2': 4, 'MAT3': 9, 'MAT4': 16}
 
 
 def read_glb(path):
     b = pathlib.Path(path).read_bytes()
+    if b[:1] == b'{':  # a .gltf with its data embedded as base64 (Quaternius animals)
+        import base64
+        j = json.loads(b); out = bytearray(); offs = []
+        for buf in j['buffers']:
+            assert buf['uri'].startswith('data:'), 'only embedded .gltf files are supported'
+            while len(out) % 4: out.append(0)
+            offs.append(len(out)); out.extend(base64.b64decode(buf['uri'].split(',', 1)[1]))
+        for v in j['bufferViews']: v['byteOffset'] = v.get('byteOffset', 0) + offs[v.get('buffer', 0)]; v['buffer'] = 0
+        return j, bytes(out)
     if b[:4] != b'glTF': sys.exit(f'{path}: not a .glb file')
     n = struct.unpack('<I', b[12:16])[0]
     j = json.loads(b[20:20 + n]); off = 20 + n
@@ -109,6 +120,12 @@ def main():
         for name, (file, clips, keep) in CHARS.items():
             src = pathlib.Path(a[1]).expanduser() / file
             if src.exists(): prune(src, OUT / f'char_{name}.glb', True, clips, keep)
+            else: print(f'  (no {file} in that folder, skipped)')
+        return
+    if len(a) == 2 and a[0] == '--animals':  # folder holding Horse.gltf, Deer.gltf from the Quaternius Ultimate Animated Animal Pack (CC0)
+        for name, (file, clips) in ANIMALS.items():
+            src = pathlib.Path(a[1]).expanduser() / file
+            if src.exists(): prune(src, OUT / f'animal_{name}.glb', True, clips)
             else: print(f'  (no {file} in that folder, skipped)')
         return
     if len(a) != 1: print(__doc__); sys.exit(1)

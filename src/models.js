@@ -6,7 +6,7 @@ import { Builder, P, M, TEXMAT } from './geo.js';
 import { UD } from './data.js';
 import { planksTexture, sailTexture, foamTexture } from './textures.js';
 import { GM, buildingParts } from './gltfmodels.js';
-import { ANIM, AnimBatch, animFigure } from './anim.js';
+import { ANIM, AnimBatch, MountBatch, animFigure } from './anim.js';
 
 export const TEAM = [0x2c50a8, 0xa62419];
 const C = {
@@ -561,7 +561,7 @@ class FigureBatch {
  * hA/hB, cat) is its own child object with its pivot at the joint, so it can be animated in another program.
  */
 export function figureGroup(team, kind, style = 'franks') {
-  if (ANIM.on && ANIM.kinds[kind]) return animFigure(kind, TEAM[team]);
+  if (ANIM.on && (ANIM.kinds[kind] || ANIM.mounts[kind])) return animFigure(kind, TEAM[team]);
   const root = new THREE.Group(); root.name = kind;
   figureParts(team, kind, style).forEach((p, n) => {
     const node = p.anim ? new THREE.Group() : root;
@@ -581,6 +581,7 @@ export class Figures {
   setAge(team, age) { this.ages[team] = age; for (const [k, b] of this.batches) if (k.startsWith(String(team))) b.setTint(AGE_TINT[age] ?? 0xffffff); }
   get(team, kind) {
     const k = team + kind; let b = this.batches.get(k);
+    if (!b && ANIM.on && ANIM.mounts[kind]) { b = new MountBatch(this.scene, team, kind, kind === 'herohorse' ? 4 : 120, this.shadows, TEAM[team]); this.batches.set(k, b); } // rider on an animated horse
     if (!b && ANIM.on && ANIM.kinds[kind]) { b = new AnimBatch(this.scene, team, kind, 200, this.shadows, TEAM[team]); this.batches.set(k, b); } // animated model (see anim.js)
     if (!b) { b = new FigureBatch(this.scene, team, kind, kind === 'hero' || kind === 'herohorse' ? 4 : UD[kind].ship || kind === 'catapult' ? 40 : 200, this.shadows, this.styles[team]); this.batches.set(k, b); b.setTint(AGE_TINT[this.ages[team]] ?? 0xffffff); }
     return b;

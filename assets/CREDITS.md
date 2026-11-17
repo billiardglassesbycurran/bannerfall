@@ -17,5 +17,7 @@ None yet. Models made with Tripo (tripo.com) go here with the account/plan they 
 - **KayKit Character Animations 1.1** by Kay Lousberg (www.kaylousberg.com), CC0. Skeleton, mannequin body and animation clips
   in `assets/anim/` (slimmed with `tools/kaykit.py`; licence text in `assets/anim/LICENSE-KayKit.txt`).
 - **KayKit Adventurers Character Pack 1.0** by Kay Lousberg (www.kaylousberg.com), CC0, from the author's GitHub
-  (github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0). Knight in `assets/anim/char_knight.glb`
-  (slimmed and re-proportioned in game; licence text in `assets/anim/LICENSE-KayKit-Adventurers.txt`).
+  (github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0). Knight, Rogue and Hooded Rogue in
+  `assets/anim/char_*.glb` (slimmed and re-proportioned in game; licence text in `assets/anim/LICENSE-KayKit-Adventurers.txt`).
+- **Ultimate Animated Animal Pack** by Quaternius (quaternius.com), CC0. Horse and Deer with their walk/gallop/idle/death
+  clips in `assets/anim/animal_*.glb` (slimmed with `tools/kaykit.py --animals`; licence text in `assets/anim/LICENSE-Quaternius.txt`).

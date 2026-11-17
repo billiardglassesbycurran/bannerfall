@@ -16,6 +16,9 @@ const MODELS = {
   knight: { file: 'char_knight.glb', team: [[.83, 1.03, .35, 1, 1], [.022, .075, .3, .62, .8]] },   // red cape/plume/badge; copper belt and straps
   rogue: { file: 'char_rogue.glb', team: [[.3, .53, .3, 1, 1]] },                                    // green tunic
   hooded: { file: 'char_hooded.glb', team: [[.3, .53, .3, 1, 1]] },                                  // green hood, cape and tunic
+  // animals (CC0, Quaternius): their own skeleton and clips, flat colours instead of a texture
+  horse: { file: 'animal_horse.glb', animal: true, height: 2.3 },
+  deer: { file: 'animal_deer.glb', animal: true, height: 1.55 },
 };
 const CLIP_FILES = ['char_knight.glb', 'rig_tools.glb', 'rig_ranged.glb']; // where animation clips come from
 // Unit types that use animated models: which character, which of its attachments show, extra gear, and which clip plays for what.
@@ -29,7 +32,27 @@ const KINDS = {
   crossbow: { model: 'hooded', show: ['2H_Crossbow'], ranged: 'xbow', clips: { ...WALK, attack: '1H_Melee_Attack_Chop', aim: '2H_Ranged_Aiming', shoot: '2H_Ranged_Shoot' } },
   peasant: { model: 'rogue', show: [], gear: ['axe'], clips: { ...WALK, attack: '1H_Melee_Attack_Chop', work: 'Chopping' }, atk: { from: .3, rate: 1.2, len: .6 } },
 };
-export const ANIM = { on: false, ready: false, kinds: KINDS, rigs: {}, pbr: true };
+// animals: pace = ground speed each clip was made for, runAt = speed where walking turns into a gallop
+const BEAST = { idle: 'Idle', walk: 'Walk', run: 'Gallop', death: 'Death' };
+const HORSE = { model: 'horse', show: [], clips: BEAST, noAttack: 1, pace: { walk: 1.9, run: 6.2, runAt: 3.2 }, cloth: 1 };
+Object.assign(KINDS, {
+  deer: { model: 'deer', show: [], clips: BEAST, noAttack: 1, pace: { walk: 1.1, run: 4.6, runAt: 2 } },
+  h_bay: { ...HORSE },
+  h_light: { ...HORSE, coat: { Main: 0x7a4a26, Main_Dark: 0x4a2a14, Main_Light: 0xa8743e, Hair: 0x2a1a10 } },
+  h_dark: { ...HORSE, coat: { Main: 0x2a1c14, Main_Dark: 0x17100c, Main_Light: 0x3c2a1e, Hair: 0x0c0a08 } },
+  h_white: { ...HORSE, coat: { Main: 0xd9d4c8, Main_Dark: 0xa8a294, Main_Light: 0xf2efe6, Hair: 0xe8e2d2, Muzzle: 0x8a7f74 } },
+});
+// riders: seated lower body, with the fighting clips played on the upper body only ("seat+clip")
+const SIT = 'Sit_Chair_Idle', RIDE = { idle: SIT, walk: SIT, run: SIT, death: 'Death_A' };
+Object.assign(KINDS, {
+  r_knight: { model: 'knight', show: ['1H_Sword', 'Rectangle_Shield', 'Knight_Helmet', 'Knight_Cape'], clips: { ...RIDE, attack: SIT + '+1H_Melee_Attack_Slice_Diagonal' } },
+  r_hero: { model: 'knight', look: 'gold', show: ['1H_Sword', 'Badge_Shield', 'Knight_Helmet', 'Knight_Cape'], clips: { ...RIDE, attack: SIT + '+1H_Melee_Attack_Slice_Diagonal' } },
+  r_light: { model: 'rogue', show: [], gear: ['spear'], clips: { ...RIDE, attack: SIT + '+1H_Melee_Attack_Stab' }, atk: { from: .5, rate: 1.5, len: .6 } },
+  r_archer: { model: 'hooded', show: ['Rogue_Cape'], gear: ['bow', 'quiver'], ranged: 'bow', clips: { ...RIDE, attack: SIT + '+1H_Melee_Attack_Chop', aim: SIT + '+Ranged_Bow_Draw', shoot: SIT + '+Ranged_Bow_Release' } },
+});
+// mounted unit types: [horse, rider]
+const MOUNTS = { knight: ['h_bay', 'r_knight'], crusader: ['h_white', 'r_knight'], lightcav: ['h_light', 'r_light'], horsearcher: ['h_dark', 'r_archer'], khanguard: ['h_dark', 'r_archer'], herohorse: ['h_white', 'r_hero'] };
+export const ANIM = { on: false, ready: false, kinds: KINDS, mounts: MOUNTS, rigs: {}, pbr: true };
 
 /** Are animated soldiers switched on? (Settings, or ?anim=1 / ?anim=0 in the address) */
 export function animWanted() {
@@ -46,7 +69,11 @@ export async function loadAnim(pbr) {
     const need = [...new Set(Object.values(KINDS).map(k => k.model))];
     const [clipFiles, models] = await Promise.all([Promise.all(CLIP_FILES.map(get)), Promise.all(need.map(id => get(MODELS[id].file)))]);
     const all = {}; for (const f of clipFiles) for (const c of f.animations) if (!all[c.name]) all[c.name] = c;
-    need.forEach((id, i) => { const names = [...new Set(Object.values(KINDS).filter(k => k.model === id).flatMap(k => Object.values(k.clips)))]; ANIM.rigs[id] = bake(models[i], all, names); ANIM.rigs[id].id = id; });
+    need.forEach((id, i) => {
+      const names = [...new Set(Object.values(KINDS).filter(k => k.model === id).flatMap(k => Object.values(k.clips)))], M = MODELS[id];
+      const own = {}; if (M.animal) for (const c of models[i].animations) own[c.name] = c;
+      ANIM.rigs[id] = bake(models[i], M.animal ? own : all, names, M); ANIM.rigs[id].id = id;
+    });
     ANIM.on = ANIM.ready = true;
   } catch (e) { console.warn('Animated soldiers could not load; using the built-in figures.', e); ANIM.on = false; }
 }
@@ -55,7 +82,9 @@ export async function loadAnim(pbr) {
 // skeleton is re-proportioned while baking: head shrunk about the neck, legs lengthened (and the body lifted to match).
 const PROP = { head: .52, leg: [1.2, 1.9, 1.2], hand: .8, arm: [1, 1.16, 1], chest: [1, 1.1, 1] };
 
-function bake(gltf, all, names) {
+const UPPER = /^(spine|chest|head|upperarm|lowerarm|wrist|hand)/; // bones a rider's fighting clip drives; the rest stay seated
+
+function bake(gltf, all, names, M = {}) {
   const root = gltf.scene; root.updateMatrixWorld(true);
   const parts = []; root.traverse(o => { if (o.isSkinnedMesh) parts.push(o); });
   const skel = parts[0].skeleton, bones = skel.bones, nB = bones.length;
@@ -70,13 +99,15 @@ function bake(gltf, all, names) {
     const m = bind[bi].clone().multiply(restWorld[bi].clone().invert()).multiply(o.matrixWorld); // into bind space, riding that bone
     attach.push({ name: o.name, bone: bi, geo: o.geometry.clone().applyMatrix4(m) });
   });
-  names = names.filter(n => all[n]);
+  const clipOf = n => all[n.includes('+') ? n.split('+')[1] : n], seatOf = n => (n.includes('+') ? all[n.split('+')[0]] : null);
+  names = names.filter(n => clipOf(n) && (!n.includes('+') || seatOf(n)));
   const table = {}; let rows = 0;
-  for (const n of names) { const c = all[n], k = Math.max(2, Math.round(c.duration * FPS) + 1); table[n] = { name: n, start: rows, n: k, dur: (k - 1) / FPS }; rows += k; }
+  for (const n of names) { const c = clipOf(n), k = Math.max(2, Math.round(c.duration * FPS) + 1); table[n] = { name: n, start: rows, n: k, dur: (k - 1) / FPS }; rows += k; }
   // re-proportioning, applied on top of every animation frame
   const rest = bones.map(b => [b.position.clone(), b.quaternion.clone(), b.scale.clone()]);
   const B = n => bones[boneIdx[n]], legV = new THREE.Vector3(...PROP.leg), armV = new THREE.Vector3(...PROP.arm), chestV = new THREE.Vector3(...PROP.chest);
   const shape = () => {
+    if (M.animal) return;
     B('head')?.scale.multiplyScalar(PROP.head);
     for (const n of ['upperlegl', 'upperlegr']) B(n)?.scale.multiply(legV);
     for (const n of ['handl', 'handr']) B(n)?.scale.multiplyScalar(PROP.hand);
@@ -86,36 +117,45 @@ function bake(gltf, all, names) {
   const body = bones.filter(b => !/IK|control|^root$/.test(b.name)); // real body bones (not the rig's helper handles)
   const lowest = () => { let y = 1e9; for (const b of body) y = Math.min(y, b.matrixWorld.elements[13]); return y; };
   const W = nB * 4, data = new Float32Array(W * rows * 4), mixer = new THREE.AnimationMixer(root), m = new THREE.Matrix4();
+  const toRest = () => bones.forEach((b, i) => { b.position.copy(rest[i][0]); b.quaternion.copy(rest[i][1]); b.scale.copy(rest[i][2]); });
   for (const n of names) {
-    bones.forEach((b, i) => { b.position.copy(rest[i][0]); b.quaternion.copy(rest[i][1]); b.scale.copy(rest[i][2]); });
-    const c = all[n], t = table[n], act = mixer.clipAction(c); act.play();
+    toRest();
+    let seat = null; // riders: the seated pose, kept on every bone the fighting clip doesn't drive
+    if (seatOf(n)) { const a = mixer.clipAction(seatOf(n)); a.play(); mixer.setTime(0); seat = bones.map(b => [b.position.clone(), b.quaternion.clone(), b.scale.clone()]); a.stop(); mixer.uncacheClip(seatOf(n)); toRest(); }
+    const c = clipOf(n), t = table[n], act = mixer.clipAction(c); act.play();
     for (let f = 0; f < t.n; f++) {
       mixer.setTime(Math.min(f / FPS, Math.max(0, c.duration - 1e-4)));
       // the mixer only rewrites values that change, so put the animated pose back exactly after re-proportioning
-      const keep = bones.map(b => [b.position.clone(), b.scale.clone()]);
+      const keep = bones.map(b => [b.position.clone(), b.scale.clone(), b.quaternion.clone()]);
+      if (seat) bones.forEach((b, i) => { if (!UPPER.test(b.name)) { b.position.copy(seat[i][0]); b.quaternion.copy(seat[i][1]); b.scale.copy(seat[i][2]); } });
       root.updateMatrixWorld(true); const y0 = lowest();
       shape(); root.updateMatrixWorld(true);
       if (B('hips')) { B('hips').position.y += y0 - lowest(); root.updateMatrixWorld(true); } // longer legs: lift the body so the lowest point stays where the animator put it
       for (let b = 0; b < nB; b++) { m.multiplyMatrices(bones[b].matrixWorld, skel.boneInverses[b]); data.set(m.elements, ((t.start + f) * W + b * 4) * 4); }
-      bones.forEach((b, i) => { b.position.copy(keep[i][0]); b.scale.copy(keep[i][1]); });
+      bones.forEach((b, i) => { b.position.copy(keep[i][0]); b.scale.copy(keep[i][1]); b.quaternion.copy(keep[i][2]); });
     }
     act.stop(); mixer.uncacheClip(c);
   }
   // normalise: measure the figure standing idle, then scale to soldier height with the feet on the ground
-  const idle = table[names.find(n => /^Idle/.test(n)) || names[0]], v = new THREE.Vector3(), acc = new THREE.Vector3(), bm = new THREE.Matrix4(); let lo = 1e9, hi = -1e9;
+  const idle = table[names.find(n => /^Idle/.test(n)) || names[0]], v = new THREE.Vector3(), acc = new THREE.Vector3(), bm = new THREE.Matrix4(); let lo = 1e9, hi = -1e9, back = -1e9, wide = 0;
   for (const mesh of parts) {
     const g = mesh.geometry, P = g.attributes.position, SI = g.attributes.skinIndex, SW = g.attributes.skinWeight;
     for (let i = 0; i < P.count; i += 3) { // every third vertex is plenty for a bounding height
       acc.set(0, 0, 0);
       for (let k = 0; k < 4; k++) { const w = SW.getComponent(i, k); if (!w) continue; bm.fromArray(data, (idle.start * W + SI.getComponent(i, k) * 4) * 4); acc.addScaledVector(v.fromBufferAttribute(P, i).applyMatrix4(mesh.bindMatrix).applyMatrix4(bm), w); }
       lo = Math.min(lo, acc.y); hi = Math.max(hi, acc.y);
+      if (M.animal && acc.z > -.2 && acc.z < .6) { if (Math.abs(acc.x) < .3) back = Math.max(back, acc.y); wide = Math.max(wide, Math.abs(acc.x)); } // where a saddle sits
     }
   }
-  const sc = 1.74 / (hi - lo), N = new THREE.Matrix4().makeScale(sc, sc, sc).setPosition(0, -lo * sc, 0);
+  const sc = (M.height || 1.74) / (hi - lo), N = new THREE.Matrix4().makeScale(sc, sc, sc).setPosition(0, -lo * sc, 0);
   for (let i = 0; i < data.length; i += 16) { m.fromArray(data, i).premultiply(N); data.set(m.elements, i); }
   const tex = new THREE.DataTexture(data, W, rows, THREE.RGBAFormat, THREE.FloatType);
   tex.minFilter = tex.magFilter = THREE.NearestFilter; tex.generateMipmaps = false; tex.needsUpdate = true;
-  return { parts, attach, table, uBones: { value: tex }, boneIdx, bind, map: parts[0].material.map || null, teamMaps: {}, nB };
+  const rig = { parts, attach, table, uBones: { value: tex }, boneIdx, bind, map: parts[0].material.map || null, teamMaps: {}, nB, W, data, sc, lo, raw: { back, wide } };
+  rig.seatY = (back - lo) * sc; // saddle height in game units (animals)
+  /** Height of a bone's joint in a given baked row (game units). */
+  rig.jointY = (bone, row) => { const b = boneIdx[bone]; if (b === undefined) return 0; const o = (row * W + b * 4) * 4, e = bind[b].elements; return data[o + 1] * e[12] + data[o + 5] * e[13] + data[o + 9] * e[14] + data[o + 13]; };
+  return rig;
 }
 
 // ---------- team colours: repaint parts of the character's palette in the team colour ----------
@@ -146,13 +186,13 @@ function withAttrs(g, skinI, skinW, color) {
   const n = g.attributes.position.count, out = new THREE.BufferGeometry();
   out.setAttribute('position', g.attributes.position.clone());
   if (!g.attributes.normal) g.computeVertexNormals(); out.setAttribute('normal', g.attributes.normal.clone());
-  const uv = !color && g.attributes.uv ? g.attributes.uv.clone() : new THREE.BufferAttribute(new Float32Array(n * 2).fill(2 / 256), 2); // gear: the white corner
+  const uv = color == null && g.attributes.uv ? g.attributes.uv.clone() : new THREE.BufferAttribute(new Float32Array(n * 2).fill(2 / 256), 2); // gear: the white corner
   out.setAttribute('uv', uv);
-  const col = new Float32Array(n * 3).fill(1); if (color) { const c = new THREE.Color(color); for (let i = 0; i < n; i++) col.set([c.r, c.g, c.b], i * 3); }
+  const col = new Float32Array(n * 3).fill(1); if (color != null) { const c = new THREE.Color(color); for (let i = 0; i < n; i++) col.set([c.r, c.g, c.b], i * 3); }
   out.setAttribute('color', new THREE.BufferAttribute(col, 3));
   const I = new Float32Array(n * 4), Wt = new Float32Array(n * 4);
   for (let i = 0; i < n; i++) {
-    if (skinI.isBufferAttribute) { let s = 0; for (let k = 0; k < 4; k++) { I[i * 4 + k] = skinI.getComponent(i, k); Wt[i * 4 + k] = skinW.getComponent(i, k); s += Wt[i * 4 + k]; } for (let k = 0; k < 4; k++) Wt[i * 4 + k] /= s || 1; }
+    if (skinI?.isBufferAttribute) { let s = 0; for (let k = 0; k < 4; k++) { I[i * 4 + k] = skinI.getComponent(i, k); Wt[i * 4 + k] = skinW.getComponent(i, k); s += Wt[i * 4 + k]; } for (let k = 0; k < 4; k++) Wt[i * 4 + k] /= s || 1; }
     else { I[i * 4] = skinI; Wt[i * 4] = 1; }
   }
   out.setAttribute('aSkinI', new THREE.BufferAttribute(I, 4)); out.setAttribute('aSkinW', new THREE.BufferAttribute(Wt, 4));
@@ -173,9 +213,20 @@ const GEAR = {
   },
   quiver: () => [['chest', new THREE.CylinderGeometry(.09, .075, .6, 7), DARK, T(.1, .1, -.3, 0, 0, -.45)], ['chest', new THREE.CylinderGeometry(.07, .07, .12, 5), 0xd8d2c0, T(.25, .42, -.3, 0, 0, -.45)]],
 };
-function unitGeo(rig, def) {
+function unitGeo(rig, def, teamColor = 0x888888) {
   const list = [];
-  for (const m of rig.parts) { const g = m.geometry.clone(); g.applyMatrix4(m.bindMatrix); list.push(withAttrs(g, g.attributes.skinIndex, g.attributes.skinWeight)); }
+  for (const m of rig.parts) {
+    const g = m.geometry.clone(); g.applyMatrix4(m.bindMatrix);
+    const flat = rig.map ? null : (def.coat?.[m.material.name] !== undefined ? new THREE.Color(def.coat[m.material.name]) : m.material.color.clone()); // animals: one flat colour per part
+    list.push(withAttrs(g, g.attributes.skinIndex, g.attributes.skinWeight, flat));
+  }
+  if (def.cloth) { // horses: a saddle and a saddle cloth in the team colour, shaped to the horse's back (modelled in the rest pose, riding the torso bone)
+    const bi = rig.boneIdx.Torso2 ?? rig.boneIdx.Torso ?? 0, top = rig.raw.back, w = rig.raw.wide;
+    const piece = (sx, sy, sz, x, y, z, col) => list.push(withAttrs(new THREE.BoxGeometry(sx, sy, sz).translate(x, y, z), bi, 1, col));
+    piece(w * 2 + .1, .07, 1.5, 0, top + .03, .2, teamColor);
+    for (const s of [-1, 1]) { piece(.06, 1.0, 1.5, s * (w + .03), top - .45, .2, teamColor); piece(.07, .12, 1.5, s * (w + .035), top - .95, .2, 0xd8b85a); }
+    piece(w * 1.3, .16, .8, 0, top + .13, .15, 0x3a2618); piece(w * 1.3, .22, .12, 0, top + .2, -.25, 0x3a2618);
+  }
   for (const a of rig.attach) if (def.show.includes(a.name)) list.push(withAttrs(a.geo, a.bone, 1));
   for (const name of def.gear || []) for (const [bone, geo, color, mat] of GEAR[name]()) {
     const bi = rig.boneIdx[bone]; if (bi === undefined) continue;
@@ -186,7 +237,11 @@ function unitGeo(rig, def) {
 
 /** A still copy of an animated unit standing idle (for button portraits and the Unity export). */
 export function animFigure(kind, teamColor) {
-  const def = KINDS[kind], rig = ANIM.rigs[def.model], g = unitGeo(rig, def), P = g.attributes.position, Nn = g.attributes.normal, I = g.attributes.aSkinI, Wt = g.attributes.aSkinW;
+  if (MOUNTS[kind]) { // horse + rider
+    const [hk, rk] = MOUNTS[kind], grp = new THREE.Group(), h = animFigure(hk, teamColor), r = animFigure(rk, teamColor), hr = ANIM.rigs.horse, rr = ANIM.rigs[KINDS[rk].model];
+    r.position.set(0, hr.seatY - rr.jointY('hips', rr.table[SIT].start) + .1, .05); grp.add(h, r); grp.name = kind; return grp;
+  }
+  const def = KINDS[kind], rig = ANIM.rigs[def.model], g = unitGeo(rig, def, teamColor), P = g.attributes.position, Nn = g.attributes.normal, I = g.attributes.aSkinI, Wt = g.attributes.aSkinW;
   const data = rig.uBones.value.image.data, W = rig.nB * 4, row = (rig.table[def.clips.idle] || Object.values(rig.table)[0]).start;
   const m = new THREE.Matrix4(), e = m.elements, v = new THREE.Vector3(), n = new THREE.Vector3(), n3 = new THREE.Matrix3();
   for (let i = 0; i < P.count; i++) {
@@ -217,13 +272,13 @@ function patch(mat, depth, rig) {
 }
 
 const _root = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _v = new THREE.Vector3(), _s = new THREE.Vector3(), ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
-const ATK = { from: .22, rate: 1.25, len: .62 };
+const ATK = { from: .22, rate: 1.25, len: .62 }, PACE = { walk: 2.4, run: 4.6, runAt: 4.2 };
 
 /** One instanced, animated mesh per (team, unit type). Same interface as the built-in FigureBatch in models.js. */
 export class AnimBatch {
   constructor(scene, team, kind, cap, shadows, teamColor) {
     const def = KINDS[kind], rig = ANIM.rigs[def.model]; this.def = def; this.cap = cap; this.used = 0; this.free = []; this.metal = []; this.parts = []; this.anim = true; this.atk = def.atk || ATK;
-    const geo = unitGeo(rig, def);
+    const geo = unitGeo(rig, def, teamColor);
     this.rows = new THREE.InstancedBufferAttribute(new Float32Array(cap), 1); this.rows.setUsage(THREE.DynamicDrawUsage); geo.setAttribute('aRow', this.rows);
     const map = teamMap(rig, teamColor, def.look), look = def.look === 'gold' ? { roughness: .42, metalness: .45 } : { roughness: .62, metalness: .08 };
     const mat = patch(ANIM.pbr ? new THREE.MeshStandardMaterial({ map, vertexColors: true, ...look }) : new THREE.MeshLambertMaterial({ map, vertexColors: true }), false, rig);
@@ -249,14 +304,38 @@ export class AnimBatch {
       else { c = C.aim; t = bow ? Math.min(c.dur, .15 + (o.draw || 0) * (c.dur - .2)) : (this.t[i] += dt) % c.dur; }
       held = true;
     }
-    else if (!C.aim && swT < A.len) { c = C.attack; t = Math.min(c.dur, A.from + swT * A.rate); held = true; }
+    else if (!C.aim && !this.def.noAttack && swT < A.len) { c = C.attack; t = Math.min(c.dur, A.from + swT * A.rate); held = true; }
     else {
-      c = spd > .15 ? (spd > 4.2 ? C.run : C.walk) : (o.work && C.work ? C.work : C.idle);
+      const P = this.def.pace || PACE;
+      c = spd > .15 ? (spd > P.runAt ? C.run : C.walk) : (o.work && C.work ? C.work : C.idle);
       if (this.cur[i] !== c.start) { this.cur[i] = c.start; this.t[i] = (i * .37) % c.dur; } // new clip: start out of step with the neighbours
-      this.t[i] += dt * (spd > .15 ? spd / (c === C.run ? 4.6 : 2.4) : 1); t = this.t[i] % c.dur;
+      this.t[i] += dt * (spd > .15 ? spd / (c === C.run ? P.run : P.walk) : 1); t = this.t[i] % c.dur;
     }
     if (held) this.cur[i] = -2;
     this.rows.array[i] = c.start + Math.min(c.n - 1, Math.floor(t * FPS));
   }
   flush() { this.mesh.instanceMatrix.needsUpdate = true; this.rows.needsUpdate = true; }
+}
+
+/** A rider on a horse: two animated meshes moved together. The rider sits at the saddle and rises and falls with the horse's back. */
+export class MountBatch {
+  constructor(scene, team, kind, cap, shadows, teamColor) {
+    const [hk, rk] = MOUNTS[kind]; this.h = new AnimBatch(scene, team, hk, cap, shadows, teamColor); this.r = new AnimBatch(scene, team, rk, cap, shadows, teamColor);
+    this.meshes = [...this.h.meshes, ...this.r.meshes]; this.cap = cap; this.metal = []; this.parts = []; this.anim = true;
+    const hr = ANIM.rigs.horse, rr = ANIM.rigs[KINDS[rk].model];
+    this.hr = hr; this.back0 = hr.jointY('Torso2', hr.table.Idle.start);
+    this.seat = hr.seatY - rr.jointY('hips', rr.table[SIT].start) + .1; // lift the rider so the hips rest on the saddle
+  }
+  get used() { return this.h.used; } get free() { return this.h.free; }
+  setTint() {}
+  alloc() { this.r.alloc(); return this.h.alloc(); }
+  release(i) { this.h.release(i); this.r.release(i); }
+  set(i, o) {
+    this.h.set(i, o); if (o.hidden) { this.r.set(i, o); return; }
+    const r = { ...o }, s = o.scale;
+    if (o.dead) { r.x = o.x + Math.cos(o.yaw) * .9 * s; r.z = o.z - Math.sin(o.yaw) * .9 * s; } // thrown clear as the horse falls
+    else { r.y = o.y + (this.seat + this.hr.jointY('Torso2', this.h.rows.array[i]) - this.back0) * s; r.x = o.x + Math.sin(o.yaw) * .05 * s; r.z = o.z + Math.cos(o.yaw) * .05 * s; r.spd = 0; }
+    this.r.set(i, r);
+  }
+  flush() { this.h.flush(); this.r.flush(); }
 }

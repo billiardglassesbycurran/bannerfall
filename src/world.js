@@ -191,7 +191,7 @@ for (const r of resources) r.y = r.fish ? WL : heightAt(r.x, r.z);
 export function updateAnimals(dt, t) {
   for (const a of animals) {
     if (!a.alive || a.hp <= 0) continue;
-    const fleeing = a.fleeT > t, sp = fleeing ? 4.2 : .9;
+    const fleeing = a.fleeT > t, sp = fleeing ? 4.2 : .9; a.spd = sp;
     if (!fleeing && (a.wT -= dt) <= 0) { a.wT = 3 + Math.random() * 6; const ang = Math.random() * TAU, d = Math.random() * 5; a.tx = a.hx + Math.cos(ang) * d; a.tz = a.hz + Math.sin(ang) * d; }
     const dx = a.tx - a.x, dz = a.tz - a.z, l = Math.hypot(dx, dz);
     if (l > .15 && (fleeing || a.wT < 2.5)) { const nx = a.x + dx / l * sp * dt, nz = a.z + dz / l * sp * dt; if (cellWalk(nx | 0, nz | 0)) { a.x = nx; a.z = nz; a.moving = true; } else { a.tx = a.x; a.tz = a.z; a.moving = false; } a.yaw = Math.atan2(dx, dz); }
@@ -202,7 +202,7 @@ export function updateAnimals(dt, t) {
 /** Hit a deer (hunting). Returns true when it falls. */
 export function hurtAnimal(a, dmg, from, t) {
   if (a.hp <= 0) return false; a.hp -= dmg;
-  if (a.hp <= 0) { a.hp = 0; a.moving = false; return true; }
+  if (a.hp <= 0) { a.hp = 0; a.moving = false; a.deadAt = t; return true; }
   const dx = a.x - from.x, dz = a.z - from.z, l = Math.hypot(dx, dz) || 1; a.tx = a.x + dx / l * 7; a.tz = a.z + dz / l * 7; a.fleeT = t + 2.2; return false;
 }
 
@@ -621,8 +621,11 @@ function deerGeo() {
 }
 let deerMesh = null; const _dq = new THREE.Quaternion(), _de = new THREE.Euler(), _dv = new THREE.Vector3(), _ds = new THREE.Vector3(1, 1, 1), _dm = new THREE.Matrix4();
 /** Write the deer into their instanced mesh (walking bob; fallen deer lie on their side). */
+let animatedDeer = false;
+/** The animated deer (anim.js) take over drawing; hide the simple built-in ones. */
+export function useAnimatedDeer() { animatedDeer = true; if (deerMesh) deerMesh.visible = false; }
 export function syncAnimals(t) {
-  if (!deerMesh) return;
+  if (!deerMesh || animatedDeer) return;
   animals.forEach((a, i) => {
     if (!a.alive) { _dm.makeScale(0, 0, 0); deerMesh.setMatrixAt(i, _dm); return; }
     const dead = a.hp <= 0, bob = a.moving ? Math.abs(Math.sin(t * 9 + i)) * .05 : 0;
