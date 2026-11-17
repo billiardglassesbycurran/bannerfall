@@ -1,7 +1,7 @@
 // Core simulation: units, buildings, economy, combat, projectiles, win/lose.
 import * as THREE from 'three';
 import { UD, BD, DIFF, CIVS, TECH, AGES } from './data.js';
-import { N, SIZE, WL, heightAt, groundY, blocked, resCell, cellWalk, navCell, navBlock, water, resources, takeRes, BASES, updateAnimals, hurtAnimal } from './world.js';
+import { N, SIZE, WL, heightAt, groundY, blocked, resCell, cellWalk, navCell, navBlock, water, resources, takeRes, BASES, updateAnimals, hurtAnimal, animals } from './world.js';
 import { findPath, nearestWalkable } from './path.js';
 import { buildingMesh, buildingGeo, arrowGeo, boltGeo, stoneGeo, ringGeo, wakeMaterial, SHIP_LEN, scaffoldGeo, TeamRings } from './models.js';
 import { M } from './geo.js';
@@ -245,7 +245,7 @@ export class Game {
     return best;
   }
   edgeDist(p, b) { const h = b.size / 2, dx = Math.max(Math.abs(p.x - b.x) - h, 0), dz = Math.max(Math.abs(p.z - b.z) - h, 0); return Math.hypot(dx, dz); }
-  reachDist(u, t) { return t.kind === 'bld' ? this.edgeDist(u, t) : dist(u, t) - t.d.rad - u.d.rad * .5; }
+  reachDist(u, t) { return t.kind === 'bld' ? this.edgeDist(u, t) : dist(u, t) - (t.d?.rad ?? t.r ?? .5) - u.d.rad * .5; }
   nearestDrop(u) { let best = null, bd = 1e9; for (const b of this.blds) if (b.alive && b.built && b.team === u.team && b.d.drop && (typeof b.d.drop !== 'string' || !u.carry || b.d.drop.includes(u.carry.rt)) && (!u.d.ship || b.d.dock)) { const d = this.edgeDist(u, b); if (d < bd) { bd = d; best = b; } } return best; }
   nearestRes(x, z, rt, r = 18, fish = false) { let best = null, bd = r; for (const s of resources) if (s.alive && s.rt === rt && !!s.fish === fish) { const d = Math.hypot(s.x - x, s.z - z); if (d < bd) { bd = d; best = s; } } return best; }
   recount() {
@@ -298,6 +298,11 @@ export class Game {
     if (sel.some(u => u.routed) && sel[0].team === 0) { if (sel.every(u => u.routed)) this.toast('They are fleeing and won\'t listen! Bring your Commander close to rally them.'); sel = sel.filter(u => !u.routed); }
     if (!sel.length) return;
     if (tgt && tgt.team !== undefined && tgt.team !== sel[0].team) { for (const u of sel) this.attack(u, tgt); return 'attack'; }
+    // God-mode creatures and machines attack whatever they're pointed at, even your own side
+    const gods = sel.filter(u => u.d.god && u !== tgt);
+    if (tgt && tgt.team === sel[0].team && (tgt.kind === 'unit' || tgt.kind === 'bld') && gods.length && gods.length === sel.length) { for (const u of gods) this.attack(u, tgt); return 'attack'; }
+    // any troop can hunt: soldiers, archers, riders, monsters and dragons go for the animal itself (peasants still gather the meat)
+    if (tgt && tgt.animal && tgt.hp > 0) { const hunters = sel.filter(u => u.type !== 'peasant' && !u.d.ship && u.d.dmg > 0); for (const u of hunters) this.attack(u, tgt); if (hunters.length === sel.length) return 'attack'; sel = sel.filter(u => !hunters.includes(u)); }
     if (tgt && tgt.kind === 'unit' && tgt.d.carry && tgt.team === sel[0].team) { // board a transport ship
       const land = sel.filter(u => !u.d.ship);
       if (land.length) { for (const u of land) this.setTask(u, { type: 'board', ship: tgt }); this.fetch(tgt, land); return 'build'; }
@@ -511,13 +516,14 @@ export class Game {
     this.onShoot?.(src, kind, f, t);
     const mesh = new THREE.Mesh(kind === 'stone' || kind === 'fire' ? stoneGeo : kind === 'bolt' ? boltGeo : arrowGeo, M.vc); mesh.castShadow = kind === 'stone'; mesh.visible = kind !== 'fire'; this.scene.add(mesh);
     const d = Math.hypot(t.x - f.x, t.z - f.z), speed = kind === 'stone' ? 13 : kind === 'fire' ? 24 : kind === 'bolt' ? 30 : 22;
-    this.shots.push({ mesh, f, t, kind, homing: kind !== 'stone' && kind !== 'fire', tx: t.x, tz: t.z, ty: (t.kind === 'bld' ? t.y + 1.5 : t.y + 1.0), k: 0, dur: Math.max(.25, d / speed), dmg, src, team: src.team, arc: d * (kind === 'stone' ? .35 : kind === 'fire' ? 0 : kind === 'bolt' ? .04 : .12) });
+    this.shots.push({ any: !!src?.d?.god && t.team === src.team, mesh, f, t, kind, homing: kind !== 'stone' && kind !== 'fire', tx: t.x, tz: t.z, ty: (t.kind === 'bld' ? t.y + 1.5 : t.y + 1.0), k: 0, dur: Math.max(.25, d / speed), dmg, src, team: src.team, arc: d * (kind === 'stone' ? .35 : kind === 'fire' ? 0 : kind === 'bolt' ? .04 : .12) });
   }
   /** Catapult stone lands: hurts everything nearby (friendly fire excluded) and any building it hits. */
   splash(s) {
     const r = s.src?.d?.splash || 1.8, src = s.src && s.src.alive ? s.src : { d: UD.catapult, team: s.team, alive: false };
-    this.unitsNear(s.tx, s.tz, r + 1, u => { if (u.alive && u.team !== s.team && !u.d.ship) { const d = Math.hypot(u.x - s.tx, u.z - s.tz); if (d < r) this.damage(u, s.dmg * (1 - d / r * .5), src); } });
-    for (const b of this.blds) if (b.alive && b.team !== s.team && this.edgeDist({ x: s.tx, z: s.tz }, b) < .6) { this.damage(b, s.dmg, src); break; }
+    this.unitsNear(s.tx, s.tz, r + 1, u => { if (u.alive && (u.team !== s.team || s.any) && u !== s.src && !u.d.ship) { const d = Math.hypot(u.x - s.tx, u.z - s.tz); if (d < r) this.damage(u, s.dmg * (1 - d / r * .5), src); } });
+    for (const b of this.blds) if (b.alive && (b.team !== s.team || s.any) && this.edgeDist({ x: s.tx, z: s.tz }, b) < .6) { this.damage(b, s.dmg, src); break; }
+    if (s.kind === 'fire') for (const a of animals) if (a.alive && a.hp > 0 && Math.hypot(a.x - s.tx, a.z - s.tz) < r) hurtAnimal(a, s.dmg, src, this.time); // dragon fire catches deer too
     this.onSplash?.(s.tx, s.tz);
   }
   updateShots(dt) {
@@ -603,6 +609,14 @@ export class Game {
       }
       case 'attack': {
         const e = t.t;
+        if (e.animal && e.kind === 'res') { // hunting an animal (any troop)
+          if (!e.alive || e.hp <= 0) { this.setTask(u, { type: 'idle' }); break; }
+          if (this.reachDist(u, e) <= u.d.rng + (u.d.ranged ? 0 : .3)) {
+            u.path = null; this.face(u, Math.atan2(e.x - u.x, e.z - u.z), dt);
+            if (u.cd <= 0) { u.cd = u.d.cd; u.swingT = 0; if (u.d.ranged) { this.shoot(u, e, u.d.dmg); this.shots[this.shots.length - 1].hunt = e; } else if (hurtAnimal(e, u.d.dmg, u, this.time)) this.onHunt?.(e); }
+          } else { u.repath = Math.min(u.repath || 0, .6); this.goTo(u, e.x, e.z, Math.max(u.d.rng * .8, .9), dt); }
+          break;
+        }
         if (!e.alive) { if (t.resume) this.setTask(u, t.resume); else { const n = u.d.acq && !u.routed && u.stance !== 'hold' ? this.nearestEnemy(u, u.d.acq + 4) : null; if (n) this.setTask(u, { type: 'attack', t: n, auto: true, home: t.home || { x: u.x, z: u.z } }); else this.setTask(u, { type: 'idle' }); } u.think = 0; break; } // target down: take on the next enemy nearby
         const rng = u.d.rng;
         if (u.stance === 'hold' && this.reachDist(u, e) > rng) { this.setTask(u, { type: 'idle' }); break; } // hold ground: never chase

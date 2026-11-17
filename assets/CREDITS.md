@@ -9,6 +9,13 @@ Files were resized/recompressed for phones.
 | LeafSet016 (oak leaves), LeafSet019 (fir sprigs) | [ambientCG](https://ambientcg.com) (colour + opacity, 1K) |
 | fern_color, fern_alpha (fern fronds, from the Fern 02 model) | [Poly Haven](https://polyhaven.com/a/fern_02) (colour + opacity, 512px) |
 
+## Voices (assets/voices)
+
+Unit voice lines were generated offline with **Piper** (open-source text-to-speech, MIT licence, github.com/rhasspy/piper) using
+the **LibriTTS-R** voice model (en_US-libritts_r-medium; its dataset, openslr.org/141, is **CC BY 4.0** — speakers from
+public-domain LibriVox audiobooks). Made with `tools/voices.py`. Dragon roars and the Battle Car engine are synthesised from
+scratch in the same script.
+
 ## Nature models (assets/nature)
 
 Photo-scanned **CC0** models from [Poly Haven](https://polyhaven.com), reduced to a few hundred triangles each with

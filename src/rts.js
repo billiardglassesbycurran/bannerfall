@@ -137,6 +137,11 @@ export class RTSView {
     const mine = a.sel.filter(e => e.kind === 'unit' && e.team === 0 && e.alive);
     const { ent } = this.pick(sx, sy, touch);
     if (!mine.length || shift || ctrl) { if (!this.selectClick(sx, sy, touch, shift, ctrl) && !shift) a.select([]); return; }
+    // God-mode creatures attack whatever you tap, even your own units and buildings
+    if (mine.every(u => u.d.god) && ent && (ent.kind === 'unit' || ent.kind === 'bld') && ent.team === 0 && !mine.includes(ent)) {
+      if (!this.godWarned) { this.godWarned = true; a.toast?.('God creatures attack whatever you tap, even your own side!', 3); }
+      this.orderAt(sx, sy, touch); return;
+    }
     if (ent && ent.kind === 'unit' && ent.team === 0 && ent.d.carry && mine.some(u => !u.d.ship)) { this.orderAt(sx, sy, touch); return; } // board the transport
     if (ent && ent.kind === 'unit' && ent.team === 0) { this.selectClick(sx, sy, touch); return; }
     if (ent && ent.kind === 'bld' && ent.team === 0) {

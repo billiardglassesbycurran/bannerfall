@@ -49,7 +49,25 @@ export class Sound {
       this.next += beat;
     }
   }
-  // ---------- unit voices (the device's built-in speech) ----------
+  // ---------- unit voices: recorded lines per role (assets/voices, made by tools/voices.py) ----------
+  /** Play a random recorded line for a role ('commander', 'soldier', 'knight', 'archer', 'villager', 'troll', 'demon') and kind
+   *  ('select', 'move', 'attack', 'gather', 'build'). Returns false if there is no recording (then the caller can fall back to say()). */
+  voice(role, kind, pan = 0) {
+    if (!this.on || this.voiceOn === false) return true;
+    const V = this.vox || (this.vox = { list: null, bufs: {}, loading: null });
+    if (!V.list) { if (!V.loading) V.loading = fetch(`assets/voices/voices.json?v=${window.BF_VERSION || ''}`).then(r => r.ok ? r.json() : {}).then(j => { V.list = j; }).catch(() => { V.list = {}; }); return true; }
+    const n = V.list[role]?.[kind] ?? V.list[role]?.select; if (!n) return false;
+    if (!this.ctx || this.ctx.state !== 'running') return true;
+    const now = performance.now(); if (now - (this.lastSay || 0) < 900) return true; this.lastSay = now;
+    const k = V.list[role]?.[kind] ? kind : 'select', i = Math.random() * n | 0, key = `${role}_${k}_${i}`;
+    const go = buf => { const c = this.ctx, s = c.createBufferSource(), g = c.createGain(), p = c.createStereoPanner ? c.createStereoPanner() : null;
+      s.buffer = buf; g.gain.value = 1.15; s.connect(g); if (p) { p.pan.value = Math.max(-.6, Math.min(.6, pan)); g.connect(p); p.connect(this.master); } else g.connect(this.master);
+      this.voiceSrc?.stop?.(); this.voiceSrc = s; s.start(); };
+    if (V.bufs[key]) { go(V.bufs[key]); return true; }
+    fetch(`assets/voices/${key}.m4a?v=${window.BF_VERSION || ''}`).then(r => r.arrayBuffer()).then(b => this.ctx.decodeAudioData(b)).then(buf => { V.bufs[key] = buf; go(buf); }).catch(() => { V.list[role] = null; });
+    return true;
+  }
+  // ---------- fallback voices (the device's built-in speech) ----------
   say(text, { pitch = 1, rate = 1.05, lang } = {}) {
     if (!this.on || this.voiceOn === false || !window.speechSynthesis) return;
     const now = performance.now(); if (now - (this.lastSay || 0) < 1100) return; this.lastSay = now;

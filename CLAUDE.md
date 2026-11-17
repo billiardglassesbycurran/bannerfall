@@ -117,6 +117,11 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
   straight-line flight 5 m up, `fire` breath = splash shot + `fx.breath`), troll, demon, skeleton (Mixamo), warwagon, battlecar
   (procedural parts in models.js; `dragonParts` is the stand-in if the model can't load). Their models are `lazy` in anim.js:
   `loadLazy()` runs only when a God-mode game starts. Dragon = Sketchfab CC-BY (credit in CREDITS.md); `mixamo.py creature` mode.
+- **Voices** (v0.35): recorded lines in `assets/voices/<role>_<kind>_<n>.m4a` + `voices.json`, made by `tools/voices.py` (Piper TTS,
+  LibriTTS-R speakers chosen by pitch per role; roars/engine synthesised). `Sound.voice(role, kind)` plays them (falls back to the
+  device's speech); `voiceRole(u)` in main.js picks commander / soldier / knight / archer / villager / troll / demon / undead / dragon / car.
+- Any troop can hunt animals (`command` → attack task on an animal res, `hurtAnimal`); God units (`d.god`) also attack their own side
+  when targeted (rts.js tap, `command`, shots `any` → friendly splash).
 - `src/battle.js` — Battle mode field: 3 capturable banners, reserves + reinforcement waves, army breaks if all banners held.
 - `src/path.js` — A* pathfinding on the grid (pass a walk function: `cellWalk` for land, `navCell` for ships). `src/ai.js` — enemy AI for Skirmish, Battle, Survival.
   Skirmish AI (Knight/Warlord): counters the player's army (`counterW`), gathers at a rally point and attacks only when

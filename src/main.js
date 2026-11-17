@@ -179,8 +179,17 @@ const LINES = {
   hero: { select: ['I am ready.', 'The banner stands.'], move: ['Onward.', 'Ride on.'], attack: ['Follow me!', 'With me!'], gather: ['Onward.'], build: ['Onward.'] },
 };
 const ACCENT = { franks: 'fr', romans: 'it', norse: 'nb' };
+/** Which recorded voice a unit has. */
+function voiceRole(u) {
+  if (u.d.hero) return 'commander'; if (u.type === 'peasant') return 'villager'; if (u.type === 'dragon') return 'dragon'; if (u.type === 'troll') return 'troll';
+  if (u.type === 'demon') return 'demon'; if (u.type === 'skeleton') return 'undead'; if (u.type === 'battlecar') return 'car';
+  if (u.d.horse) return 'knight'; if (u.d.ranged && !u.d.ship && u.d.cls !== 'siege') return 'archer'; if (u.d.ship) return null;
+  return 'soldier'; // infantry, and the crews of catapults and war wagons
+}
 function speak(u, kind) {
   if (!u || !app.settings.voice) return;
+  const role = voiceRole(u); if (role && sound.voice(role, kind)) return; // recorded voices; the device's speech is the fallback
+  if (u.d.god) return; // never a human voice for creatures
   const set = u.d.hero ? LINES.hero : u.type === 'peasant' || u.d.ship ? LINES.civ : LINES.mil, list = set[kind] || set.select;
   sound.say(list[Math.random() * list.length | 0], { pitch: u.d.hero ? .7 : u.type === 'peasant' ? 1.15 : .85, lang: ACCENT[app.game?.civKeys[0]] });
 }
@@ -339,7 +348,7 @@ function setupGame(mode, diff, civ = 'franks', enemyCiv, god) {
     else if (t.kind === 'bld') fx.dust(t.x, t.y + .5, t.z, 3, .8);
   };
   g.onShoot = (src, kind, f, t) => {
-    if (kind === 'fire' && f && t) { fx.breath(f.x, f.y, f.z, t.x, (t.y ?? f.y - 6) + 1, t.z); app.sfx('collapse', src.x, src.z, .35); return; } // dragon fire
+    if (kind === 'fire' && f && t) { fx.breath(f.x, f.y, f.z, t.x, (t.y ?? f.y - 6) + 1, t.z); app.sfx('collapse', src.x, src.z, .35); if (src.team === 0 && Math.random() < .5) sound.voice('dragon', 'attack'); return; } // dragon fire (and a roar)
     if (kind === 'stone') app.sfx('thud', src.x, src.z, .6); else if (Math.random() < .5) app.sfx('arrow', src.x, src.z, .5);
   };
   g.onSplash = (x, z) => { const h = heightAt(x, z); if (h < WL) { fx.splash(x, WL, z, 16); app.sfx('splash', x, z); } else { fx.dust(x, h, z, 14, 2.2); app.sfx('stone', x, z); } };
