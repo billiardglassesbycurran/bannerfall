@@ -60,6 +60,11 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
 - `src/assets.js` + `assets/tex/` — CC0 photo textures (Poly Haven, ambientCG; see `assets/CREDITS.md`), loaded before the
   world is built; leaf photos are composed into branch "cards" for trees at startup. Keep each texture ≤1K and the folder
   small (~3.5 MB now); only use CC0/permissively licensed assets and record them in CREDITS.md. Never use images from Google.
+- `src/nature.js` + `assets/nature/` — photo-scanned CC0 Poly Haven rocks (6), stump and fallen log, slimmed by
+  `tools/blender/nature.py` (raw downloads in `assets/incoming/polyhaven/`). world.js scatters them (instanced): mossy rocks,
+  logs by the woods, a stump where every tree is felled (`addStump`), boulder heaps for mines/quarries; falls back to the
+  old shapes if loading fails. Ferns are photo-frond cards (`fernGeo`, `FROND` rects in `fern_color.jpg`); the forest floor
+  under trees is darker and earthy (`FOREST` density in `groundMix`); every 8th grass tuft flowers.
 - `src/game.js` — simulation: spawning, orders, gathering, building, training, combat, projectiles, win/lose.
   Combat tactics live here too: `PACE` (global fight length), `counterMul` (unit counters), flanking, high ground,
   cavalry charge (`u.run`), braced spears, morale/rout (`shake`, `moraleTick`; Commander nearby inspires and rallies).

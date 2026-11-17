@@ -91,7 +91,7 @@ const WIND = (start, amp) => `#include <begin_vertex>
   transformed.x += sin(uTime * 1.7 + wp.x * 0.35 + wp.z * 0.21 + position.y * 0.4) * sw * gust;
   transformed.z += cos(uTime * 1.3 + wp.x * 0.19 + wp.z * 0.33 + position.x * 0.5) * sw * 0.7 * gust;`;
 /** Adds gentle wind sway to an (instanced) material. start = height where bending begins, amp = strength. */
-function windify(mat, start, amp, key, twoSidedLight = false) {
+export function windify(mat, start, amp, key, twoSidedLight = false) {
   mat.onBeforeCompile = sh => {
     sh.uniforms.uTime = U.time;
     sh.vertexShader = 'uniform float uTime;\n' + sh.vertexShader.replace('#include <begin_vertex>', WIND(start, amp));
@@ -153,10 +153,11 @@ export function initMaterials(pbr, A) {
   if (pbr) { detailed(M.cloth, detailTexture('cloth'), 9, .5, .3, 'c'); detailed(M.metal, detailTexture('metal'), 4, .35, 1.1, 'm'); }
   M.stone = building(S({ vertexColors: true, roughness: .95, flatShading: true }));
   M.foliage = windify(S({ vertexColors: true, roughness: .9 }), 1.2, .022, 'f');
-  M.grass = windify(S({ vertexColors: true, roughness: 1, envMapIntensity: .25 }), 0, .35, 'g');
+  M.grass = windify(S({ vertexColors: true, roughness: 1, envMapIntensity: .1 }), 0, .35, 'g');
   if (M.photo) {
     M.bark = S({ vertexColors: true, roughness: .95, map: A.bark });
     M.leaves = windify(S({ vertexColors: true, roughness: .8, envMapIntensity: .5, map: A.oakCard, alphaTest: .45, side: THREE.DoubleSide }), 1.0, .028, 'lo', true);
+    if (A.fernCard) M.fern = windify(S({ vertexColors: true, roughness: .85, envMapIntensity: .4, map: A.fernCard, alphaTest: .45, side: THREE.DoubleSide }), 0, .07, 'fe', true);
     M.needles = windify(S({ vertexColors: true, roughness: .85, envMapIntensity: .5, map: A.firCard, alphaTest: .4, side: THREE.DoubleSide }), 1.0, .022, 'ln', true);
   }
   M.pbr = pbr;

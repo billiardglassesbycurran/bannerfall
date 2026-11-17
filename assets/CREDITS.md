@@ -7,6 +7,18 @@ Files were resized/recompressed for phones.
 |---|---|
 | aerial_grass_rock, stony_dirt_path, aerial_rocks_02, coast_sand_01, bark_brown_02, castle_wall_slates, clay_plaster, clay_roof_tiles, reed_roof_04 | [Poly Haven](https://polyhaven.com) (diffuse maps, 1K) |
 | LeafSet016 (oak leaves), LeafSet019 (fir sprigs) | [ambientCG](https://ambientcg.com) (colour + opacity, 1K) |
+| fern_color, fern_alpha (fern fronds, from the Fern 02 model) | [Poly Haven](https://polyhaven.com/a/fern_02) (colour + opacity, 512px) |
+
+## Nature models (assets/nature)
+
+Photo-scanned **CC0** models from [Poly Haven](https://polyhaven.com), reduced to a few hundred triangles each with
+`tools/blender/nature.py` (colour + normal maps at 512px):
+
+| File | Source |
+|---|---|
+| rocks.glb (six mossy rocks) | [Rock Moss Set 01](https://polyhaven.com/a/rock_moss_set_01) |
+| stump.glb | [Tree Stump 01](https://polyhaven.com/a/tree_stump_01) |
+| log.glb (fallen log) | [Dead Tree Trunk](https://polyhaven.com/a/dead_tree_trunk) |
 
 ## Custom 3D models (assets/models)
 

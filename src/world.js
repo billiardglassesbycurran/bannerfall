@@ -4,6 +4,7 @@ import { clamp, lerp, smooth, fbm, vnoise, hash2, mulberry32, segDist, TAU } fro
 import { Builder, P, M, U, bake, jitter, shadeAO } from './geo.js';
 import { tileFbm, cloudTexture } from './textures.js';
 import { GM } from './gltfmodels.js';
+import { NAT } from './nature.js';
 export const CLOUDS = { value: null };
 
 export const SIZE = 128, N = SIZE, HN = SIZE + 1;
@@ -208,6 +209,18 @@ export function hurtAnimal(a, dmg, from, t) {
 
 // ---------------- terrain mesh ----------------
 // Each vertex gets blend weights for 4 ground textures (grass, dirt, rock, sand) plus a colour tint.
+let FOREST = null; // how wooded each terrain vertex is (0..1): the floor under trees is shaded and littered with needles/leaves
+function forestDensity() {
+  const f = new Float32Array(HN * HN);
+  for (const t of resources) {
+    if (t.rt !== 'w') continue;
+    for (let j = Math.max(0, (t.z | 0) - 3); j <= Math.min(HN - 1, (t.z | 0) + 4); j++) for (let i = Math.max(0, (t.x | 0) - 3); i <= Math.min(HN - 1, (t.x | 0) + 4); i++) {
+      const d = Math.hypot(i - t.x, j - t.z); if (d < 3.2) f[j * HN + i] += (1 - d / 3.2) * .55;
+    }
+  }
+  for (let k = 0; k < f.length; k++) f[k] = smooth(clamp(f[k], 0, 1));
+  return f;
+}
 function groundMix(i, j) {
   const h = hgt[j * HN + i];
   const sl = Math.hypot(hgt[j * HN + Math.min(i + 1, HN - 1)] - hgt[j * HN + Math.max(i - 1, 0)], hgt[Math.min(j + 1, HN - 1) * HN + i] - hgt[Math.max(j - 1, 0) * HN + i]) / 2;
@@ -217,15 +230,17 @@ function groundMix(i, j) {
   d = Math.max(d, dry * (.5 + .5 * n2));
   const rd = distToRoad(i, j); if (rd < 2.8) d = Math.max(d, smooth(clamp((2.8 - rd) / 1.4, 0, 1)) * (.8 + .2 * n2));
   for (const bs of BASES) { const dd = Math.hypot(i - bs.x, j - bs.z); if (dd < 9) d = Math.max(d, smooth(clamp((9 - dd) / 4, 0, 1)) * .6 * (.6 + .4 * n2)); }
+  const fo = FOREST ? FOREST[j * HN + i] : 0; if (fo > 0) d = Math.max(d, fo * (.55 + .3 * n2));
   if (h < WL + .9) s = clamp((WL + .9 - h) / .7, 0, 1);
   if (sl > .45) r = clamp((sl - .45) / .45, 0, 1);
   if (h > 9) r = Math.max(r, clamp((h - 9) / 3, 0, 1));
   g = Math.max(0, 1 - d - r - s); const tot = g + d + r + s || 1;
-  const tint = .86 + .24 * n, snow = h > 12.5 ? clamp((h - 12.5) / 3, 0, 1) : 0;
+  const tint = (.86 + .24 * n) * (1 - fo * .4), snow = h > 12.5 ? clamp((h - 12.5) / 3, 0, 1) : 0;
   return { w: [g / tot, d / tot, r / tot, s / tot], tint: [tint * (1 + snow * 1.3), tint * (1 + snow * 1.35), tint * (1 + snow * 1.5)] };
 }
 const AVG = [[86, 100, 46], [118, 94, 66], [120, 116, 110], [186, 170, 132]];
 export function buildTerrain(Q, tex) {
+  FOREST = forestDensity();
   const pos = new Float32Array(HN * HN * 3), col = new Float32Array(HN * HN * 3), spl = new Float32Array(HN * HN * 4);
   for (let j = 0; j < HN; j++) for (let i = 0; i < HN; i++) {
     const k = j * HN + i; pos[k * 3] = i; pos[k * 3 + 1] = hgt[k]; pos[k * 3 + 2] = j;
@@ -518,12 +533,24 @@ function mineGeo(seed) {
   for (let i = 0; i < 18; i++) { const a = r() * TAU, d = r() * 1.25; b.m(P.dode(.08 + r() * .12), 0xf0c040, Math.cos(a) * d, .25 + r() * .55, Math.sin(a) * d, r() * 3, r() * 3, 0); }
   return b.split();
 }
-function tuftGeo(blades, seed) {
+function tuftGeo(blades, seed, flowers = 0) {
   const pos = [], col = [], r = mulberry32(seed), c0 = new THREE.Color(), c1 = new THREE.Color();
+  const FLOWER = [[.15, .85, .62], [0, 0, .92], [.75, .45, .62], [.08, .8, .55]];
+  for (let f = 0; f < flowers; f++) { // little flower heads: a tiny cross of two coloured quads on a stalk
+    const ox = (r() - .5) * .22, oz = (r() - .5) * .22, h = .12 + r() * .16, s = .018 + r() * .012, [fh, fs, fl] = FLOWER[seed % FLOWER.length];
+    c0.setHSL(.24, .4, .2); c1.setHSL(fh, fs, fl);
+    pos.push(ox - .005, 0, oz, ox + .005, 0, oz, ox, h, oz, ox + .005, 0, oz, ox - .005, 0, oz, ox, h, oz);
+    col.push(c0.r, c0.g, c0.b, c0.r, c0.g, c0.b, c0.r, c0.g, c0.b, c0.r, c0.g, c0.b, c0.r, c0.g, c0.b, c0.r, c0.g, c0.b);
+    for (const [ax, az] of [[s, 0], [0, s]]) {
+      pos.push(ox - ax, h, oz - az, ox + ax, h, oz + az, ox + ax, h + s * 1.6, oz + az, ox - ax, h, oz - az, ox + ax, h + s * 1.6, oz + az, ox - ax, h + s * 1.6, oz - az);
+      for (let k = 0; k < 6; k++) col.push(c1.r, c1.g, c1.b);
+    }
+  }
   for (let i = 0; i < blades; i++) {
     const a = r() * Math.PI, w = .025 + r() * .02, h = .22 + r() * .32, ox = (r() - .5) * .3, oz = (r() - .5) * .3, lean = (r() - .5) * .25;
     const ca = Math.cos(a) * w, sa = Math.sin(a) * w, tx = ox + Math.cos(a + 1.57) * lean, tz = oz + Math.sin(a + 1.57) * lean;
-    c0.setHSL(.22 + r() * .04, .5, .12); c1.setHSL(.17 + r() * .06, .5 + r() * .15, .3 + r() * .12);
+    const dry = r() < .18; // a few straw-coloured blades among the green
+    c0.setHSL(.19 + r() * .03, .5, .07); if (dry) c1.setHSL(.11 + r() * .03, .45 + r() * .1, .36 + r() * .1); else c1.setHSL(.15 + r() * .06, .5 + r() * .2, .2 + r() * .1);
     const tri = [ox - ca, 0, oz - sa, ox + ca, 0, oz + sa, tx, h, tz], rev = [ox + ca, 0, oz + sa, ox - ca, 0, oz - sa, tx, h, tz];
     pos.push(...tri, ...rev); for (let k = 0; k < 2; k++) col.push(c0.r, c0.g, c0.b, c0.r, c0.g, c0.b, c1.r, c1.g, c1.b);
   }
@@ -546,9 +573,9 @@ function barkGeo(parts) { const b = new Builder(); for (const [geo, x, y, z, rx,
 function cardPine(seed) {
   const r = mulberry32(seed), leaves = new Builder();
   const bark = barkGeo([[uvScale(P.cyl(.04, .19, 4.4, 8), 2, 4.4), 0, 2.2, 0, 0, 0, 0]]);
-  const tiers = 11;
+  const tiers = 15;
   for (let t = 0; t < tiers; t++) {
-    const k = t / (tiers - 1), y = .95 + k * 3.95, len = 1.75 * (1 - k * .82) + .3, n = Math.round(8 - k * 4);
+    const k = t / (tiers - 1), y = .85 + k * 4.05, len = 1.8 * (1 - k * .82) + .3, n = Math.round(9 - k * 4);
     for (let i = 0; i < n; i++) {
       const a = (i + r() * .6) / n * TAU + t * .9, droop = .32 + .25 * (1 - k) + (r() - .5) * .15;
       const g = new THREE.PlaneGeometry(len, len * .5); g.translate(len / 2, 0, 0);
@@ -556,8 +583,17 @@ function cardPine(seed) {
       _qq.setFromEuler(new THREE.Euler(Math.PI / 2 - .35 + (r() - .5) * .5, 0, -droop, 'YZX'));
       _q2.setFromAxisAngle(new THREE.Vector3(0, 1, 0), -a); _q2.multiply(_qq);
       _mm.compose(_vv.set(Math.cos(a) * .08, y, Math.sin(a) * .08), _q2, _ss.set(1, 1, 1));
-      const col = new THREE.Color().setHSL(.3 + r() * .03, .25 + r() * .1, .42 + k * .12 + r() * .08).getHex();
+      const col = new THREE.Color().setHSL(.3 + r() * .03, .25 + r() * .1, .4 + k * .14 + r() * .08).getHex();
       leaves.addBaked(bakeM(g, col, _mm));
+    }
+  }
+  for (let t = 0; t < 7; t++) { // a dark inner layer close to the trunk, so you can't see through the tree
+    const k = t / 6, y = 1.1 + k * 3.2, len = .9 * (1 - k * .7) + .2;
+    for (let i = 0; i < 4; i++) {
+      const a = (i + .5) / 4 * TAU + t * 1.3, g = new THREE.PlaneGeometry(len, len * .7); g.translate(len / 2, 0, 0);
+      _qq.setFromEuler(new THREE.Euler(Math.PI / 2 - .9, 0, -.25, 'YZX')); _q2.setFromAxisAngle(new THREE.Vector3(0, 1, 0), -a); _q2.multiply(_qq);
+      _mm.compose(_vv.set(0, y, 0), _q2, _ss.set(1, 1, 1));
+      leaves.addBaked(bakeM(g, new THREE.Color().setHSL(.31, .3, .3).getHex(), _mm));
     }
   }
   for (let i = 0; i < 3; i++) { // spire
@@ -571,18 +607,21 @@ function cardPine(seed) {
 function cardOak(seed) {
   const r = mulberry32(seed), leaves = new Builder(), barkParts = [[uvScale(P.cyl(.12, .22, 2.3, 9), 2, 2.5), 0, 1.15, 0, 0, 0, 0]];
   for (let i = 0; i < 5; i++) { const a = i / 5 * TAU + r(); barkParts.push([uvScale(P.cyl(.035, .08, 1.4, 6), 1, 1.5), Math.cos(a) * .42, 2.3, Math.sin(a) * .42, Math.sin(a) * .8, 0, -Math.cos(a) * .8]); }
-  const cx = 0, cy = 3.05, R = [1.65, 1.2, 1.65];
-  for (let i = 0; i < 64; i++) {
-    const u = r() * 2 - 1, a = r() * TAU, rr = Math.sqrt(1 - u * u), d = .35 + r() * .55;
-    const off = new THREE.Vector3(Math.cos(a) * rr * R[0] * d, u * R[1] * d, Math.sin(a) * rr * R[2] * d);
+  // the crown is 3-4 lobes (big boughs), each a cloud of smaller leaf clusters, so the outline is lumpy like a real oak
+  const cx = 0, cy = 3.05, R = [1.65, 1.2, 1.65], lobes = [[0, .35, 0, 1]];
+  for (let k = 0; k < 3; k++) { const a = k / 3 * TAU + r(); lobes.push([Math.cos(a) * .85, -.1 + r() * .3, Math.sin(a) * .85, .78]); }
+  for (let i = 0; i < 104; i++) {
+    const [lx, ly, lz, ls] = lobes[i % lobes.length], u = r() * 2 - 1, a = r() * TAU, rr = Math.sqrt(1 - u * u), d = .45 + r() * .55, inner = i % 6 === 0;
+    const off = new THREE.Vector3(lx + Math.cos(a) * rr * R[0] * .62 * ls * d, ly + u * R[1] * .7 * ls * d, lz + Math.sin(a) * rr * R[2] * .62 * ls * d);
+    if (inner) off.multiplyScalar(.45);
     const out = off.clone().normalize(); out.y += .35; out.normalize();
-    const sz = 1.25 + r() * .7, g = new THREE.PlaneGeometry(sz, sz); g.translate(0, sz / 2 - .15, 0);
+    const sz = (inner ? 1.1 : .8) + r() * .45, g = new THREE.PlaneGeometry(sz, sz); g.translate(0, sz / 2 - .15, 0);
     _qq.setFromUnitVectors(new THREE.Vector3(0, 1, 0), out); _q2.setFromAxisAngle(out, r() * TAU); _q2.multiply(_qq);
     _mm.compose(_vv.set(cx + off.x * .7, cy + off.y * .7 - .2, cz0 + off.z * .7), _q2, _ss.set(1, 1, 1));
-    const col = new THREE.Color().setHSL(.25 + r() * .04, .35 + r() * .1, .32 + (u + 1) * .07 + r() * .06).getHex();
+    const col = new THREE.Color().setHSL(.25 + r() * .04, .35 + r() * .1, inner ? .2 : .3 + (u + 1) * .07 + r() * .06).getHex();
     leaves.addBaked(bakeM(g, col, _mm));
   }
-  const lg = leaves.build(); shadeAO(lg, 1.9, 4.3, .45, 0, 0, 1.7);
+  const lg = leaves.build(); shadeAO(lg, 1.9, 4.3, .42, 0, 0, 1.7);
   return { bark: barkGeo(barkParts), leaves: crownNormals(lg, cx, cy, 0, .4) };
 }
 const cz0 = 0;
@@ -601,6 +640,37 @@ function cardBush() {
   return { bark: berries.build(), leaves: lg };
 }
 
+// fern fronds in assets/tex/fern_color.jpg: [left, top, right, bottom] as fractions of the image (stem at the bottom)
+const FROND = [[.543, .027, .66, .5], [.316, .031, .457, .766], [.09, .113, .234, .879], [.719, .113, .84, .832], [.516, .512, .629, .953]];
+/** A fern: 7-9 photo fronds arching out from the centre, each a bent strip of 3 quads. */
+function fernGeo(seed) {
+  const r = mulberry32(seed), pos = [], uv = [], nrm = [], col = [], idx = [], seg = 3;
+  const n = 7 + (r() * 3 | 0);
+  for (let f = 0; f < n; f++) {
+    const [u0, v0, u1, v1] = FROND[(r() * FROND.length) | 0], a = f / n * TAU + r() * .6, len = .5 + r() * .35;
+    const w = len * (u1 - u0) / (v1 - v0) * 1.15, lift = .8 + r() * .45, base = pos.length / 3, shade = .75 + r() * .3;
+    const ca = Math.cos(a), sa = Math.sin(a), sx = -sa * w / 2, sz = ca * w / 2;
+    for (let s = 0; s <= seg; s++) {
+      const t = s / seg, out = t * len * .92, y = Math.sin(t * 2.2) * len * .5 * lift - t * t * len * .2;
+      pos.push(ca * out - sx, y, sa * out - sz, ca * out + sx, y, sa * out + sz);
+      const vv = 1 - (v1 - t * (v1 - v0)); uv.push(u0, vv, u1, vv);
+      const nx = ca * (.35 - t * .5), l = Math.hypot(nx, 1); for (let k = 0; k < 2; k++) { nrm.push(nx / l * ca, 1 / l, nx / l * sa); col.push(shade * (.7 + t * .3), shade * (.75 + t * .3), shade * (.7 + t * .3)); }
+      if (s) { const b = base + (s - 1) * 2; idx.push(b, b + 2, b + 1, b + 1, b + 2, b + 3); }
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setIndex(idx);
+  return g;
+}
+/** Stumps are left where trees are cut down (plus a few where the first settlers cleared the land). */
+let stumpMesh = null;
+function addStump(x, z, seed) {
+  if (!stumpMesh || stumpMesh.count >= stumpMesh.instanceMatrix.count) return;
+  const i = stumpMesh.count++, h = hash2(x * 7.3, z * 3.1), s = .5 + h * .25;
+  _q.setFromAxisAngle(UP, seed * 2.4 + h * 9); _m.compose(_v.set(x, heightAt(x, z) - .04, z), _q, _s.set(s, s * (1.5 + h * .5), s));
+  stumpMesh.setMatrixAt(i, _m); stumpMesh.instanceMatrix.needsUpdate = true;
+}
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _v = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color(), UP = new THREE.Vector3(0, 1, 0);
 // ---------------- deer ----------------
 function deerGeo() {
@@ -672,13 +742,24 @@ export function buildResources(scene, Q) {
     berries.forEach((b, i) => { _q.setFromAxisAngle(UP, i * 2.1); _m.compose(_v.set(b.x, b.y - .05, b.z), _q, _s.set(1, 1, 1)); bushes.setMatrixAt(i, _m); b.inst = { mesh: bushes, i }; });
     for (const m of [...kinds, bushes]) { m.castShadow = shadows; m.receiveShadow = shadows; scene.add(m); }
   }
+  // stone quarries and gold mines: a heap of photo-scanned boulders (pale for stone, dark for gold) with cut blocks / gold nuggets
+  const pileMat = NAT.ok && { s: NAT.rocks[0].mat.clone(), g: NAT.rocks[0].mat.clone() };
+  if (pileMat) { pileMat.s.color.setRGB(1.35, 1.3, 1.2); pileMat.g.color.setRGB(.72, .7, .68); }
   for (const g of resources.filter(r => r.rt === 'g' || r.rt === 's')) {
     const { c, m } = g.rt === 's' ? quarryGeo(g.id) : mineGeo(g.id), grp = new THREE.Group();
-    grp.add(new THREE.Mesh(c, M.stone)); if (m) grp.add(new THREE.Mesh(m, M.stone));
+    if (pileMat) {
+      const pr = mulberry32(g.id * 13 + 5);
+      for (let i = 0; i < 7; i++) {
+        const p = NAT.rocks[(g.id + i) % NAT.rocks.length], a = i / 7 * TAU + pr(), d = i ? .55 + pr() * .6 : 0, s = (i ? .95 + pr() * .55 : 1.75) * (g.rt === 's' ? 1.05 : 1);
+        const o = new THREE.Mesh(p.geo, pileMat[g.rt]); o.position.set(Math.cos(a) * d, -.08 * s, Math.sin(a) * d); o.rotation.y = pr() * TAU; o.scale.set(s, s * (1.05 + pr() * .55), s); grp.add(o);
+      }
+      if (m) { const n = new THREE.Mesh(m, M.stone); n.scale.set(.75, .9, .75); n.position.y = .05; grp.add(n); } // gold nuggets in the rock
+      if (g.rt === 's') { const bb = new Builder(); for (let i = 0; i < 5; i++) { const a = pr() * TAU, d = .75 + pr() * .6; bb.add(P.box, 0xb4ae9f, Math.cos(a) * d, .16, Math.sin(a) * d, 0, pr() * 3, 0, .42, .3, .3); } grp.add(new THREE.Mesh(bb.build(), M.stone)); }
+    } else { grp.add(new THREE.Mesh(c, M.stone)); if (m) grp.add(new THREE.Mesh(m, M.stone)); }
     grp.children.forEach(o => { o.castShadow = shadows; o.receiveShadow = true; });
     grp.position.set(g.x, heightAt(g.x, g.z), g.z); scene.add(grp); g.mesh = grp;
   }
-  // decoration: rocks and grass (not obstacles)
+  // decoration: rocks, grass, ferns, fallen logs and stumps (not obstacles)
   const r = mulberry32(99), rocks = [], tufts = [];
   for (let k = 0; k < 320; k++) {
     const x = 5 + r() * 118, z = 5 + r() * 118, h = heightAt(x, z);
@@ -688,16 +769,68 @@ export function buildResources(scene, Q) {
   for (let k = 0; k < want * 3 && tufts.length < want; k++) {
     const x = 4 + r() * 120, z = 4 + r() * 120, h = heightAt(x, z), cx = x | 0, cz = z | 0;
     if (h < WL + .6 || h > 9 || blocked[cz * N + cx] === 1 || distToRoad(x, z) < 2.2 || nearBase(x, z, 6)) continue;
+    if (FOREST && FOREST[cz * HN + cx] > .55 && r() < .7) continue; // shady forest floor: ferns instead of meadow grass
     tufts.push([x, z]);
   }
-  const rockGeo = shadeAO(bake(jitter(P.ico(1, 1), .18, 5), 0x8a857c), -.6, .8, .6);
-  const rockMesh = new THREE.InstancedMesh(rockGeo, M.stone, rocks.length);
-  rocks.forEach(([x, z, s], i) => { _q.setFromEuler(new THREE.Euler(r() * 3, r() * 3, 0)); _m.compose(_v.set(x, heightAt(x, z) - s * .15, z), _q, _s.set(s, s * .55, s * (.8 + r() * .4))); rockMesh.setMatrixAt(i, _m); _c.setHSL(.08, .05 + r() * .08, .75 + r() * .35); rockMesh.setColorAt(i, _c); });
-  rockMesh.castShadow = shadows; rockMesh.receiveShadow = true; scene.add(rockMesh);
+  if (NAT.ok) {
+    // photo-scanned mossy rocks: six shapes, plus a few more tucked among the trees
+    for (const t of trees) if (hash2(t.x * 5.7, t.z * 2.3) < .12) { const a = r() * TAU, d = .8 + r(); rocks.push([t.x + Math.cos(a) * d, t.z + Math.sin(a) * d, .2 + r() * .3]); }
+    const rm = NAT.rocks.map(p => { const m = new THREE.InstancedMesh(p.geo, p.mat, rocks.length); m.count = 0; m.castShadow = shadows; m.receiveShadow = true; scene.add(m); return m; });
+    rocks.forEach(([x, z, s], k) => {
+      const m = rm[k % rm.length], i = m.count++, sc = s * 1.9;
+      _q.setFromAxisAngle(UP, r() * TAU); _m.compose(_v.set(x, heightAt(x, z) - sc * .12, z), _q, _s.set(sc, sc * (.8 + r() * .5), sc * (.85 + r() * .3)));
+      m.setMatrixAt(i, _m); _c.setHSL(.1, .05 + r() * .1, .8 + r() * .3); m.setColorAt(i, _c);
+    });
+    // fallen logs lying at the edge of the woods
+    const logs = [];
+    for (const t of trees) if (hash2(t.z * 4.1, t.x * 6.3) < .035) { const a = r() * TAU, d = 1.3 + r() * .8, x = t.x + Math.cos(a) * d, z = t.z + Math.sin(a) * d; if (heightAt(x, z) > WL + .4 && distToRoad(x, z) > 2.5) logs.push([x, z, r() * TAU]); }
+    const lm = new THREE.InstancedMesh(NAT.log.geo, NAT.log.mat, Math.max(1, logs.length)); lm.count = logs.length;
+    logs.forEach(([x, z, yaw], i) => {
+      const s = .7 + r() * .35, th = 2.1 + r() * .6, dx = Math.cos(yaw) * 1.2 * s, dz = -Math.sin(yaw) * 1.2 * s, tilt = Math.atan2(heightAt(x + dx, z + dz) - heightAt(x - dx, z - dz), 2.4 * s);
+      _q.setFromEuler(new THREE.Euler(0, yaw, tilt, 'YXZ')); _m.compose(_v.set(x, heightAt(x, z) - .06, z), _q, _s.set(s, s * th, s * th)); lm.setMatrixAt(i, _m);
+    });
+    lm.castShadow = shadows; lm.receiveShadow = true; scene.add(lm);
+    // stumps: one for every tree that gets cut down, and a few where the land round each town was cleared
+    stumpMesh = new THREE.InstancedMesh(NAT.stump.geo, NAT.stump.mat, trees.length + 40); stumpMesh.count = 0;
+    stumpMesh.castShadow = shadows; stumpMesh.receiveShadow = true; stumpMesh.frustumCulled = false; scene.add(stumpMesh);
+    for (const b of BASES) for (let k = 0, n = 0; k < 60 && n < 8; k++) {
+      const a = r() * TAU, d = 10 + r() * 4, x = b.x + Math.cos(a) * d, z = b.z + Math.sin(a) * d, cx = x | 0, cz = z | 0;
+      if (cellFree0(cx, cz) && distToRoad(x, z) > 2.5 && heightAt(x, z) > WL + .5) { addStump(x, z, k); n++; }
+    }
+  }
+  // ferns on the forest floor, round the foot of the trees
+  if (M.fern && want > 0) {
+    const ferns = [], per = want > 5000 ? 2.2 : 1.3;
+    for (const t of trees) {
+      const n = Math.floor(hash2(t.x * 1.3, t.z * 8.7) * per + .45);
+      for (let k = 0; k < n; k++) {
+        const a = r() * TAU, d = .7 + r() * 1.1, x = t.x + Math.cos(a) * d, z = t.z + Math.sin(a) * d;
+        if (heightAt(x, z) > WL + .5 && distToRoad(x, z) > 2.2) ferns.push([x, z]);
+      }
+    }
+    const kinds = [fernGeo(11), fernGeo(12), fernGeo(13)].map((g, k) => { const m = new THREE.InstancedMesh(g, M.fern, ferns.length); m.count = 0; m.receiveShadow = shadows; scene.add(m); return m; });
+    ferns.forEach(([x, z], k) => {
+      const m = kinds[k % 3], i = m.count++, s = .8 + r() * .7;
+      _q.setFromAxisAngle(UP, r() * TAU); _m.compose(_v.set(x, heightAt(x, z) - .02, z), _q, _s.set(s, s * (.8 + r() * .4), s)); m.setMatrixAt(i, _m);
+      _c.setHSL(.06 * (r() - .5), .25 * r(), .78 + r() * .35); m.setColorAt(i, _c);
+    });
+  }
+  if (!NAT.ok) {
+    const rockGeo = shadeAO(bake(jitter(P.ico(1, 1), .18, 5), 0x8a857c), -.6, .8, .6);
+    const rockMesh = new THREE.InstancedMesh(rockGeo, M.stone, rocks.length);
+    rocks.forEach(([x, z, s], i) => { _q.setFromEuler(new THREE.Euler(r() * 3, r() * 3, 0)); _m.compose(_v.set(x, heightAt(x, z) - s * .15, z), _q, _s.set(s, s * .55, s * (.8 + r() * .4))); rockMesh.setMatrixAt(i, _m); _c.setHSL(.08, .05 + r() * .08, .75 + r() * .35); rockMesh.setColorAt(i, _c); });
+    rockMesh.castShadow = shadows; rockMesh.receiveShadow = true; scene.add(rockMesh);
+  }
   if (tufts.length) {
-    const tm = new THREE.InstancedMesh(tuftGeo(Q.grass > 5000 ? 9 : 6, 7), M.grass, tufts.length);
-    tufts.forEach(([x, z], i) => { const s = .6 + r() * .9; _q.setFromAxisAngle(UP, r() * 6); _m.compose(_v.set(x, heightAt(x, z) - .03, z), _q, _s.set(s, s * (.7 + r() * .6), s)); tm.setMatrixAt(i, _m); });
-    tm.receiveShadow = shadows; tm.layers.set(1); scene.add(tm);
+    // every 8th tuft is in flower (4 colours)
+    const nf = Math.ceil(tufts.length / 8), plain = new THREE.InstancedMesh(tuftGeo(Q.grass > 5000 ? 9 : 6, 7), M.grass, Math.max(1, tufts.length - nf));
+    const fl = [0, 1, 2, 3].map(k => new THREE.InstancedMesh(tuftGeo(5, 20 + k, 6), M.grass, Math.ceil(nf / 4)));
+    for (const m of [plain, ...fl]) m.count = 0;
+    tufts.forEach(([x, z], i) => {
+      const m = i % 8 === 0 ? fl[(i >> 3) % 4] : plain, s = .6 + r() * .9;
+      _q.setFromAxisAngle(UP, r() * 6); _m.compose(_v.set(x, heightAt(x, z) - .03, z), _q, _s.set(s, s * (.7 + r() * .6), s)); m.setMatrixAt(m.count++, _m);
+    });
+    for (const m of [plain, ...fl]) { m.receiveShadow = shadows; m.layers.set(1); scene.add(m); }
   }
 }
 
@@ -707,6 +840,7 @@ export function takeRes(res, amt) {
   if (res.amt <= 0 && res.alive) {
     res.alive = false;
     for (const c of res.cells) { blocked[c] = 0; resCell[c] = null; }
+    if (res.rt === 'w') addStump(res.x, res.z, res.id);
     if (res.inst) { _m.makeScale(0, 0, 0); for (const m of res.inst.meshes || [res.inst.mesh]) { m.setMatrixAt(res.inst.i, _m); m.instanceMatrix.needsUpdate = true; } }
     if (res.mesh) res.mesh.removeFromParent();
     res.onDeplete?.();

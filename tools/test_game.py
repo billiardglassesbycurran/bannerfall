@@ -161,10 +161,11 @@ def main():
 
         print('Animated soldiers')
         page, errors = open_game(p, base + 'index.html?anim=1', 'play=battle,1', **desk)
-        r = page.evaluate("""async () => { const a = window.bannerfall, g = a.game; const A = await import(new URL('src/anim.js', location.href).href);
+        r = page.evaluate("""async () => { const a = window.bannerfall, g = a.game; const A = await import(new URL('src/anim.js', location.href).href), N = await import(new URL('src/nature.js', location.href).href);
           for (let i = 0; i < 1600 && !g.over; i++) { g.update(.05); a.ai.update(.05); if (i % 10 === 0) g.syncVisuals(.05, -1); }
-          const sw = g.units.find(u => u.type === 'sword'); return { on: A.ANIM.on, clips: Object.keys(A.ANIM.rigs.knight?.table || {}).length, animated: ['sword', 'spear', 'archer', 'hero'].every(t => { const u = g.units.find(u => u.type === t); return !u || u.batch.anim; }) && !!sw?.batch.anim, others: !!(A.ANIM.rigs.horse && A.ANIM.rigs.deer), t: g.time | 0 }; }""")
+          const sw = g.units.find(u => u.type === 'sword'); return { on: A.ANIM.on, clips: Object.keys(A.ANIM.rigs.knight?.table || {}).length, animated: ['sword', 'spear', 'archer', 'hero'].every(t => { const u = g.units.find(u => u.type === t); return !u || u.batch.anim; }) && !!sw?.batch.anim, others: !!(A.ANIM.rigs.horse && A.ANIM.rigs.deer), nature: N.NAT.ok && N.NAT.rocks.length, t: g.time | 0 }; }""")
         check(r['on'] and r['clips'] >= 5 and r['animated'] and r['others'], f'foot soldiers, the Commander, horses and deer use animated models {r}')
+        check(r['nature'] == 6, f'photo-scanned rocks, stumps and logs loaded {r}')
         page.wait_for_timeout(1500); page.screenshot(path=str(OUT / 'animated.png'))
         check(not err_box(page) and not errors, 'animated: no errors ' + (err_box(page) + ' '.join(errors))[:300])
         page.context.browser.close()

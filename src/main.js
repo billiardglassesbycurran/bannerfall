@@ -23,6 +23,7 @@ import { groundTextures } from './textures.js';
 import { loadAssets } from './assets.js';
 import { loadModels } from './gltfmodels.js';
 import { loadAnim, ANIM, AnimBatch } from './anim.js';
+import { loadNature } from './nature.js';
 import { cloudTexture } from './textures.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -55,6 +56,7 @@ renderer.toneMapping = THREE.NeutralToneMapping; renderer.toneMappingExposure = 
 const A = await loadAssets(renderer.capabilities.getMaxAnisotropy()); // photo textures (falls back to painted ones)
 initMaterials(qLevel !== 'low', A);
 await loadModels(qLevel !== 'low'); // custom Tripo/Blender models from assets/models (if any)
+await loadNature(qLevel !== 'low'); // photo-scanned rocks, stumps and fallen logs (assets/nature)
 await loadAnim(qLevel !== 'low');   // animated soldiers trial (Settings): skeleton + clips, baked for instancing
 renderer.shadowMap.enabled = Q.shadow > 0; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.shadowMap.autoUpdate = false;
 
