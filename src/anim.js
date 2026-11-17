@@ -18,8 +18,10 @@ const MODELS = {
   hooded: { file: 'char_hooded.glb', team: [[.3, .53, .3, 1, 1]] },                                  // green hood, cape and tunic
   // realistic characters from Mixamo (Adobe; free for use inside games): realistic proportions, motion-captured clips (mx_clips.glb)
   paladin: { file: 'mx_paladin.glb', mixamo: 1, bright: 2.1, team: [[.62, .9, .12, .5, 1], [.05, .15, .35, .9, 1]] }, // purple tabard and sash; gilt trim
-  mxarcher: { file: 'mx_archer.glb', mixamo: 1, bright: 1.6, team: [[0, 1, 0, .2, .9]] },                     // dark leather, dyed
+  mxarcher: { file: 'mx_archer.glb', mixamo: 1, bright: 1.6, team: [[0, 1, 0, .2, .9, .2]] },                 // dark leather, dyed
   mxpeasant: { file: 'mx_peasant.glb', mixamo: 1, team: [[.03, .1, .35, .62, .85]] },              // striped trousers
+  brute: { file: 'mx_brute.glb', mixamo: 1, team: [[0, 1, 0, .2, .9, .17]] },                         // bare-chested, tattooed; trousers dyed
+  heraklios: { file: 'mx_heraklios.glb', mixamo: 1, bright: 1.3, team: [] },                         // fur-and-iron steppe warrior
   // animals (CC0, Quaternius): their own skeleton and clips, flat colours instead of a texture
   horse: { file: 'animal_horse.glb', animal: true, height: 2.3 },
   deer: { file: 'animal_deer.glb', animal: true, height: 1.55 },
@@ -45,11 +47,11 @@ Object.assign(KINDS, {
   spear: { model: 'paladin', parts: ['Body', 'Helmet', 'Shield'], show: [], gear: ['spear'], clips: { ...SS, attack: 'ss_atk4' }, atk: { from: .3, rate: 1.4, len: .6 } },
   legion: { model: 'paladin', look: 'bronze', parts: ['Body', 'Helmet', 'Sword', 'Shield'], show: [], clips: { ...SS, attack: 'ss_atk3' }, atk: { from: .45, rate: 1.4, len: .7 } },
   hero: { model: 'paladin', look: 'gold', parts: ['Body', 'Helmet', 'Sword'], show: [], clips: { ...GS, attack: 'gs_slash' }, atk: { from: .3, rate: 1.25, len: .7 }, size: 1.04 },
-  berserker: { model: 'mxpeasant', look: 'raider', parts: ['Body'], show: [], gear: ['bigaxe'], clips: { ...GS, attack: 'gs_attack' }, atk: { from: .3, rate: 1.4, len: .6 } },
+  berserker: { model: 'brute', show: [], clips: { ...GS, attack: 'gs_attack' }, atk: { from: .3, rate: 1.4, len: .6 } },
   archer: { model: 'mxarcher', parts: ['Body', 'Helmet', 'Extra', 'Bow'], show: [], ranged: 'bow', clips: { ...BOW, attack: 'ss_atk4', aim: 'bow_draw', shoot: 'bow_draw' } },
   crossbow: { model: 'mxarcher', parts: ['Body', 'Helmet', 'Extra'], show: [], gear: ['xbow'], ranged: 'xbow', clips: XB },
   repeater: { model: 'mxarcher', look: 'lacquer', parts: ['Body', 'Helmet', 'Extra'], show: [], gear: ['xbow'], ranged: 'xbow', clips: XB },
-  peasant: { model: 'mxpeasant', parts: ['Body'], show: [], gear: ['axe'], clips: { idle: 'xb_idle', walk: 'xb_walk', run: 'bow_run', death: 'ss_death', attack: 'gs_attack', work: 'gs_attack' }, atk: { from: .3, rate: 1.3, len: .6 } },
+  peasant: { model: 'brute', hide: ['Weapon'], show: [], gear: ['axe'], clips: { idle: 'xb_idle', walk: 'xb_walk', run: 'bow_run', death: 'ss_death', attack: 'gs_attack', work: 'gs_attack' }, atk: { from: .3, rate: 1.3, len: .6 } },
 });
 // animals: pace = ground speed each clip was made for, runAt = speed where walking turns into a gallop
 const BEAST = { idle: 'Idle', walk: 'Walk', run: 'Gallop', death: 'Death' };
@@ -66,7 +68,7 @@ const SIT = 'sit', RIDE = { idle: SIT, walk: SIT, run: SIT, death: 'ss_death' };
 Object.assign(KINDS, {
   r_knight: { model: 'paladin', parts: ['Body', 'Helmet', 'Sword', 'Shield'], show: [], clips: { ...RIDE, attack: SIT + '+ss_atk2' }, atk: { from: .35, rate: 1.3, len: .7 } },
   r_hero: { model: 'paladin', look: 'gold', parts: ['Body', 'Helmet', 'Sword', 'Shield'], show: [], clips: { ...RIDE, attack: SIT + '+ss_atk2' }, atk: { from: .35, rate: 1.3, len: .7 } },
-  r_light: { model: 'mxpeasant', look: 'raider', parts: ['Body'], show: [], gear: ['spear'], clips: { ...RIDE, attack: SIT + '+ss_atk4' }, atk: { from: .3, rate: 1.4, len: .6 } },
+  r_light: { model: 'heraklios', show: [], gear: ['spear'], clips: { ...RIDE, attack: SIT + '+ss_atk4' }, atk: { from: .3, rate: 1.4, len: .6 } },
   r_archer: { model: 'mxarcher', parts: ['Body', 'Helmet', 'Extra', 'Bow'], show: [], ranged: 'bow', clips: { ...RIDE, attack: SIT + '+ss_atk4', aim: SIT + '+bow_draw', shoot: SIT + '+bow_draw' } },
 });
 // mounted unit types: [horse, rider]
@@ -205,9 +207,9 @@ function teamMap(rig, teamColor, look) {
   for (let i = 0; i < d.length; i += 4) {
     c.setRGB(d[i] / 255, d[i + 1] / 255, d[i + 2] / 255, THREE.SRGBColorSpace).getHSL(hsl, THREE.SRGBColorSpace);
     let hit = false;
-    for (const [h0, h1, smin, lmax, shade] of rules) {
+    for (const [h0, h1, smin, lmax, shade, minL = 0] of rules) {
       if (!((hsl.h >= h0 && hsl.h < h1) || (hsl.h + 1 >= h0 && hsl.h + 1 < h1)) || hsl.s < smin || hsl.l > lmax) continue;
-      c.setHSL(th.h, Math.min(1, (shade === 1 ? hsl.s * (.55 + th.s * .6) : th.s * .85)), hsl.l * (.6 + th.l) * (shade === 1 ? 1 : shade), THREE.SRGBColorSpace); hit = true; break;
+      c.setHSL(th.h, Math.min(1, (shade === 1 ? hsl.s * (.55 + th.s * .6) : th.s * (minL ? .62 : .85))), Math.max(minL + hsl.l * .6, hsl.l * (.6 + th.l) * (shade === 1 ? 1 : shade)), THREE.SRGBColorSpace); hit = true; break;
     }
     if (!hit && look === 'gold' && hsl.s < .25 && hsl.l > (rig.mixamo ? .05 : .22) && hsl.l < .85) { c.setHSL(.115, .62, Math.min(.78, rig.mixamo ? hsl.l * 1.7 + .08 : hsl.l * 1.05), THREE.SRGBColorSpace); hit = true; } // the Commander's gilded armour
     if (!hit && look === 'bronze' && hsl.s < .22 && hsl.l > .12 && hsl.l < .8) { c.setHSL(.075, .5, Math.min(.62, hsl.l * 1.15 + .04), THREE.SRGBColorSpace); hit = true; } // Roman bronze
@@ -267,6 +269,7 @@ function unitGeo(rig, def, teamColor = 0x888888) {
   const list = [];
   for (const m of rig.parts) {
     if (def.parts && !def.parts.includes(m.name)) continue;
+    if (def.hide && def.hide.some(h => m.name.startsWith(h))) continue;
     const g = m.geometry.clone(); g.applyMatrix4(m.bindMatrix);
     const flat = rig.map ? null : (def.coat?.[m.material.name] !== undefined ? new THREE.Color(def.coat[m.material.name]) : m.material.color.clone()); // animals: one flat colour per part
     list.push(withAttrs(g, g.attributes.skinIndex, g.attributes.skinWeight, flat));

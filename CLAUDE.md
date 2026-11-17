@@ -105,6 +105,10 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
   no re-proportioning, clips keep only rotations + hip motion (scaled to each body), loop clips are taken in place and their
   speed measured (`table[n].pace`), `parts` picks the pieces, `MX_SLOT` maps gear onto Mixamo hands (`gripr` for crossbows),
   `bright` lifts dark textures, looks: gold (Commander), bronze (legion), lacquer (repeater), raider (berserker/light cav).
+  Models: paladin (sword/spear/legion/hero/knight riders), mxarcher (archers, crossbows, repeaters, horse archers), brute
+  (berserkers with his own battle axe; villagers with `hide: ['Weapon']` + gear axe), heraklios (light cavalry riders); mxpeasant unused.
+  Several-material characters are baked into one atlas (source textures read 'map1' via UV Map nodes, bake into 'atlas').
+  Team rings: `TeamRings` in models.js (instanced ring per team under every land unit, `RINGS.on` = Settings `rings`).
   Downloads: the owner signs in to mixamo.com in the browser pane; the pane can't save files, so read the export job's
   `/monitor` response (network log) for the one-time S3 link and curl it. KayKit `char_*`/`rig_*` files are now unused.
 - `src/battle.js` — Battle mode field: 3 capturable banners, reserves + reinforcement waves, army breaks if all banners held.

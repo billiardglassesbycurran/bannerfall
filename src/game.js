@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { UD, BD, DIFF, CIVS, TECH, AGES } from './data.js';
 import { N, SIZE, WL, heightAt, groundY, blocked, resCell, cellWalk, navCell, navBlock, water, resources, takeRes, BASES, updateAnimals, hurtAnimal } from './world.js';
 import { findPath, nearestWalkable } from './path.js';
-import { buildingMesh, buildingGeo, arrowGeo, boltGeo, stoneGeo, ringGeo, wakeMaterial, SHIP_LEN, scaffoldGeo } from './models.js';
+import { buildingMesh, buildingGeo, arrowGeo, boltGeo, stoneGeo, ringGeo, wakeMaterial, SHIP_LEN, scaffoldGeo, TeamRings } from './models.js';
 import { M } from './geo.js';
 import { stepEnv, isNight } from './sky.js';
 import { angDiff, clamp, dist } from './util.js';
@@ -790,6 +790,7 @@ export class Game {
   shootVisual(src, t) { (this._shoot || this.shoot.bind(this))(src, t, 0); this.shots[this.shots.length - 1].visual = true; }
   /** Write every unit's pose into the instanced meshes. */
   syncVisuals(dt, hideId) {
+    if (!this.rings && this.scene) this.rings = new TeamRings(this.scene);
     for (const u of this.units) {
       u.y = u.d.ship ? WL : groundY(u.x, u.z);
       const k = Math.min(1, u.speedNow / 3); u.phase += dt * (4 + u.speedNow * 2.2);
@@ -826,6 +827,7 @@ export class Game {
         if (!b.ring) { b.ring = new THREE.Mesh(ringGeo, ringMats[b.team]); this.scene.add(b.ring); b.ring.scale.setScalar(b.size * .95); b.ring.position.set(b.x, b.y + .12, b.z); }
       } else if (b.ring) { b.ring.removeFromParent(); b.ring = null; }
     }
+    this.rings?.update(this.units);
     this.figures.flush();
   }
 }

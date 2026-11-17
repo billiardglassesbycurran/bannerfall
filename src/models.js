@@ -9,6 +9,30 @@ import { GM, buildingParts } from './gltfmodels.js';
 import { ANIM, AnimBatch, MountBatch, animFigure } from './anim.js';
 
 export const TEAM = [0x2c50a8, 0xa62419];
+/** Team rings: a soft ring in the team colour on the ground under every soldier, so the two armies are easy to tell apart
+ *  in a melee (like the coloured circles under units in classic RTS games). One instanced mesh per team. */
+export const RING_COL = [0x4a8dff, 0xff4636], RINGS = { on: true }; // RINGS.on: Settings switch
+export class TeamRings {
+  constructor(scene, cap = 700) {
+    const g = new THREE.RingGeometry(.52, .7, 32).rotateX(-Math.PI / 2), cv = new THREE.Matrix4();
+    this.cap = cap; this.m = new THREE.Matrix4(); void cv;
+    this.meshes = RING_COL.map(c => {
+      const mat = new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: .62, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+      const m = new THREE.InstancedMesh(g, mat, cap); m.count = 0; m.frustumCulled = false; m.renderOrder = 2; scene.add(m); return m;
+    });
+  }
+  update(units) {
+    const n = [0, 0], m = this.m;
+    if (RINGS.on) for (const u of units) {
+      if (u.dead || !u.alive || u.boarded || u.fowHidden || u.d.ship || u.team > 1) continue;
+      const k = n[u.team]; if (k >= this.cap) continue; n[u.team]++;
+      const r = (u.d.horse ? 1.25 : u.d.siege || u.type === 'catapult' ? 1.5 : .78) * (u.d.hero ? 1.25 : 1) * (u.scale || 1);
+      m.makeScale(r, 1, r).setPosition(u.x, (u.yOver ?? u.y) + .06, u.z); this.meshes[u.team].setMatrixAt(k, m);
+    }
+    this.meshes.forEach((mesh, t) => { mesh.count = n[t]; mesh.instanceMatrix.needsUpdate = true; });
+  }
+  dispose() { for (const m of this.meshes) m.removeFromParent(); }
+}
 const C = {
   skin: 0xd8a07c, lip: 0xa86a56, hair: 0x3b2716, beard: 0x4a2e18, eye: 0x1c1410,
   linen: 0xcfc2a2, gamb: 0xa08c66, pants: 0x4a3c2c, hose: 0x3c3a30, leather: 0x5a3a22, dleather: 0x36220f, boot: 0x2c1d10,

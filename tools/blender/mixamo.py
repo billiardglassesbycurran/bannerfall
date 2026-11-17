@@ -67,9 +67,11 @@ def char(inp, out, faces, tex):
     for pb in arm.pose.bones: pb.location = (0, 0, 0); pb.rotation_quaternion = (1, 0, 0, 0); pb.rotation_euler = (0, 0, 0); pb.scale = (1, 1, 1)
     meshes = [o for o in objs if o.type == 'MESH']
     # drop eyes / eyelashes (tiny, often see-through): meshes weighted only to the head whose material uses transparency
+    all_tris = sum(len(p.vertices) - 2 for o in meshes for p in o.data.polygons)
     for o in list(meshes):
         alpha = any(l.to_socket.name == 'Alpha' for m in o.data.materials if m and m.use_nodes for l in m.node_tree.links)
-        if alpha: meshes.remove(o); bpy.data.objects.remove(o)
+        small = sum(len(p.vertices) - 2 for p in o.data.polygons) < all_tris * .06
+        if alpha and small and len(meshes) > 1: meshes.remove(o); bpy.data.objects.remove(o)
     dropped = prune_bones(arm, meshes)
     # name the props after the single bone they ride (Sword_joint -> Sword, Left_arch1/2 -> Bow, arrow -> Arrow)
     total = 0
@@ -87,6 +89,7 @@ def char(inp, out, faces, tex):
         elif any('Shield' in x for x in b): o.name = 'Shield'
         elif any('arch' in x for x in b): o.name = 'Bow'
         elif any(x.lower() == 'arrow' for x in b): o.name = 'Arrow'
+        elif set(b) <= {'RightHand', 'LeftHand'}: o.name = 'Weapon'
         elif b == ['Head'] or set(b) <= {'Head', 'Neck'}: o.name = 'Helmet'
         else: o.name = 'Extra'
     # fewer triangles (each piece gets its share; small pieces keep at least 120)
@@ -128,12 +131,20 @@ def atlas(meshes, tex):
     col = bpy.data.images.new('atlas_col', tex, tex); nrm = bpy.data.images.new('atlas_nrm', tex, tex); nrm.colorspace_settings.name = 'Non-Color'
     bpy.ops.object.select_all(action='DESELECT')
     for o in meshes:
-        uv0 = o.data.uv_layers[0]; uv0.active_render = True
+        if not o.data.uv_layers: o.data.uv_layers.new(name='map1')
+        while len(o.data.uv_layers) > 1: o.data.uv_layers.remove(o.data.uv_layers[-1])  # room for the atlas layer
+        o.data.uv_layers[0].name = 'map1'
         new = o.data.uv_layers.new(name='atlas'); o.data.uv_layers.active = new; o.select_set(True)
     bpy.context.view_layer.objects.active = meshes[0]
     bpy.ops.object.mode_set(mode='EDIT'); bpy.ops.mesh.select_all(action='SELECT')
     bpy.ops.uv.smart_project(angle_limit=1.15, island_margin=.004); bpy.ops.object.mode_set(mode='OBJECT')
+    # the source textures read the original layout explicitly; the bake writes into the new one (active *render* layer)
+    for o in meshes:
+        o.data.uv_layers['atlas'].active_render = True
     for m in {m for o in meshes for m in o.data.materials if m}:
+        for tn in [n for n in m.node_tree.nodes if n.type == 'TEX_IMAGE']:
+            if not tn.inputs['Vector'].is_linked:
+                uvn = m.node_tree.nodes.new('ShaderNodeUVMap'); uvn.uv_map = 'map1'; m.node_tree.links.new(uvn.outputs['UV'], tn.inputs['Vector'])
         n = m.node_tree.nodes.new('ShaderNodeTexImage'); n.name = 'bake_target'
         for nn in m.node_tree.nodes: nn.select = False
         n.select = True; m.node_tree.nodes.active = n
@@ -148,7 +159,8 @@ def atlas(meshes, tex):
     nt.links.new(tn.outputs['Color'], nm.inputs['Color']); nt.links.new(nm.outputs['Normal'], bsdf.inputs['Normal'])
     for o in meshes:
         o.data.materials.clear(); o.data.materials.append(mat)
-        o.data.uv_layers.remove(o.data.uv_layers[0]); o.data.uv_layers['atlas'].name = 'map1'
+        for uv in [u for u in o.data.uv_layers if u.name != 'atlas']: o.data.uv_layers.remove(uv)
+        if 'atlas' in o.data.uv_layers: o.data.uv_layers['atlas'].name = 'map1'
     col.pack(); nrm.pack()
 
 

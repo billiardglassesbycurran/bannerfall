@@ -12,7 +12,7 @@ import { initIcons, symbolHtml } from './icons.js';
 import { MISSIONS, progress, saveProgress } from './campaign.js';
 import { saveGame, loadSave, applySave, saveInfo, clearSave } from './save.js';
 import { Sound } from './audio.js';
-import { Figures, ghostObject } from './models.js';
+import { Figures, ghostObject, RINGS } from './models.js';
 import { Game } from './game.js';
 import { AI } from './ai.js';
 import { RTSView } from './rts.js';
@@ -130,7 +130,7 @@ const fx = new FX(scene), sound = new Sound();
 const atmo = new Atmosphere({ scene, sun, hemi, renderer, base: { sun: sun.intensity, hemi: hemi.intensity }, low: qLevel === 'low', sound });
 // ---------------- player settings (saved on this device) ----------------
 const SET_DEFAULT = { look: 1, cam: 1, vol: .7, music: true, voice: true, big: false, auto: true, fog: true, mapBot: false, mapOff: false, cycle: true, animOn: true,
-  bright: 1, sat: 1, haze: 1, bloom: 1, mist: 1, film: false, ao: !isTouch }; // the last row is the Look panel
+  bright: 1, sat: 1, haze: 1, bloom: 1, mist: 1, film: false, ao: !isTouch, rings: true }; // the last row is the Look panel (+ team rings)
 app.settings = { ...SET_DEFAULT }; try { Object.assign(app.settings, JSON.parse(localStorage.getItem('bf.settings') || '{}')); } catch { /* ignore */ }
 function applySettings() {
   sound.setMusic?.(app.settings.music !== false); sound.voiceOn = app.settings.voice !== false;
@@ -141,7 +141,7 @@ function applySettings() {
   renderer.toneMapping = S.film ? THREE.ACESFilmicToneMapping : THREE.NeutralToneMapping;
   GRADE.uniforms.uSat.value = 1.08 * (S.sat ?? 1) * (S.film ? 1.04 : 1); GRADE.uniforms.uVig.value = S.film ? .5 : .32;
   if (bloomPass) bloomPass.strength = .18 * (S.bloom ?? 1) * (S.film ? 1.3 : 1);
-  setAO(S.ao);
+  setAO(S.ao); RINGS.on = S.rings !== false;
   try { localStorage.setItem('bf.settings', JSON.stringify(app.settings)); } catch { /* ignore */ }
 }
 app.fx = fx; app.sound = sound;
@@ -298,7 +298,7 @@ function setupGame(mode, diff, civ = 'franks', enemyCiv) {
   const tut = mode === 'tutorial'; if (tut) { mode = 'skirmish'; diff = 0; }
   const mis = mode === 'campaign' ? MISSIONS[app.missionId || 0] : null; if (mis) { mode = 'skirmish'; diff = mis.diff; }
   app.campaign = null;
-  app.game?.fow?.dispose();
+  app.game?.fow?.dispose(); app.game?.rings?.dispose();
   if (app.game?.field) for (const f of app.game.field.flags) f.mesh.removeFromParent();
   app.tut = null; document.getElementById('tutor').classList.add('hide');
   if (!CIVS[civ]) civ = 'franks';
@@ -530,13 +530,13 @@ onBtn('hTut', () => { app.cfg.mode = 'tutorial'; try { localStorage.setItem('bf.
 onBtn('bBack', showHome);
 const openSettings = () => {
   const S = app.settings; $('sLook').value = S.look; $('sCam').value = S.cam; $('sVol').value = S.vol; $('sMusic').checked = S.music; $('sVoice').checked = S.voice; $('sBig').checked = S.big; $('sAuto').checked = S.auto; $('sFog').checked = S.fog; $('sMapBot').checked = S.mapBot; $('sCycle').checked = S.cycle; $('sAnim').checked = S.animOn !== false;
-  for (const k of ['bright', 'sat', 'haze', 'bloom', 'mist']) $('s_' + k).value = S[k] ?? 1; $('s_film').checked = !!S.film; $('s_ao').checked = !!S.ao; $('s_ao').disabled = qLevel !== 'high';
+  for (const k of ['bright', 'sat', 'haze', 'bloom', 'mist']) $('s_' + k).value = S[k] ?? 1; $('s_film').checked = !!S.film; $('s_rings').checked = S.rings !== false; $('s_ao').checked = !!S.ao; $('s_ao').disabled = qLevel !== 'high';
   $('settings').classList.remove('hide');
 };
 onBtn('bSettings', openSettings); onBtn('bSettings2', openSettings);
 onBtn('bSetBack', () => { $('settings').classList.add('hide'); });
 for (const [id, key, num] of [['sLook', 'look', 1], ['sCam', 'cam', 1], ['sVol', 'vol', 1], ['sMusic', 'music'], ['sVoice', 'voice'], ['sBig', 'big'], ['sAuto', 'auto'], ['sFog', 'fog'], ['sMapBot', 'mapBot'], ['sCycle', 'cycle'], ['sAnim', 'animOn'],
-  ['s_bright', 'bright', 1], ['s_sat', 'sat', 1], ['s_haze', 'haze', 1], ['s_bloom', 'bloom', 1], ['s_mist', 'mist', 1], ['s_film', 'film'], ['s_ao', 'ao']])
+  ['s_bright', 'bright', 1], ['s_sat', 'sat', 1], ['s_haze', 'haze', 1], ['s_bloom', 'bloom', 1], ['s_mist', 'mist', 1], ['s_film', 'film'], ['s_ao', 'ao'], ['s_rings', 'rings']])
   $(id).addEventListener('input', e => { app.settings[key] = num ? +e.target.value : e.target.checked; applySettings(); });
 $('sAnim').addEventListener('change', () => { if (!app.game) location.reload(); else app.toast('Animated soldiers: applies after you return to the main menu.', 3); }); // models load at start-up
 onBtn('s_reset', () => { Object.assign(app.settings, { bright: 1, sat: 1, haze: 1, bloom: 1, mist: 1, film: false, ao: !isTouch }); applySettings(); openSettings(); });
