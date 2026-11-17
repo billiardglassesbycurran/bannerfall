@@ -31,5 +31,9 @@ None yet. Models made with Tripo (tripo.com) go here with the account/plan they 
 - **KayKit Adventurers Character Pack 1.0** by Kay Lousberg (www.kaylousberg.com), CC0, from the author's GitHub
   (github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0). Knight, Rogue and Hooded Rogue in
   `assets/anim/char_*.glb` (slimmed and re-proportioned in game; licence text in `assets/anim/LICENSE-KayKit-Adventurers.txt`).
+- **Mixamo** (Adobe, mixamo.com): the realistic soldiers and villagers since v0.31 — characters Paladin W/Prop J Nordstrom,
+  Erika Archer With Bow/Arrow and Peasant Man, and motion-captured clips (sword & shield, great sword, longbow, rifle, farming,
+  sitting). Converted with `tools/blender/mixamo.py` into `assets/anim/mx_*.glb`. **Not CC0**: Mixamo's terms let them be used
+  royalty-free inside a game, but not redistributed as standalone assets — please don't reuse these files outside Bannerfall.
 - **Ultimate Animated Animal Pack** by Quaternius (quaternius.com), CC0. Horse and Deer with their walk/gallop/idle/death
   clips in `assets/anim/animal_*.glb` (slimmed with `tools/kaykit.py --animals`; licence text in `assets/anim/LICENSE-Quaternius.txt`).

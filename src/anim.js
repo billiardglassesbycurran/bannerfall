@@ -16,11 +16,16 @@ const MODELS = {
   knight: { file: 'char_knight.glb', team: [[.83, 1.03, .35, 1, 1], [.022, .075, .3, .62, .8]] },   // red cape/plume/badge; copper belt and straps
   rogue: { file: 'char_rogue.glb', team: [[.3, .53, .3, 1, 1]] },                                    // green tunic
   hooded: { file: 'char_hooded.glb', team: [[.3, .53, .3, 1, 1]] },                                  // green hood, cape and tunic
+  // realistic characters from Mixamo (Adobe; free for use inside games): realistic proportions, motion-captured clips (mx_clips.glb)
+  paladin: { file: 'mx_paladin.glb', mixamo: 1, bright: 2.1, team: [[.62, .9, .12, .5, 1], [.05, .15, .35, .9, 1]] }, // purple tabard and sash; gilt trim
+  mxarcher: { file: 'mx_archer.glb', mixamo: 1, bright: 1.6, team: [[0, 1, 0, .2, .9]] },                     // dark leather, dyed
+  mxpeasant: { file: 'mx_peasant.glb', mixamo: 1, team: [[.03, .1, .35, .62, .85]] },              // striped trousers
   // animals (CC0, Quaternius): their own skeleton and clips, flat colours instead of a texture
   horse: { file: 'animal_horse.glb', animal: true, height: 2.3 },
   deer: { file: 'animal_deer.glb', animal: true, height: 1.55 },
 };
-const CLIP_FILES = ['char_knight.glb', 'rig_tools.glb', 'rig_ranged.glb']; // where animation clips come from
+const CLIP_FILES = ['char_knight.glb', 'rig_tools.glb', 'rig_ranged.glb']; // where the KayKit characters' clips come from
+const MX_CLIPS = 'mx_clips.glb'; // every Mixamo character shares one skeleton, so they share these clips
 // Unit types that use animated models: which character, which of its attachments show, extra gear, and which clip plays for what.
 // atk = how the attack clip is played: start `from` seconds in (the blow lands the moment the game strikes), at `rate`, for `len` seconds.
 const WALK = { idle: 'Idle', walk: 'Walking_A', run: 'Running_A', death: 'Death_A' };
@@ -32,6 +37,20 @@ const KINDS = {
   crossbow: { model: 'hooded', show: ['2H_Crossbow'], ranged: 'xbow', clips: { ...WALK, attack: '1H_Melee_Attack_Chop', aim: '2H_Ranged_Aiming', shoot: '2H_Ranged_Shoot' } },
   peasant: { model: 'rogue', show: [], gear: ['axe'], clips: { ...WALK, attack: '1H_Melee_Attack_Chop', work: 'Chopping' }, atk: { from: .3, rate: 1.2, len: .6 } },
 };
+// Realistic Mixamo soldiers (replace the KayKit ones above). parts = which pieces of the character show.
+const SS = { idle: 'ss_idle', walk: 'ss_walk', run: 'ss_run', death: 'ss_death' }, GS = { idle: 'gs_idle', walk: 'gs_walk', run: 'gs_run', death: 'gs_death' };
+const BOW = { idle: 'bow_idle', walk: 'bow_walk', run: 'bow_run', death: 'ss_death' }, XB = { idle: 'xb_idle', walk: 'xb_walk', run: 'bow_run', death: 'ss_death', attack: 'ss_atk4', aim: 'xb_fire', shoot: 'xb_fire' };
+Object.assign(KINDS, {
+  sword: { model: 'paladin', parts: ['Body', 'Helmet', 'Sword', 'Shield'], show: [], clips: { ...SS, attack: 'ss_atk2' }, atk: { from: .35, rate: 1.3, len: .7 } },
+  spear: { model: 'paladin', parts: ['Body', 'Helmet', 'Shield'], show: [], gear: ['spear'], clips: { ...SS, attack: 'ss_atk4' }, atk: { from: .3, rate: 1.4, len: .6 } },
+  legion: { model: 'paladin', look: 'bronze', parts: ['Body', 'Helmet', 'Sword', 'Shield'], show: [], clips: { ...SS, attack: 'ss_atk3' }, atk: { from: .45, rate: 1.4, len: .7 } },
+  hero: { model: 'paladin', look: 'gold', parts: ['Body', 'Helmet', 'Sword'], show: [], clips: { ...GS, attack: 'gs_slash' }, atk: { from: .3, rate: 1.25, len: .7 }, size: 1.04 },
+  berserker: { model: 'mxpeasant', look: 'raider', parts: ['Body'], show: [], gear: ['bigaxe'], clips: { ...GS, attack: 'gs_attack' }, atk: { from: .3, rate: 1.4, len: .6 } },
+  archer: { model: 'mxarcher', parts: ['Body', 'Helmet', 'Extra', 'Bow'], show: [], ranged: 'bow', clips: { ...BOW, attack: 'ss_atk4', aim: 'bow_draw', shoot: 'bow_draw' } },
+  crossbow: { model: 'mxarcher', parts: ['Body', 'Helmet', 'Extra'], show: [], gear: ['xbow'], ranged: 'xbow', clips: XB },
+  repeater: { model: 'mxarcher', look: 'lacquer', parts: ['Body', 'Helmet', 'Extra'], show: [], gear: ['xbow'], ranged: 'xbow', clips: XB },
+  peasant: { model: 'mxpeasant', parts: ['Body'], show: [], gear: ['axe'], clips: { idle: 'xb_idle', walk: 'xb_walk', run: 'bow_run', death: 'ss_death', attack: 'gs_attack', work: 'gs_attack' }, atk: { from: .3, rate: 1.3, len: .6 } },
+});
 // animals: pace = ground speed each clip was made for, runAt = speed where walking turns into a gallop
 const BEAST = { idle: 'Idle', walk: 'Walk', run: 'Gallop', death: 'Death' };
 const HORSE = { model: 'horse', show: [], clips: BEAST, noAttack: 1, pace: { walk: 1.9, run: 6.2, runAt: 3.2 }, cloth: 1 };
@@ -43,12 +62,12 @@ Object.assign(KINDS, {
   h_white: { ...HORSE, coat: { Main: 0xd9d4c8, Main_Dark: 0xa8a294, Main_Light: 0xf2efe6, Hair: 0xe8e2d2, Muzzle: 0x8a7f74 } },
 });
 // riders: seated lower body, with the fighting clips played on the upper body only ("seat+clip")
-const SIT = 'Sit_Chair_Idle', RIDE = { idle: SIT, walk: SIT, run: SIT, death: 'Death_A' };
+const SIT = 'sit', RIDE = { idle: SIT, walk: SIT, run: SIT, death: 'ss_death' };
 Object.assign(KINDS, {
-  r_knight: { model: 'knight', show: ['1H_Sword', 'Rectangle_Shield', 'Knight_Helmet', 'Knight_Cape'], clips: { ...RIDE, attack: SIT + '+1H_Melee_Attack_Slice_Diagonal' } },
-  r_hero: { model: 'knight', look: 'gold', show: ['1H_Sword', 'Badge_Shield', 'Knight_Helmet', 'Knight_Cape'], clips: { ...RIDE, attack: SIT + '+1H_Melee_Attack_Slice_Diagonal' } },
-  r_light: { model: 'rogue', show: [], gear: ['spear'], clips: { ...RIDE, attack: SIT + '+1H_Melee_Attack_Stab' }, atk: { from: .5, rate: 1.5, len: .6 } },
-  r_archer: { model: 'hooded', show: ['Rogue_Cape'], gear: ['bow', 'quiver'], ranged: 'bow', clips: { ...RIDE, attack: SIT + '+1H_Melee_Attack_Chop', aim: SIT + '+Ranged_Bow_Draw', shoot: SIT + '+Ranged_Bow_Release' } },
+  r_knight: { model: 'paladin', parts: ['Body', 'Helmet', 'Sword', 'Shield'], show: [], clips: { ...RIDE, attack: SIT + '+ss_atk2' }, atk: { from: .35, rate: 1.3, len: .7 } },
+  r_hero: { model: 'paladin', look: 'gold', parts: ['Body', 'Helmet', 'Sword', 'Shield'], show: [], clips: { ...RIDE, attack: SIT + '+ss_atk2' }, atk: { from: .35, rate: 1.3, len: .7 } },
+  r_light: { model: 'mxpeasant', look: 'raider', parts: ['Body'], show: [], gear: ['spear'], clips: { ...RIDE, attack: SIT + '+ss_atk4' }, atk: { from: .3, rate: 1.4, len: .6 } },
+  r_archer: { model: 'mxarcher', parts: ['Body', 'Helmet', 'Extra', 'Bow'], show: [], ranged: 'bow', clips: { ...RIDE, attack: SIT + '+ss_atk4', aim: SIT + '+bow_draw', shoot: SIT + '+bow_draw' } },
 });
 // mounted unit types: [horse, rider]
 const MOUNTS = { knight: ['h_bay', 'r_knight'], crusader: ['h_white', 'r_knight'], lightcav: ['h_light', 'r_light'], horsearcher: ['h_dark', 'r_archer'], khanguard: ['h_dark', 'r_archer'], herohorse: ['h_white', 'r_hero'] };
@@ -66,13 +85,15 @@ export async function loadAnim(pbr) {
   try {
     const loader = new GLTFLoader(), v = window.BF_VERSION || '', base = new URL('../assets/anim/', import.meta.url).href.split('?')[0];
     const cache = {}, get = f => cache[f] || (cache[f] = fetch(`${base}${f}?v=${v}`).then(r => { if (!r.ok) throw new Error(`${f}: ${r.status}`); return r.arrayBuffer(); }).then(b => loader.parseAsync(b, base)));
-    const need = [...new Set(Object.values(KINDS).map(k => k.model))];
-    const [clipFiles, models] = await Promise.all([Promise.all(CLIP_FILES.map(get)), Promise.all(need.map(id => get(MODELS[id].file)))]);
+    const need = [...new Set(Object.values(KINDS).map(k => k.model))], kk = need.some(id => !MODELS[id].mixamo && !MODELS[id].animal), mx = need.some(id => MODELS[id].mixamo);
+    const [clipFiles, mxClips, models] = await Promise.all([kk ? Promise.all(CLIP_FILES.map(get)) : [], mx ? get(MX_CLIPS) : null, Promise.all(need.map(id => get(MODELS[id].file)))]);
     const all = {}; for (const f of clipFiles) for (const c of f.animations) if (!all[c.name]) all[c.name] = c;
+    const mxAll = {}; if (mxClips) for (const c of mxClips.animations) mxAll[c.name] = c;
+    const mxHips = mxClips?.scene.getObjectByName('mixamorigHips')?.position.length() || 1; // hip height of the body the clips were made on
     need.forEach((id, i) => {
       const names = [...new Set(Object.values(KINDS).filter(k => k.model === id).flatMap(k => Object.values(k.clips)))], M = MODELS[id];
       const own = {}; if (M.animal) for (const c of models[i].animations) own[c.name] = c;
-      ANIM.rigs[id] = bake(models[i], M.animal ? own : all, names, M); ANIM.rigs[id].id = id;
+      ANIM.rigs[id] = bake(models[i], M.animal ? own : M.mixamo ? mxAll : all, names, { ...M, clipHips: mxHips }); ANIM.rigs[id].id = id;
     });
     ANIM.on = ANIM.ready = true;
   } catch (e) { console.warn('Animated soldiers could not load; using the built-in figures.', e); ANIM.on = false; }
@@ -83,6 +104,8 @@ export async function loadAnim(pbr) {
 const PROP = { head: .52, leg: [1.2, 1.9, 1.2], hand: .8, arm: [1, 1.16, 1], chest: [1, 1.1, 1] };
 
 const UPPER = /^(spine|chest|head|upperarm|lowerarm|wrist|hand)/; // bones a rider's fighting clip drives; the rest stay seated
+const MX_UPPER = /Spine|Neck|Head|Shoulder|Arm|Hand|Sword|Shield|arch|arrow/;
+const LOOP = /idle|walk|run|carry|^sit$/i; // clips played on the spot: their forward drift is taken out (and measured as the clip's pace)
 
 function bake(gltf, all, names, M = {}) {
   const root = gltf.scene; root.updateMatrixWorld(true);
@@ -116,6 +139,9 @@ function bake(gltf, all, names, M = {}) {
   };
   const body = bones.filter(b => !/IK|control|^root$/.test(b.name)); // real body bones (not the rig's helper handles)
   const lowest = () => { let y = 1e9; for (const b of body) y = Math.min(y, b.matrixWorld.elements[13]); return y; };
+  const hipsName = M.mixamo ? 'mixamorigHips' : 'hips', hips = B(hipsName), upper = M.mixamo ? MX_UPPER : UPPER;
+  const hipsK = M.mixamo && hips ? hips.position.length() / M.clipHips : 1; // the clips were made on another Mixamo body: scale the hip motion to this one
+  const hw = new THREE.Vector3(), h0 = new THREE.Vector3(), drift = {};
   const W = nB * 4, data = new Float32Array(W * rows * 4), mixer = new THREE.AnimationMixer(root), m = new THREE.Matrix4();
   const toRest = () => bones.forEach((b, i) => { b.position.copy(rest[i][0]); b.quaternion.copy(rest[i][1]); b.scale.copy(rest[i][2]); });
   for (const n of names) {
@@ -123,21 +149,31 @@ function bake(gltf, all, names, M = {}) {
     let seat = null; // riders: the seated pose, kept on every bone the fighting clip doesn't drive
     if (seatOf(n)) { const a = mixer.clipAction(seatOf(n)); a.play(); mixer.setTime(0); seat = bones.map(b => [b.position.clone(), b.quaternion.clone(), b.scale.clone()]); a.stop(); mixer.uncacheClip(seatOf(n)); toRest(); }
     const c = clipOf(n), t = table[n], act = mixer.clipAction(c); act.play();
+    const loop = M.mixamo && LOOP.test(n);
     for (let f = 0; f < t.n; f++) {
       mixer.setTime(Math.min(f / FPS, Math.max(0, c.duration - 1e-4)));
       // the mixer only rewrites values that change, so put the animated pose back exactly after re-proportioning
       const keep = bones.map(b => [b.position.clone(), b.scale.clone(), b.quaternion.clone()]);
-      if (seat) bones.forEach((b, i) => { if (!UPPER.test(b.name)) { b.position.copy(seat[i][0]); b.quaternion.copy(seat[i][1]); b.scale.copy(seat[i][2]); } });
-      root.updateMatrixWorld(true); const y0 = lowest();
-      shape(); root.updateMatrixWorld(true);
-      if (B('hips')) { B('hips').position.y += y0 - lowest(); root.updateMatrixWorld(true); } // longer legs: lift the body so the lowest point stays where the animator put it
+      if (seat) bones.forEach((b, i) => { if (!upper.test(b.name)) { b.position.copy(seat[i][0]); b.quaternion.copy(seat[i][1]); b.scale.copy(seat[i][2]); } });
+      if (M.mixamo) {
+        bones.forEach((b, i) => { if (b !== hips) { b.position.copy(rest[i][0]); b.scale.copy(rest[i][2]); } }); // keep this body's own bone lengths; only rotations come from the clip
+        if (hips && hipsK !== 1) hips.position.multiplyScalar(hipsK);
+        root.position.set(0, 0, 0); root.updateMatrixWorld(true);
+        if (loop && hips) { hips.getWorldPosition(hw); if (f === 0) h0.copy(hw); root.position.set(h0.x - hw.x, 0, h0.z - hw.z); if (f === t.n - 1) drift[n] = Math.hypot(hw.x - h0.x, hw.z - h0.z); }
+        root.updateMatrixWorld(true);
+      } else {
+        root.updateMatrixWorld(true); const y0 = lowest();
+        shape(); root.updateMatrixWorld(true);
+        if (B('hips')) { B('hips').position.y += y0 - lowest(); root.updateMatrixWorld(true); } // longer legs: lift the body so the lowest point stays where the animator put it
+      }
       for (let b = 0; b < nB; b++) { m.multiplyMatrices(bones[b].matrixWorld, skel.boneInverses[b]); data.set(m.elements, ((t.start + f) * W + b * 4) * 4); }
       bones.forEach((b, i) => { b.position.copy(keep[i][0]); b.scale.copy(keep[i][1]); b.quaternion.copy(keep[i][2]); });
     }
-    act.stop(); mixer.uncacheClip(c);
+    act.stop(); mixer.uncacheClip(c); root.position.set(0, 0, 0);
   }
+  root.updateMatrixWorld(true);
   // normalise: measure the figure standing idle, then scale to soldier height with the feet on the ground
-  const idle = table[names.find(n => /^Idle/.test(n)) || names[0]], v = new THREE.Vector3(), acc = new THREE.Vector3(), bm = new THREE.Matrix4(); let lo = 1e9, hi = -1e9, back = -1e9, wide = 0;
+  const idle = table[names.find(n => /^Idle/.test(n)) || names.find(n => /idle/i.test(n) && !n.includes('+')) || names[0]], v = new THREE.Vector3(), acc = new THREE.Vector3(), bm = new THREE.Matrix4(); let lo = 1e9, hi = -1e9, back = -1e9, wide = 0;
   for (const mesh of parts) {
     const g = mesh.geometry, P = g.attributes.position, SI = g.attributes.skinIndex, SW = g.attributes.skinWeight;
     for (let i = 0; i < P.count; i += 3) { // every third vertex is plenty for a bounding height
@@ -151,7 +187,8 @@ function bake(gltf, all, names, M = {}) {
   for (let i = 0; i < data.length; i += 16) { m.fromArray(data, i).premultiply(N); data.set(m.elements, i); }
   const tex = new THREE.DataTexture(data, W, rows, THREE.RGBAFormat, THREE.FloatType);
   tex.minFilter = tex.magFilter = THREE.NearestFilter; tex.generateMipmaps = false; tex.needsUpdate = true;
-  const rig = { parts, attach, table, uBones: { value: tex }, boneIdx, bind, map: parts[0].material.map || null, teamMaps: {}, nB, W, data, sc, lo, raw: { back, wide } };
+  const rig = { parts, attach, table, uBones: { value: tex }, boneIdx, bind, map: parts[0].material.map || null, nmap: M.mixamo ? parts[0].material.normalMap || null : null, nscale: parts[0].material.normalScale?.clone() || new THREE.Vector2(1, 1), teamMaps: {}, nB, W, data, sc, lo, raw: { back, wide }, hips: hipsName, mixamo: !!M.mixamo };
+  for (const n in drift) if (drift[n] > .05) table[n].pace = drift[n] * sc / table[n].dur; // ground speed the clip was captured at (game units / s)
   rig.seatY = (back - lo) * sc; // saddle height in game units (animals)
   /** Height of a bone's joint in a given baked row (game units). */
   rig.jointY = (bone, row) => { const b = boneIdx[bone]; if (b === undefined) return 0; const o = (row * W + b * 4) * 4, e = bind[b].elements; return data[o + 1] * e[12] + data[o + 5] * e[13] + data[o + 9] * e[14] + data[o + 13]; };
@@ -172,7 +209,11 @@ function teamMap(rig, teamColor, look) {
       if (!((hsl.h >= h0 && hsl.h < h1) || (hsl.h + 1 >= h0 && hsl.h + 1 < h1)) || hsl.s < smin || hsl.l > lmax) continue;
       c.setHSL(th.h, Math.min(1, (shade === 1 ? hsl.s * (.55 + th.s * .6) : th.s * .85)), hsl.l * (.6 + th.l) * (shade === 1 ? 1 : shade), THREE.SRGBColorSpace); hit = true; break;
     }
-    if (!hit && look === 'gold' && hsl.s < .2 && hsl.l > .22 && hsl.l < .85) { c.setHSL(.115, .62, Math.min(.78, hsl.l * 1.05), THREE.SRGBColorSpace); hit = true; } // the Commander's gilded armour
+    if (!hit && look === 'gold' && hsl.s < .25 && hsl.l > (rig.mixamo ? .05 : .22) && hsl.l < .85) { c.setHSL(.115, .62, Math.min(.78, rig.mixamo ? hsl.l * 1.7 + .08 : hsl.l * 1.05), THREE.SRGBColorSpace); hit = true; } // the Commander's gilded armour
+    if (!hit && look === 'bronze' && hsl.s < .22 && hsl.l > .12 && hsl.l < .8) { c.setHSL(.075, .5, Math.min(.62, hsl.l * 1.15 + .04), THREE.SRGBColorSpace); hit = true; } // Roman bronze
+    if (!hit && look === 'lacquer' && hsl.l < .3 && hsl.s < .5) { c.setHSL(.01, .55, hsl.l * .9 + .04, THREE.SRGBColorSpace); hit = true; } // red-lacquered leather
+    if (!hit && look === 'raider' && hsl.s < .25 && hsl.l > .5) { c.setHSL(.07, .35, hsl.l * .55, THREE.SRGBColorSpace); hit = true; } // weathered: no pale cloth, darker hair
+    const br = MODELS[rig.id]?.bright; if (br && hsl.s < .3) { if (!hit) c.setHSL(hsl.h, hsl.s, Math.min(.9, hsl.l * br), THREE.SRGBColorSpace); else { const k = {}; c.getHSL(k, THREE.SRGBColorSpace); c.setHSL(k.h, k.s, Math.min(.9, k.l * br), THREE.SRGBColorSpace); } hit = true; } // lift very dark textures
     if (hit) { c.getRGB(hsl, THREE.SRGBColorSpace); d[i] = hsl.r * 255; d[i + 1] = hsl.g * 255; d[i + 2] = hsl.b * 255; }
   }
   cx.putImageData(img, 0, 0);
@@ -211,11 +252,21 @@ const GEAR = {
     const zs = R * Math.cos(arc / 2) - R, len = 2 * R * Math.sin(arc / 2);
     return [['handslotl', limb, WOOD, T(0, 0, .04)], ['handslotl', new THREE.CylinderGeometry(.008, .008, len, 4), 0xe8e2d0, T(0, 0, zs + .04)], ['handslotl', new THREE.CylinderGeometry(.04, .04, .16, 6), DARK, T(0, 0, .04)]];
   },
+  bigaxe: () => [['handslotr', new THREE.CylinderGeometry(.03, .036, 1.25, 6), WOOD, T(0, .35, 0)], ['handslotr', new THREE.CylinderGeometry(.24, .24, .035, 10, 1, false, 0, 2.2).rotateZ(Math.PI / 2).rotateY(Math.PI / 2), STEEL, T(0, .82, .05)], ['handslotr', new THREE.BoxGeometry(.06, .14, .1), DARK, T(0, .86, -.03)]],
+  xbow: () => [['gripr', new THREE.BoxGeometry(.06, .7, .07), WOOD, T(0, .18, .05)], ['gripr', new THREE.TorusGeometry(.32, .02, 4, 10, 2.2).rotateZ(-1.1 + Math.PI / 2).rotateX(Math.PI / 2).rotateY(Math.PI / 2), DARK, T(0, .48, 0)], ['gripr', new THREE.BoxGeometry(.08, .12, .05), STEEL, T(0, .08, .08)]],
   quiver: () => [['chest', new THREE.CylinderGeometry(.09, .075, .6, 7), DARK, T(.1, .1, -.3, 0, 0, -.45)], ['chest', new THREE.CylinderGeometry(.07, .07, .12, 5), 0xd8d2c0, T(.25, .42, -.3, 0, 0, -.45)]],
 };
+// Mixamo hands: fingers run along the bone's +Y and the palm faces +Z. A slot maps the gear's own space (+Y up the weapon,
+// +Z away from the palm, as on the KayKit hand slots) onto the bone, gripped in the palm. [bone, slot→bone matrix]
+const MXR = new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 1, 0), new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, -1)).setPosition(0, .085, .035);
+const MXL = new THREE.Matrix4().makeBasis(new THREE.Vector3(0, -1, 0), new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 0, -1)).setPosition(0, .085, .035);
+// a gun-style grip (crossbows on the rifle clips): the stock runs along the fingers' direction
+const MXG = new THREE.Matrix4().makeBasis(new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, -1)).setPosition(0, .085, .035);
+const MX_SLOT = { handslotr: ['mixamorigRightHand', MXR], handslotl: ['mixamorigLeftHand', MXL], gripr: ['mixamorigRightHand', MXG], chest: ['mixamorigSpine2', new THREE.Matrix4()] };
 function unitGeo(rig, def, teamColor = 0x888888) {
   const list = [];
   for (const m of rig.parts) {
+    if (def.parts && !def.parts.includes(m.name)) continue;
     const g = m.geometry.clone(); g.applyMatrix4(m.bindMatrix);
     const flat = rig.map ? null : (def.coat?.[m.material.name] !== undefined ? new THREE.Color(def.coat[m.material.name]) : m.material.color.clone()); // animals: one flat colour per part
     list.push(withAttrs(g, g.attributes.skinIndex, g.attributes.skinWeight, flat));
@@ -229,8 +280,12 @@ function unitGeo(rig, def, teamColor = 0x888888) {
   }
   for (const a of rig.attach) if (def.show.includes(a.name)) list.push(withAttrs(a.geo, a.bone, 1));
   for (const name of def.gear || []) for (const [bone, geo, color, mat] of GEAR[name]()) {
-    const bi = rig.boneIdx[bone]; if (bi === undefined) continue;
-    list.push(withAttrs(geo.applyMatrix4(mat).applyMatrix4(rig.bind[bi]), bi, 1, color));
+    let bi = rig.boneIdx[bone], slot = null;
+    if (rig.mixamo && MX_SLOT[bone]) { bi = rig.boneIdx[MX_SLOT[bone][0]]; slot = MX_SLOT[bone][1]; }
+    if (bi === undefined) continue;
+    geo.applyMatrix4(mat);
+    if (slot) { const s = new THREE.Vector3().setFromMatrixScale(rig.bind[bi]).x; geo.applyMatrix4(slot).applyMatrix4(new THREE.Matrix4().makeScale(1 / s, 1 / s, 1 / s)); }
+    list.push(withAttrs(geo.applyMatrix4(rig.bind[bi]), bi, 1, color));
   }
   return mergeGeometries(list, false);
 }
@@ -239,7 +294,7 @@ function unitGeo(rig, def, teamColor = 0x888888) {
 export function animFigure(kind, teamColor) {
   if (MOUNTS[kind]) { // horse + rider
     const [hk, rk] = MOUNTS[kind], grp = new THREE.Group(), h = animFigure(hk, teamColor), r = animFigure(rk, teamColor), hr = ANIM.rigs.horse, rr = ANIM.rigs[KINDS[rk].model];
-    r.position.set(0, hr.seatY - rr.jointY('hips', rr.table[SIT].start) + .1, .05); grp.add(h, r); grp.name = kind; return grp;
+    r.position.set(0, hr.seatY - rr.jointY(rr.hips, rr.table[KINDS[rk].clips.idle].start) + .1, .05); grp.add(h, r); grp.name = kind; return grp;
   }
   const def = KINDS[kind], rig = ANIM.rigs[def.model], g = unitGeo(rig, def, teamColor), P = g.attributes.position, Nn = g.attributes.normal, I = g.attributes.aSkinI, Wt = g.attributes.aSkinW;
   const data = rig.uBones.value.image.data, W = rig.nB * 4, row = (rig.table[def.clips.idle] || Object.values(rig.table)[0]).start;
@@ -281,13 +336,16 @@ export class AnimBatch {
     const geo = unitGeo(rig, def, teamColor);
     this.rows = new THREE.InstancedBufferAttribute(new Float32Array(cap), 1); this.rows.setUsage(THREE.DynamicDrawUsage); geo.setAttribute('aRow', this.rows);
     const map = teamMap(rig, teamColor, def.look), look = def.look === 'gold' ? { roughness: .42, metalness: .45 } : { roughness: .62, metalness: .08 };
-    const mat = patch(ANIM.pbr ? new THREE.MeshStandardMaterial({ map, vertexColors: true, ...look }) : new THREE.MeshLambertMaterial({ map, vertexColors: true }), false, rig);
+    if (def.look === 'bronze') Object.assign(look, { roughness: .5, metalness: .35 });
+    const mat = patch(ANIM.pbr ? new THREE.MeshStandardMaterial({ map, vertexColors: true, ...look, ...(rig.nmap ? { normalMap: rig.nmap, normalScale: rig.nscale.clone().multiplyScalar(.9) } : {}) }) : new THREE.MeshLambertMaterial({ map, vertexColors: true }), false, rig);
     const m = this.mesh = new THREE.InstancedMesh(geo, mat, cap); m.count = 0; m.frustumCulled = false; m.castShadow = shadows; m.receiveShadow = false;
     if (shadows) { rig.depthMat = rig.depthMat || patch(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }), true, rig); m.customDepthMaterial = rig.depthMat; }
     m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); scene.add(m); this.meshes = [m];
     const c = n => (def.clips[n] && rig.table[def.clips[n]]) || null, idle = c('idle') || Object.values(rig.table)[0];
     this.C = { idle, walk: c('walk') || idle, run: c('run') || c('walk') || idle, attack: c('attack') || idle, death: c('death') || idle, work: c('work'), aim: c('aim'), shoot: c('shoot') };
     this.t = new Float32Array(cap); this.cur = new Int16Array(cap).fill(-1);
+    const pw = this.C.walk.pace, pr = this.C.run.pace; // Mixamo clips: the speed they were captured at
+    this.P = pw ? { walk: pw, run: pr || pw * 2.2, runAt: Math.max(pw * 1.6, Math.min(4.2, (pw + (pr || pw * 2.2)) / 2)) } : PACE;
   }
   setTint() { /* gear colours are part of the model */ }
   alloc() { const i = this.free.length ? this.free.pop() : this.used++; if (i >= this.cap) throw new Error('too many units'); this.mesh.count = Math.max(this.mesh.count, i + 1); this.cur[i] = -1; return i; }
@@ -306,7 +364,7 @@ export class AnimBatch {
     }
     else if (!C.aim && !this.def.noAttack && swT < A.len) { c = C.attack; t = Math.min(c.dur, A.from + swT * A.rate); held = true; }
     else {
-      const P = this.def.pace || PACE;
+      const P = this.def.pace || this.P;
       c = spd > .15 ? (spd > P.runAt ? C.run : C.walk) : (o.work && C.work ? C.work : C.idle);
       if (this.cur[i] !== c.start) { this.cur[i] = c.start; this.t[i] = (i * .37) % c.dur; } // new clip: start out of step with the neighbours
       this.t[i] += dt * (spd > .15 ? spd / (c === C.run ? P.run : P.walk) : 1); t = this.t[i] % c.dur;
@@ -324,7 +382,7 @@ export class MountBatch {
     this.meshes = [...this.h.meshes, ...this.r.meshes]; this.cap = cap; this.metal = []; this.parts = []; this.anim = true;
     const hr = ANIM.rigs.horse, rr = ANIM.rigs[KINDS[rk].model];
     this.hr = hr; this.back0 = hr.jointY('Torso2', hr.table.Idle.start);
-    this.seat = hr.seatY - rr.jointY('hips', rr.table[SIT].start) + .1; // lift the rider so the hips rest on the saddle
+    this.seat = hr.seatY - rr.jointY(rr.hips, rr.table[KINDS[rk].clips.idle].start) + .1; // lift the rider so the hips rest on the saddle
   }
   get used() { return this.h.used; } get free() { return this.h.free; }
   setTint() {}

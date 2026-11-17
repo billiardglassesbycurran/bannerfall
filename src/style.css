@@ -163,6 +163,8 @@ html, body { margin:0; height:100%; overflow:hidden; overscroll-behavior:none; b
 label.set { display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:14px; min-height:40px; }
 label.set input[type=range] { width:46%; accent-color:#d8b45a; touch-action:pan-x; }
 label.set input[type=checkbox] { width:24px; height:24px; accent-color:#d8b45a; }
+label.set input:disabled { opacity:.35; }
+.lookh { margin:10px 0 2px; color:var(--gold2); font-size:15px; letter-spacing:.06em; border-top:1px solid rgba(216,180,90,.25); padding-top:8px; }
 body.bigui #bottom, body.bigui #povact, body.bigui #povbar { zoom:1.12; }
 
 #tutor { position:fixed; left:50%; transform:translateX(-50%); top:calc(42px + var(--st)); width:min(560px, calc(100vw - 2 * 200px)); padding:8px 12px 8px; z-index:8;

@@ -98,6 +98,15 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
   (`MOUNTS`: horse batch + seated rider batch whose upper body plays the attack, rider follows the horse's back bone).
   Siege, ships and civ unique units are still the built-in figures. Viewer: `tools/animview.html`. The `rig_*.glb`
   files (mannequin + extra clips from KayKit Character Animations 1.1) are not loaded yet; they are for future unit types.
+- **Realistic soldiers (v0.31+): Mixamo** (Adobe, free inside games, *not* CC0 — don't publish the raw FBX). Raw downloads in
+  `assets/incoming/mixamo/` (git-ignored); `tools/blender/mixamo.py char|clips` makes `assets/anim/mx_paladin|mx_archer|mx_peasant.glb`
+  (finger bones dropped, ~3.5k tris, one texture + normal map; props named Sword/Shield/Bow/Helmet/Extra) and `mx_clips.glb`
+  (30 clips: ss_* sword&shield, gs_* great sword, bow_*, xb_* rifle-held crossbow, f_* farming, sit). In anim.js `MODELS.*.mixamo`:
+  no re-proportioning, clips keep only rotations + hip motion (scaled to each body), loop clips are taken in place and their
+  speed measured (`table[n].pace`), `parts` picks the pieces, `MX_SLOT` maps gear onto Mixamo hands (`gripr` for crossbows),
+  `bright` lifts dark textures, looks: gold (Commander), bronze (legion), lacquer (repeater), raider (berserker/light cav).
+  Downloads: the owner signs in to mixamo.com in the browser pane; the pane can't save files, so read the export job's
+  `/monitor` response (network log) for the one-time S3 link and curl it. KayKit `char_*`/`rig_*` files are now unused.
 - `src/battle.js` — Battle mode field: 3 capturable banners, reserves + reinforcement waves, army breaks if all banners held.
 - `src/path.js` — A* pathfinding on the grid (pass a walk function: `cellWalk` for land, `navCell` for ships). `src/ai.js` — enemy AI for Skirmish, Battle, Survival.
   Skirmish AI (Knight/Warlord): counters the player's army (`counterW`), gathers at a rally point and attacks only when

@@ -21,7 +21,7 @@
 </script>
 <script>
   // ===== Game version: bump on every change you publish (see CLAUDE.md). =====
-  window.BF_VERSION = '0.30.0';
+  window.BF_VERSION = '0.31.0';
   // Every game file is loaded as file.js?v=VERSION so phones never mix old and new files from the browser cache.
   // (On localhost a timestamp is used instead, so edits show up immediately while developing.)
   (function () {
@@ -162,6 +162,15 @@
     <label class="set">Animated soldiers and villagers <input type="checkbox" id="sAnim"></label>
     <label class="set">Day &amp; night and weather (new games) <input type="checkbox" id="sCycle"></label>
     <label class="set">Fog of war (new games; not in Battle mode) <input type="checkbox" id="sFog"></label>
+    <h4 class="lookh">Look</h4>
+    <label class="set">Brightness <input type="range" id="s_bright" min="0.7" max="1.4" step="0.05"></label>
+    <label class="set">Colour <input type="range" id="s_sat" min="0.6" max="1.5" step="0.05"></label>
+    <label class="set">Distance haze <input type="range" id="s_haze" min="0.3" max="2.5" step="0.1"></label>
+    <label class="set">Valley mist <input type="range" id="s_mist" min="0" max="2" step="0.1"></label>
+    <label class="set">Glow around bright light <input type="range" id="s_bloom" min="0" max="3" step="0.1"></label>
+    <label class="set">Film look (cinematic contrast) <input type="checkbox" id="s_film"></label>
+    <label class="set">Contact shadows (High graphics; slower on phones) <input type="checkbox" id="s_ao"></label>
+    <div class="row"><button class="btn sb" id="s_reset">Reset look</button></div>
     <div class="row"><button class="btn" id="bSetBack">&#8592; Done</button></div>
   </div>
 </div>

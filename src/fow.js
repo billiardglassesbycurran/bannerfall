@@ -7,15 +7,18 @@ const S = 128;
 const data = new Uint8Array(S * S).fill(255);
 const tex = new THREE.DataTexture(data, S, S, THREE.RedFormat, THREE.UnsignedByteType);
 tex.magFilter = tex.minFilter = THREE.LinearFilter; tex.generateMipmaps = false; tex.needsUpdate = true;
-export const FOW = { map: { value: tex }, on: { value: 0 }, cam: { value: new THREE.Matrix4() } };
+export const FOW = { map: { value: tex }, on: { value: 0 }, cam: { value: new THREE.Matrix4() }, mist: { value: 0 }, mistTop: { value: 1.6 } };
 
 // --- shader patch: every material that uses scene fog also gets fog of war ---
 const C = THREE.ShaderChunk;
-C.fog_pars_vertex += '\n#ifdef USE_FOG\n varying vec2 vFowW; uniform mat4 fowCam;\n#endif\n';
-C.fog_vertex += '\n#ifdef USE_FOG\n vFowW = (fowCam * vec4(mvPosition.xyz, 1.0)).xz;\n#endif\n';
-C.fog_pars_fragment += '\n#ifdef USE_FOG\n varying vec2 vFowW; uniform sampler2D fowMap; uniform float fowOn;\n#endif\n';
+C.fog_pars_vertex += '\n#ifdef USE_FOG\n varying vec2 vFowW; varying float vFowY; uniform mat4 fowCam;\n#endif\n';
+C.fog_vertex += '\n#ifdef USE_FOG\n vec4 fowWP = fowCam * vec4(mvPosition.xyz, 1.0); vFowW = fowWP.xz; vFowY = fowWP.y;\n#endif\n';
+C.fog_pars_fragment += '\n#ifdef USE_FOG\n varying vec2 vFowW; varying float vFowY; uniform sampler2D fowMap; uniform float fowOn, fowMist, fowMistTop;\n#endif\n';
 C.fog_fragment += `
 #ifdef USE_FOG
+  // valley mist: a soft white layer lying in the low ground (rivers, hollows), thickest at dawn and in misty weather
+  if (fowMist > 0.001) { float mh = 1.0 - smoothstep(-0.8, fowMistTop, vFowY); float wob = 0.75 + 0.25 * sin(vFowW.x * 0.21 + vFowW.y * 0.17) * sin(vFowW.y * 0.13 - vFowW.x * 0.07);
+    gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor * 1.04, clamp(fowMist * mh * wob, 0.0, 0.85)); }
   if (fowOn > 0.5 && vFowW.x > 0.0 && vFowW.y > 0.0 && vFowW.x < ${S}.0 && vFowW.y < ${S}.0) gl_FragColor.rgb *= mix(0.05, 1.0, texture2D(fowMap, vFowW / ${S}.0).r);
 #endif
 `;
@@ -24,7 +27,7 @@ C.fog_fragment += `
 const P = THREE.Material.prototype;
 Object.defineProperty(P, 'onBeforeCompile', {
   configurable: true,
-  get() { return this._fowObc || (this._fowObc = (sh, r) => { sh.uniforms.fowMap = FOW.map; sh.uniforms.fowOn = FOW.on; sh.uniforms.fowCam = FOW.cam; this._userObc?.(sh, r); }); },
+  get() { return this._fowObc || (this._fowObc = (sh, r) => { sh.uniforms.fowMap = FOW.map; sh.uniforms.fowOn = FOW.on; sh.uniforms.fowCam = FOW.cam; sh.uniforms.fowMist = FOW.mist; sh.uniforms.fowMistTop = FOW.mistTop; this._userObc?.(sh, r); }); },
   set(fn) { this._userObc = fn; },
 });
 P.customProgramCacheKey = function () { return this._userObc ? this._userObc.toString() : ''; };

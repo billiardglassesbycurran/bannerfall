@@ -102,13 +102,18 @@ const GRADE = {
       float gr = fract(sin(dot(vUv * 913.0 + uTime, vec2(12.9898,78.233))) * 43758.5453); c.rgb += (gr - .5) * .012; // fine film grain
       gl_FragColor = c; }`,
 };
-let composer = null;
+let composer = null, bloomPass = null, aoPass = null;
+/** Contact shadows (screen-space ambient occlusion): soft darkening where things meet. High quality only; a Settings switch. */
+function setAO(on) {
+  if (!composer || qLevel !== 'high') return;
+  if (on && !aoPass) try { aoPass = new GTAOPass(scene, camera, innerWidth, innerHeight); aoPass.blendIntensity = .8; aoPass.updateGtaoMaterial?.({ radius: .5, distanceExponent: 1.5, thickness: 1, scale: 1 }); composer.insertPass(aoPass, 1); composer.setSize(innerWidth, innerHeight); } catch (e) { console.warn('AO unavailable', e); }
+  if (aoPass) aoPass.enabled = !!on;
+}
 if (qLevel !== 'low') {
   const rt = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: Q.aa ? 4 : 0 });
   composer = new EffectComposer(renderer, rt);
   composer.addPass(new RenderPass(scene, camera));
-  if (qLevel === 'high' && !isTouch) try { const ao = new GTAOPass(scene, camera, 4, 4); ao.blendIntensity = .8; ao.updateGtaoMaterial?.({ radius: .5, distanceExponent: 1.5, thickness: 1, scale: 1 }); composer.addPass(ao); } catch (e) { console.warn('AO unavailable', e); }
-  composer.addPass(new UnrealBloomPass(new THREE.Vector2(256, 256), .18, .5, .92));
+  bloomPass = new UnrealBloomPass(new THREE.Vector2(256, 256), .18, .5, .92); composer.addPass(bloomPass);
   composer.addPass(new ShaderPass(GRADE));
   composer.addPass(new OutputPass());
 }
@@ -124,12 +129,19 @@ for (const [id, k] of [['bAll', 'helmet'], ['bIdle', 'zzz'], ['bBox', 'box'], ['
 const fx = new FX(scene), sound = new Sound();
 const atmo = new Atmosphere({ scene, sun, hemi, renderer, base: { sun: sun.intensity, hemi: hemi.intensity }, low: qLevel === 'low', sound });
 // ---------------- player settings (saved on this device) ----------------
-const SET_DEFAULT = { look: 1, cam: 1, vol: .7, music: true, voice: true, big: false, auto: true, fog: true, mapBot: false, mapOff: false, cycle: true, animOn: true };
+const SET_DEFAULT = { look: 1, cam: 1, vol: .7, music: true, voice: true, big: false, auto: true, fog: true, mapBot: false, mapOff: false, cycle: true, animOn: true,
+  bright: 1, sat: 1, haze: 1, bloom: 1, mist: 1, film: false, ao: !isTouch }; // the last row is the Look panel
 app.settings = { ...SET_DEFAULT }; try { Object.assign(app.settings, JSON.parse(localStorage.getItem('bf.settings') || '{}')); } catch { /* ignore */ }
 function applySettings() {
   sound.setMusic?.(app.settings.music !== false); sound.voiceOn = app.settings.voice !== false;
   document.body.classList.toggle('bigui', !!app.settings.big); sound.setVolume?.(app.settings.vol);
   const mw = document.getElementById('miniw'); mw.classList.toggle('bottom', !!app.settings.mapBot); mw.classList.toggle('off', !!app.settings.mapOff); document.getElementById('bMap').classList.toggle('on', !app.settings.mapOff);
+  // Look panel: brightness / colour / haze / bloom / valley mist, Film look (cinematic ACES tone curve), contact shadows
+  const S = app.settings; atmo.look = S;
+  renderer.toneMapping = S.film ? THREE.ACESFilmicToneMapping : THREE.NeutralToneMapping;
+  GRADE.uniforms.uSat.value = 1.08 * (S.sat ?? 1) * (S.film ? 1.04 : 1); GRADE.uniforms.uVig.value = S.film ? .5 : .32;
+  if (bloomPass) bloomPass.strength = .18 * (S.bloom ?? 1) * (S.film ? 1.3 : 1);
+  setAO(S.ao);
   try { localStorage.setItem('bf.settings', JSON.stringify(app.settings)); } catch { /* ignore */ }
 }
 app.fx = fx; app.sound = sound;
@@ -518,13 +530,16 @@ onBtn('hTut', () => { app.cfg.mode = 'tutorial'; try { localStorage.setItem('bf.
 onBtn('bBack', showHome);
 const openSettings = () => {
   const S = app.settings; $('sLook').value = S.look; $('sCam').value = S.cam; $('sVol').value = S.vol; $('sMusic').checked = S.music; $('sVoice').checked = S.voice; $('sBig').checked = S.big; $('sAuto').checked = S.auto; $('sFog').checked = S.fog; $('sMapBot').checked = S.mapBot; $('sCycle').checked = S.cycle; $('sAnim').checked = S.animOn !== false;
+  for (const k of ['bright', 'sat', 'haze', 'bloom', 'mist']) $('s_' + k).value = S[k] ?? 1; $('s_film').checked = !!S.film; $('s_ao').checked = !!S.ao; $('s_ao').disabled = qLevel !== 'high';
   $('settings').classList.remove('hide');
 };
 onBtn('bSettings', openSettings); onBtn('bSettings2', openSettings);
 onBtn('bSetBack', () => { $('settings').classList.add('hide'); });
-for (const [id, key, num] of [['sLook', 'look', 1], ['sCam', 'cam', 1], ['sVol', 'vol', 1], ['sMusic', 'music'], ['sVoice', 'voice'], ['sBig', 'big'], ['sAuto', 'auto'], ['sFog', 'fog'], ['sMapBot', 'mapBot'], ['sCycle', 'cycle'], ['sAnim', 'animOn']])
+for (const [id, key, num] of [['sLook', 'look', 1], ['sCam', 'cam', 1], ['sVol', 'vol', 1], ['sMusic', 'music'], ['sVoice', 'voice'], ['sBig', 'big'], ['sAuto', 'auto'], ['sFog', 'fog'], ['sMapBot', 'mapBot'], ['sCycle', 'cycle'], ['sAnim', 'animOn'],
+  ['s_bright', 'bright', 1], ['s_sat', 'sat', 1], ['s_haze', 'haze', 1], ['s_bloom', 'bloom', 1], ['s_mist', 'mist', 1], ['s_film', 'film'], ['s_ao', 'ao']])
   $(id).addEventListener('input', e => { app.settings[key] = num ? +e.target.value : e.target.checked; applySettings(); });
 $('sAnim').addEventListener('change', () => { if (!app.game) location.reload(); else app.toast('Animated soldiers: applies after you return to the main menu.', 3); }); // models load at start-up
+onBtn('s_reset', () => { Object.assign(app.settings, { bright: 1, sat: 1, haze: 1, bloom: 1, mist: 1, film: false, ao: !isTouch }); applySettings(); openSettings(); });
 applySettings();
 // auto-pause when the app goes to the background (phone call, switching apps)
 document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(app); if (document.hidden && app.settings.auto && app.game && !app.game.over && !app.multi) setPause(true); });
@@ -666,7 +681,7 @@ renderer.setAnimationLoop(() => {
   fx.update(dt);
   const f = app.mode === 'pov' && pov.unit ? pov.unit : rts.focus; // keep the sharp-shadow area centred on the action
   { const k = g && g.time - (app.lastFight ?? -99) < 9 ? 1 : 0; if (k !== app.musicK) { app.musicK = k; sound.setIntensity?.(k); } }
-  atmo.update(dt, g?.cycle ? g.env : null, camera); SUN_DIR.copy(atmo.dir);
+  atmo.update(dt, g?.cycle ? g.env : null, camera, f); SUN_DIR.copy(atmo.dir);
   sun.target.position.set(f.x, 0, f.z); sun.position.copy(sun.target.position).addScaledVector(SUN_DIR, 110);
   if (marker.visible) { markerT += real; marker.scale.setScalar(1 + markerT * 1.5); marker.material.opacity = 1 - markerT / .7; if (markerT > .7) marker.visible = false; }
   hud.update(real);
