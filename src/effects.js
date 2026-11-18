@@ -72,6 +72,11 @@ export class FX {
       this.glow.add(x, y, z, dx / d * sp * k + R(-1.6, 1.6), dy / d * sp * k + R(-1, 1.4), dz / d * sp * k + R(-1.6, 1.6), life, R(.3, .6), R(1.4, 2.6), 1, R(.35, .75), R(.05, .2), .95, -1.5, .4); }
     for (let i = 0; i < 10; i++) this.soft.add(tx + R(-1, 1), ty, tz + R(-1, 1), R(-.3, .3), R(.8, 1.6), R(-.3, .3), R(1.5, 2.5), .8, 3, .2, .18, .16, .5, 0, .3);
   }
+  /** A cannon firing out of a gun port: a bright flash and a thick gout of smoke blown out sideways (dx, dz). */
+  muzzle(x, y, z, dx, dz) {
+    for (let i = 0; i < 7; i++) this.glow.add(x, y, z, dx * R(2, 7) + R(-.6, .6), R(-.2, .8), dz * R(2, 7) + R(-.6, .6), R(.08, .18), R(.5, .9), .2, 1, R(.6, .85), .25, 1, 0, 3);
+    for (let i = 0; i < 9; i++) this.soft.add(x + dx * R(.2, 1.4), y + R(-.1, .3), z + dz * R(.2, 1.4), dx * R(.8, 2.6) + R(-.3, .3), R(.2, .7), dz * R(.8, 2.6) + R(-.3, .3), R(1.8, 3.2), .6, 2.4, .84, .83, .8, .55, 0, .9);
+  }
   ember(x, y, z) { this.glow.add(x, y, z, R(-.5, .5), R(1, 2.5), R(-.5, .5), R(.8, 1.4), .12, .05, 1, .6, .2, 1, .5, .5); }
   sparks(x, y, z, n = 6) { for (let i = 0; i < n; i++) this.glow.add(x, y, z, R(-2, 2), R(.5, 3), R(-2, 2), R(.15, .35), .14, .04, 1, R(.75, .95), .4, 1, 9, 2); }
   dust(x, y, z, n = 10, spread = 1.5, tint = [.55, .48, .38]) { for (let i = 0; i < n; i++) { const a = R(0, 6.28), s = R(.5, 1) * spread; this.soft.add(x + Math.cos(a) * .3, y + .2, z + Math.sin(a) * .3, Math.cos(a) * s, R(.2, .9), Math.sin(a) * s, R(1, 2), .6, 2.2, tint[0], tint[1], tint[2], .5, -.1, 1.5); } }

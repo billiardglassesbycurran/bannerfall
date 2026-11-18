@@ -194,17 +194,20 @@ def main():
 
         print('Online play (two tabs, same-computer test link)')
         H, herr = open_game(p, base + 'index.html?loop=1', '', viewport={'width': 1000, 'height': 600})
-        G = H.context.new_page(); gerr = []; G.on('pageerror', lambda e: gerr.append(str(e))); G.goto(base + 'index.html?loop=1')
-        for _ in range(90):
+        G = H.context.new_page(); gerr = []; G.on('pageerror', lambda e: gerr.append(str(e))); G.bring_to_front(); G.goto(base + 'index.html?loop=1')
+        for _ in range(320):  # two tabs share one software renderer here and the big maps take a while to build
             if G.evaluate('!!window.bannerfall && !document.getElementById("loading")'): break
             time.sleep(1.5)
-        H.click('#hOnline'); G.click('#hOnline')
+        state = lambda pg: pg.evaluate("() => ({ url: location.href.slice(-30), loading: !!document.getElementById('loading'), online: !!document.getElementById('hOnline'), game: !!window.bannerfall })")
+        print('   host', state(H), 'guest', state(G), herr[:2], gerr[:2])
+        H.bring_to_front(); H.click('#hOnline'); G.bring_to_front(); G.click('#hOnline')  # a page in the background tab never looks 'stable' to Playwright
+        H.bring_to_front()
         H.click('#bHost'); code = None
         for _ in range(40):
             time.sleep(.5); mm = re.search(r'Your code: ([A-Z0-9]{5})', H.inner_text('#onlineMsg'))
             if mm: code = mm.group(1); break
         check(bool(code), f'host gets a join code {code}')
-        G.fill('#joinCode', code or ''); G.click('#bJoin')
+        G.bring_to_front(); G.fill('#joinCode', code or ''); G.click('#bJoin')
         for _ in range(60):
             time.sleep(.5)
             if G.evaluate('() => !!bannerfall.game && bannerfall.game.units.length > 0'): break

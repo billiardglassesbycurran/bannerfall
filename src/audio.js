@@ -100,6 +100,7 @@ export class Sound {
       case 'splash': this.burst(t, .25, .4, 'bandpass', 900, .8, out, 400); break;
       case 'chime': this.tone('sine', 880, t, .12, .5, out); this.tone('sine', 1320, t + .08, .08, .5, out); break;
       case 'horn': for (const [f, dt] of [[196, 0], [233, .35]]) { const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900; lp.connect(out); this.tone('sawtooth', f, t + dt, .12, .5, lp); } break;
+      case 'cannon': this.burst(t, .7, .9, 'lowpass', 1800, .6, out, 90); this.tone('sine', 62, t, .55, .7, out, 34); this.burst(t + .02, .3, .12, 'highpass', 2500, .5, out); break;
       case 'thunder': this.burst(t, .6, 2.6, 'lowpass', 500, .4, out, 60); this.tone('sine', 40, t + .05, .4, 2, out); break;
       case 'fanfare': [261.6, 329.6, 392, 523.2].forEach((f, i) => { const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1600; lp.connect(out); this.tone('sawtooth', f, t + i * .16, .12, i === 3 ? .9 : .25, lp); }); break;
     }

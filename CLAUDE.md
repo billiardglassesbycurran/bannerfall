@@ -50,9 +50,16 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
 - `src/data.js` — unit/building stats, civilizations (`CIVS`: per-class stat mods, unique unit, look), difficulty, modes.
   Civ bonuses are applied in `Game.stat(team, type)`; always read unit stats through it, never straight from `UD`.
   Civilizations are historically inspired, but bonuses/unique units are original — don't copy another game's.
-- `src/world.js` — maps (`MAP_LIST`/`MAP`: Riverlands, Highland Pass, Forest Valley, Random with seed; chosen via
+- `src/world.js` — maps (`MAP_LIST`/`MAP`: Riverlands, Highland Pass, Forest Valley, Inland Sea, Random with seed; chosen via
   localStorage `bf.map`/`bf.mapSeed` or `#play=...&map=highland`, built at page load so switching maps reloads), heightmap, walkability grid, roads, terrain splat shader, resources (trees/berries/gold), grass/rocks,
   water, sky, minimap colours. Tree/grass detail scales with the quality level — keep Medium near ~1M triangles.
+  **Map size (v0.36): `SIZE` 256** (was 128). Layouts are written on a 128 "design" grid and stretched by `K` (`sc()`);
+  things that belong to a town use `home(x, z)` (same offset from the town as before) so starting resources stay close.
+  Gold/stone/berries/deer are also scattered everywhere (mirrored `spots` block). Inland Sea (`MAP.sea`, `seaIn()`): sea
+  along the frontier, a bay toward each town, 3 islands with gold/stone, land only round the far corners; Battle mode uses
+  `FIELD` (a corner on the sea map). Big instanced sets (trees, rocks, ferns, grass, logs) are split into 64 m tiles
+  (`splitTiles`/`retile`) so the camera culls what's off screen — keep that for anything instanced map-wide.
+  fow.js `S` must equal `SIZE` (not imported on purpose); save key `bf.save2`; long paths use a 40000-node A* budget.
 - `src/models.js` — unit figures (GPU-instanced per team+type: keeps big armies fast), knight + horse, building models, arrows.
 - `src/geo.js` — helpers to bake colours into geometry and merge parts (cloth vs metal buckets); shared materials `M`
   (PBR on Medium/High, Lambert on Low), wind sway, weathered-stone triplanar shader; `U` holds shared shader uniforms.
@@ -113,7 +120,7 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
   `/monitor` response (network log) for the one-time S3 link and curl it. KayKit `char_*`/`rig_*` files are now unused.
 - **God mode** (v0.34): setup tick box (`app.cfg.god`, `#god` in the URL); online only if both players ticked it (hello/start carry
   `god`). `game.god = { on, T: [{res, build, pop, hero}, …] }`; `cheat/cheatAge/cheatSpawn` (also in net.js `RPC`, team-swapped);
-  reveal is local (fog off). ⚡ button → `#godp` panel; summoning = pending `spawn`. God-only units in `UD` (`god: 1`): dragon (`fly`:
+  reveal is local (fog off). ⚡ button → `#godp` panel (phones on their side: cheats and summons side by side, `.gbody`); summoning = pending `spawn`. God-only units in `UD` (`god: 1`): dragon (`fly`:
   straight-line flight 5 m up, `fire` breath = splash shot + `fx.breath`), troll, demon, skeleton (Mixamo), warwagon, battlecar
   (procedural parts in models.js; `dragonParts` is the stand-in if the model can't load). Their models are `lazy` in anim.js:
   `loadLazy()` runs only when a God-mode game starts. Dragon = Sketchfab CC-BY (credit in CREDITS.md); `mixamo.py creature` mode.
@@ -123,6 +130,9 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
 - Any troop can hunt animals (`command` → attack task on an animal res, `hurtAnimal`); God units (`d.god`) also attack their own side
   when targeted (rts.js tap, `command`, shots `any` → friendly splash).
 - `src/battle.js` — Battle mode field: 3 capturable banners, reserves + reinforcement waves, army breaks if all banners held.
+- Ships (v0.37): fishboat, transport (10), warship (archer galley), fireship (`d.fire`, `vsShip`), cog (big transport, 20),
+  galleon (`d.cannon`: broadside from the side facing the target, `fx.muzzle`, 'cannon' sound, splash hits ships). Models in
+  models.js `shipParts`; `SHIP_LEN` per type. AI (`navy()`) builds a mixed fleet and raids the water nearest the enemy town.
 - `src/path.js` — A* pathfinding on the grid (pass a walk function: `cellWalk` for land, `navCell` for ships). `src/ai.js` — enemy AI for Skirmish, Battle, Survival.
   Skirmish AI (Knight/Warlord): counters the player's army (`counterW`), gathers at a rally point and attacks only when
   strong enough (`power`), targets the weakest spot (`weakSpot`), retreats when losing, cavalry raids on peasants (`raid`),
@@ -186,5 +196,5 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
    Stone Walls tech; enemies `breach` walls that block their path.
 4. ✅ v0.13 Fog of war; ✅ v0.12 formations, morale, flanking, banners; ✅ v0.18 generated music (calm/battle, `Sound.schedule`)
    and unit voices (speechSynthesis, `speak()` in main.js).
-5. ✅ v0.14 Highland Pass, Forest Valley, Random maps. Still: campaign missions (the prototype has 4).
+5. ✅ v0.14 Highland Pass, Forest Valley, Random maps; ✅ v0.36 maps 4× bigger + Inland Sea; ✅ v0.37 galleons, fire ships, cogs.
 6. 3rd-person polish: blocking, charge ability, mounted hero, camera avoiding trees.

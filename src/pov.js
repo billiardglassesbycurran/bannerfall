@@ -170,7 +170,7 @@ export class POVView {
       sh.yaw += turn; this.yaw += turn;
       const ok = v && this.g.step(sh, Math.sin(sh.yaw) * v * dt, Math.cos(sh.yaw) * v * dt); sh.speedNow = ok ? Math.abs(v) : 0;
       u.x = sh.x - Math.sin(sh.yaw) * L * .14; u.z = sh.z - Math.cos(sh.yaw) * L * .14;
-      u.yOver = WL + (sh.type === 'transport' ? .14 : sh.type === 'warship' ? .03 : .02) + Math.sin(this.g.time * 1.6 + sh.id) * .04;
+      u.yOver = WL + ({ transport: .14, cog: .3, galleon: .28, warship: .03, fireship: .03 }[sh.type] ?? .02) + Math.sin(this.g.time * 1.6 + sh.id) * .04;
     } else if (this.room) { // walking around inside a building
       const r = this.room, [lx, lz] = this.local();
       if (sp > 0) { mdx = fx * my + rx * mx; mdz = fz * my + rz * mx; const dl = Math.hypot(mdx, mdz) || 1, c = Math.cos(r.ry), sn = Math.sin(r.ry);

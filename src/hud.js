@@ -15,7 +15,7 @@ export const missing = (T, c) => ['f', 'w', 'g', 's'].filter(k => (c?.[k] || 0) 
 const TASK = { patrol: 'Patrolling', garrison: 'Running to the Town Hall', repair: 'Repairing', board: 'Boarding ship', unload: 'Sailing to land troops', idle: 'Idle', move: 'Moving', amove: 'Attacking', attack: 'Fighting', follow: 'Following', build: 'Building', farm: 'Farming', return: 'Carrying to storage' };
 const RN = { f: 'food', w: 'wood', g: 'gold', s: 'stone' };
 // button names short enough to fit (the full name is in the tooltip and the selection panel)
-const SHORT = { Crossbowman: 'Crossbow', 'Light Cavalry': 'Light Cav', 'Horse Archer': 'H. Archer', 'Fishing Boat': 'Fisher', 'Transport Ship': 'Transport', 'Lumber Camp': 'Lumber', 'Mining Camp': 'Mining', Storehouse: 'Store',
+const SHORT = { Crossbowman: 'Crossbow', 'Light Cavalry': 'Light Cav', 'Horse Archer': 'H. Archer', 'Fishing Boat': 'Fisher', 'Transport Ship': 'Transport', 'Cannon Galleon': 'Galleon', 'Lumber Camp': 'Lumber', 'Mining Camp': 'Mining', Storehouse: 'Store',
   'Archery Range': 'Range', 'Siege Workshop': 'Siege', Blacksmith: 'Smith', 'Wall Tower': 'W. Tower', Watchtower: 'Tower', 'Bronze Age': 'Bronze', 'Castle Age': 'Castle', 'Town Watch': 'Watch', Wheelbarrow: 'Barrow',
   'Stone Walls': 'St. Walls', 'Castle Walls': 'C. Walls', 'Fortified Hall': 'Fortify', 'Double-Bit Axe': 'Axe', 'Gold Mining': 'Gold Mine', 'Heavy Plough': 'Plough', 'Iron Casting': 'Casting', 'Bodkin Arrows': 'Bodkin',
   'Chain Mail': 'Chainmail', 'Plate Armour': 'Plate', 'Veteran Infantry': 'Veterans', 'Elite Guard': 'Elite', 'Royal Bowmen': 'R. Bowmen', 'Blast Furnace': 'Furnace', 'Guard Towers': 'Guard Tw.', "Khan's Guard": 'Khan Guard' };

@@ -20,6 +20,9 @@ export const UD = {
   fishboat:  { name: 'Fishing Boat', plural: 'Fishing Boats', cls: 'ship', hp: 80, spd: 3.3, dmg: 0, rng: 0, cd: 1, arm: 0, cost: { w: 60 }, time: 12, rad: .9, acq: 0, ship: 1, fisher: 1, desc: 'Catches fish and brings it to a Dock' },
   transport: { name: 'Transport Ship', plural: 'Transport Ships', cls: 'ship', hp: 160, spd: 3.5, dmg: 0, rng: 0, cd: 1, arm: 1, cost: { w: 100 }, time: 16, rad: 1.3, acq: 0, ship: 1, carry: 10, desc: 'Carries up to 10 units across water' },
   warship:   { age: 1, name: 'Warship', plural: 'Warships', cls: 'ship', hp: 230, spd: 3.3, dmg: 9, rng: 9.5, cd: 1.5, arm: 2, cost: { w: 120, g: 50 }, time: 22, rad: 1.3, acq: 11, ship: 1, ranged: 1, desc: 'Archers on a fast galley; attacks ships and the shore' },
+  fireship:  { age: 1, name: 'Fire Ship', plural: 'Fire Ships', cls: 'ship', hp: 190, spd: 4.1, dmg: 12, rng: 4, cd: 1.1, arm: 1, cost: { w: 90, g: 45 }, time: 18, rad: 1.2, acq: 10, ship: 1, ranged: 1, fire: 1, splash: 1.6, vsShip: 2, desc: 'Fast and fierce: sprays fire that sets enemy ships ablaze. Get close!' },
+  galleon:   { age: 2, name: 'Cannon Galleon', plural: 'Cannon Galleons', cls: 'ship', hp: 460, spd: 2.6, dmg: 30, rng: 15, cd: 4.0, arm: 3, cost: { w: 220, g: 130 }, time: 32, rad: 1.7, acq: 16, ship: 1, ranged: 1, cannon: 1, splash: 1.7, vsBld: 2.5, desc: 'A great gun ship: cannon broadsides smash ships, troops and coastal buildings from far away' },
+  cog:       { age: 2, name: 'War Cog', plural: 'War Cogs', cls: 'ship', hp: 420, spd: 3.1, dmg: 0, rng: 0, cd: 1, arm: 3, cost: { w: 180, g: 40 }, time: 24, rad: 1.6, acq: 0, ship: 1, carry: 20, desc: 'A big armoured transport: carries 20 troops for a landing' },
   healer:    { age: 1, name: 'Healer', plural: 'Healers', cls: 'civ', hp: 45, spd: 2.8, dmg: 0, rng: 0, cd: 1, arm: 0, cost: { g: 90 }, time: 16, rad: .4, acq: 0, heal: 4, desc: 'Heals wounded troops near them (4 hit points a second)' },
   hero:      { name: 'Commander', plural: 'Commanders', cls: 'hero', hp: 620, spd: 3.6, dmg: 28, rng: 1.6, cd: .85, arm: 4, cost: null, time: 0, rad: .5, acq: 10, hero: 1, melee: 1, scale: 1.15, desc: 'Your hero. Soldiers near the Commander fight harder and rally' },
   // God mode only (spawned from the God panel, never trained)
@@ -55,7 +58,7 @@ export const BD = {
   gate:     { name: 'Gate', hp: 700, size: 1, cost: { w: 25 }, time: 8, arm: 6, wall: 1, gate: 1, desc: 'Your troops pass, enemies can\'t. Place it on your own wall' },
   castle:   { age: 3, name: 'Castle', hp: 5000, size: 6, cost: { w: 400, s: 650, g: 300 }, time: 90, trains: ['knight', 'crossbow'], pop: 15, drop: 0, atk: { dmg: 18, rng: 13, cd: .9 }, arm: 8, one: 1, desc: 'The mightiest building: 5000 hit points, rains arrows, trains your unique unit, knights and crossbowmen. One per side' },
   tower:    { age: 1, name: 'Watchtower', hp: 600, size: 2, cost: { w: 50, s: 100 }, time: 20, atk: { dmg: 11, rng: 11, cd: 1.4 }, arm: 4, desc: 'Shoots arrows at enemies' },
-  dock:     { name: 'Dock', hp: 900, size: 3, cost: { w: 150 }, time: 22, trains: ['fishboat', 'transport', 'warship'], drop: 1, dock: 1, arm: 2, desc: 'Build on the shore. Builds ships, stores fish' },
+  dock:     { name: 'Dock', hp: 900, size: 3, cost: { w: 150 }, time: 22, trains: ['fishboat', 'transport', 'warship', 'fireship', 'cog', 'galleon'], drop: 1, dock: 1, arm: 2, desc: 'Build on the shore. Builds ships, stores fish' },
 };
 export const BUILD_LIST = ['house', 'farm', 'store', 'barracks', 'range', 'stable', 'workshop', 'smith', 'tower', 'dock'];
 export const BUILD_ECO = ['house', 'farm', 'mill', 'lumber', 'mining', 'store', 'dock', 'market', 'smith', 'well'];

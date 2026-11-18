@@ -25,12 +25,15 @@ const MAX_POP = 200;
 const CASTLE_HOLD = 300; // seconds a Castle must stand to win Castle mode
 const PACE = .5, TAU = Math.PI * 2;
 /** Rock-paper-scissors bonuses on top of spearmen's 3x vs horses. */
+const cannonMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1c, roughness: .4, metalness: .7 }); // iron cannonballs
 function counterMul(a, t) {
   let m = 1;
   if (a.horse && !a.ranged && t.cls === 'arch') m *= a.vsArch || 1.6;              // cavalry run down archers
   if (a.cls === 'arch' && !a.horse && t.vsHorse) m *= 1.3;                         // arrows thin out spear blocks
   if (a.cls === 'inf' && !a.vsHorse && t.vsHorse) m *= 1.3;                        // swordsmen get inside the spears
   if (a.cls === 'arch' && t.horse && !t.ranged && !a.bolt) m *= .8;                // armoured riders shrug off arrows (bolts pierce)
+  if (a.vsShip && t.ship) m *= a.vsShip;                                           // fire ships burn other ships
+  if (a.cannon && t.ship) m *= 1.4;                                                // cannonballs hole hulls
   return m;
 }
 export class Game {
@@ -510,21 +513,23 @@ export class Game {
 
   // ---------------- projectiles ----------------
   shoot(src, t, dmg, from) {
-    const kind = src?.d?.fire ? 'fire' : src?.d?.stone ? 'stone' : src?.d?.bolt ? 'bolt' : 'arrow';
-    const f = from || new THREE.Vector3(src.x, src.y + (src.d?.fly ? 5.6 : src.d?.horse ? 2.4 : src.d?.ship ? 1.8 : 1.5) * (src.scale || 1), src.z);
-    if (kind === 'fire') f.addScaledVector(new THREE.Vector3(Math.sin(src.yaw), 0, Math.cos(src.yaw)), 2.2); // from the dragon's jaws
+    const kind = src?.d?.fire ? 'fire' : src?.d?.cannon ? 'cannon' : src?.d?.stone ? 'stone' : src?.d?.bolt ? 'bolt' : 'arrow';
+    const f = from || new THREE.Vector3(src.x, src.y + (src.d?.fly ? 5.6 : src.d?.horse ? 2.4 : src.d?.cannon ? .9 : src.d?.ship ? 1.8 : 1.5) * (src.scale || 1), src.z);
+    if (kind === 'fire') f.addScaledVector(new THREE.Vector3(Math.sin(src.yaw), 0, Math.cos(src.yaw)), src.d.ship ? 3 : 2.2); // from the dragon's jaws / the fire ship's bow
+    if (kind === 'cannon') { const sx = Math.cos(src.yaw), sz = -Math.sin(src.yaw), side = (t.x - src.x) * sx + (t.z - src.z) * sz > 0 ? 1 : -1, al = (Math.random() - .5) * 4; f.x += sx * side * 1.5 + Math.sin(src.yaw) * al; f.z += sz * side * 1.5 + Math.cos(src.yaw) * al; } // a gun port on the side facing the target
     this.onShoot?.(src, kind, f, t);
-    const mesh = new THREE.Mesh(kind === 'stone' || kind === 'fire' ? stoneGeo : kind === 'bolt' ? boltGeo : arrowGeo, M.vc); mesh.castShadow = kind === 'stone'; mesh.visible = kind !== 'fire'; this.scene.add(mesh);
-    const d = Math.hypot(t.x - f.x, t.z - f.z), speed = kind === 'stone' ? 13 : kind === 'fire' ? 24 : kind === 'bolt' ? 30 : 22;
-    this.shots.push({ any: !!src?.d?.god && t.team === src.team, mesh, f, t, kind, homing: kind !== 'stone' && kind !== 'fire', tx: t.x, tz: t.z, ty: (t.kind === 'bld' ? t.y + 1.5 : t.y + 1.0), k: 0, dur: Math.max(.25, d / speed), dmg, src, team: src.team, arc: d * (kind === 'stone' ? .35 : kind === 'fire' ? 0 : kind === 'bolt' ? .04 : .12) });
+    const mesh = new THREE.Mesh(kind === 'stone' || kind === 'fire' || kind === 'cannon' ? stoneGeo : kind === 'bolt' ? boltGeo : arrowGeo, kind === 'cannon' ? cannonMat : M.vc); mesh.castShadow = kind === 'stone'; mesh.visible = kind !== 'fire'; if (kind === 'cannon') mesh.scale.setScalar(.45); this.scene.add(mesh);
+    const d = Math.hypot(t.x - f.x, t.z - f.z), speed = kind === 'stone' ? 13 : kind === 'fire' ? 24 : kind === 'cannon' ? 28 : kind === 'bolt' ? 30 : 22;
+    const miss = kind === 'cannon' ? (Math.random() - .5) * 1.6 : 0; // cannons aren't sniper rifles
+    this.shots.push({ any: !!src?.d?.god && t.team === src.team, navy: !!src?.d?.ship, mesh, f, t, kind, homing: kind !== 'stone' && kind !== 'fire' && kind !== 'cannon', tx: t.x + miss, tz: t.z - miss, ty: (t.kind === 'bld' ? t.y + 1.5 : t.y + 1.0), k: 0, dur: Math.max(.25, d / speed), dmg, src, team: src.team, arc: d * (kind === 'stone' ? .35 : kind === 'fire' ? 0 : kind === 'cannon' ? .08 : kind === 'bolt' ? .04 : .12) });
   }
   /** Catapult stone lands: hurts everything nearby (friendly fire excluded) and any building it hits. */
   splash(s) {
     const r = s.src?.d?.splash || 1.8, src = s.src && s.src.alive ? s.src : { d: UD.catapult, team: s.team, alive: false };
-    this.unitsNear(s.tx, s.tz, r + 1, u => { if (u.alive && (u.team !== s.team || s.any) && u !== s.src && !u.d.ship) { const d = Math.hypot(u.x - s.tx, u.z - s.tz); if (d < r) this.damage(u, s.dmg * (1 - d / r * .5), src); } });
+    this.unitsNear(s.tx, s.tz, r + 1, u => { if (u.alive && (u.team !== s.team || s.any) && u !== s.src && (!u.d.ship || s.navy || s.kind === 'cannon')) { const d = Math.hypot(u.x - s.tx, u.z - s.tz); if (d < r) this.damage(u, s.dmg * (1 - d / r * .5), src); } });
     for (const b of this.blds) if (b.alive && (b.team !== s.team || s.any) && this.edgeDist({ x: s.tx, z: s.tz }, b) < .6) { this.damage(b, s.dmg, src); break; }
     if (s.kind === 'fire') for (const a of animals) if (a.alive && a.hp > 0 && Math.hypot(a.x - s.tx, a.z - s.tz) < r) hurtAnimal(a, s.dmg, src, this.time); // dragon fire catches deer too
-    this.onSplash?.(s.tx, s.tz);
+    this.onSplash?.(s.tx, s.tz, s.kind);
   }
   updateShots(dt) {
     const p = new THREE.Vector3(), q = new THREE.Vector3();
@@ -536,7 +541,7 @@ export class Game {
       const k2 = Math.min(1, k + .02); q.set(s.f.x + (s.tx - s.f.x) * k2, s.f.y + (s.ty - s.f.y) * k2 + Math.sin(k2 * Math.PI) * s.arc, s.f.z + (s.tz - s.f.z) * k2);
       s.mesh.position.copy(p); s.mesh.lookAt(q);
       if (s.k >= 1) {
-        if (s.hunt) { if (!s.visual && hurtAnimal(s.hunt, s.dmg, s.src, this.time)) this.onHunt?.(s.hunt); } else if (s.visual) { if (s.kind === 'stone') this.onSplash?.(s.tx, s.tz); } else if (s.kind === 'stone' || s.kind === 'fire') this.splash(s); else if (s.t.alive) this.damage(s.t, s.dmg, s.src);
+        if (s.hunt) { if (!s.visual && hurtAnimal(s.hunt, s.dmg, s.src, this.time)) this.onHunt?.(s.hunt); } else if (s.visual) { if (s.kind === 'stone') this.onSplash?.(s.tx, s.tz); } else if (s.kind === 'stone' || s.kind === 'fire' || s.kind === 'cannon') this.splash(s); else if (s.t.alive) this.damage(s.t, s.dmg, s.src);
         s.mesh.removeFromParent(); this.shots.splice(i, 1);
       }
     }
@@ -846,7 +851,7 @@ export class Game {
       const k = Math.min(1, u.speedNow / 3); u.phase += dt * (4 + u.speedNow * 2.2);
       const sw = u.swingT < .35 ? u.swingT / .35 : 0;
       let tilt = 0, y = u.y;
-      if (u.d.ship) { tilt = Math.sin(this.time * 1.1 + u.id) * .035; y += Math.sin(this.time * 1.6 + u.id) * .04 - (u.type === 'fishboat' ? .12 : .28); if (u.dead) { tilt += u.deathT * .2; y -= u.deathT * .7; } } // rocking / sinking
+      if (u.d.ship) { tilt = Math.sin(this.time * 1.1 + u.id) * .035; y += Math.sin(this.time * 1.6 + u.id) * .04 - (u.type === 'fishboat' ? .12 : u.type === 'galleon' || u.type === 'cog' ? .34 : .28); if (u.dead) { tilt += u.deathT * .2; y -= u.deathT * .7; } } // rocking / sinking
       else if (u.dead) { tilt = -Math.min(1, u.deathT * 2.5) * Math.PI / 2 * .95; y -= .12 * Math.min(1, u.deathT) + Math.max(0, u.deathT - 37) * .6; }
       if (u.yOver != null) y = u.yOver; // standing on a ship's deck or a building floor
       if (u.d.fly) { y = u.y + (u.dead ? Math.max(0, 5 - u.deathT * 6) : 5 + Math.sin(this.time * 1.7 + u.id) * .35); tilt = u.dead ? Math.min(1, u.deathT) * .6 : 0; } // in the air (a slain dragon crashes down)

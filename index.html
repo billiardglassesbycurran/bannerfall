@@ -21,7 +21,7 @@
 </script>
 <script>
   // ===== Game version: bump on every change you publish (see CLAUDE.md). =====
-  window.BF_VERSION = '0.36.0';
+  window.BF_VERSION = '0.37.0';
   // Every game file is loaded as file.js?v=VERSION so phones never mix old and new files from the browser cache.
   // (On localhost a timestamp is used instead, so edits show up immediately while developing.)
   (function () {
@@ -76,16 +76,20 @@
   </div>
   <div id="godp" class="hide">
   <div class="gh"><b>&#9889; God mode</b><button class="btn sm" id="godX" title="Close">&#10005;</button></div>
+  <div class="gbody"><div class="gcol">
   <div class="gsec">Cheats</div>
+  <div class="gcheats">
   <label class="set"><span>Endless resources</span><input type="checkbox" data-cheat="res"></label>
-  <label class="set"><span>Instant building &amp; training</span><input type="checkbox" data-cheat="build"></label>
+  <label class="set"><span>Instant build &amp; train</span><input type="checkbox" data-cheat="build"></label>
   <label class="set"><span>No population limit</span><input type="checkbox" data-cheat="pop"></label>
   <label class="set"><span>Invincible Commander</span><input type="checkbox" data-cheat="hero"></label>
-  <label class="set"><span>Reveal the whole map</span><input type="checkbox" data-cheat="reveal"></label>
-  <div class="row"><button class="btn" id="godAge">&#9733; Next age now</button></div>
+  <label class="set"><span>Reveal the map</span><input type="checkbox" data-cheat="reveal"></label>
+  <button class="btn" id="godAge">&#9733; Next age now</button>
+  </div></div><div class="gcol">
   <div class="gsec">Summon <small>pick, then tap the map</small></div>
   <div class="row" id="godN"><button class="btn sb on" data-n="1">&times;1</button><button class="btn sb" data-n="5">&times;5</button><button class="btn sb" data-n="10">&times;10</button></div>
   <div id="godU"></div>
+  </div></div>
 </div>
 <div id="place" class="hide"><span id="ptxt">Tap the map to place</span><button class="btn" id="pok">&#10003;</button><button class="btn" id="pno">&#10005;</button></div>
 </div>

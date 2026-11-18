@@ -555,6 +555,60 @@ function shipParts(team, kind) {
     b.add(P.box, C.dwood, 0, .1, -2.75, 0, 0, 0, .06, .9, .5); // rudder
     for (const [x, z] of [[-.5, .9], [.4, -.6], [.5, .6]]) b.add(P.cyl(.2, .22, .45, 10), C.wood, x, .65, z);
     crew(b, tc, -.5, .42, -.3); crew(b, tc, .3, .45 + .8, -2.0); b.add(P.cyl(.012, .012, .9, 4), C.wood, 0, 5.3, .1); box(b, tc, .3, 5.6, .1, .55, .25, .015);
+  } else if (kind === 'galleon') { // a great gun ship: three masts, high stern castle, a row of cannons on each side
+    const L = 9.4, W = 2.9; addHull(L, W, 1.45, .95, .78, .52);
+    // stern castle (captain's cabin with windows and a lantern) and forecastle
+    b.add(P.box, C.wood, 0, 1.25, -3.25, 0, 0, 0, hullWidth(L, W, -3.25) * 1.9, 1.45, 2.4); b.add(P.box, C.dwood, 0, 2.0, -3.25, 0, 0, 0, hullWidth(L, W, -3.25) * 1.95, .08, 2.5);
+    for (let i = -1; i <= 1; i++) box(b, 0xffd27a, i * .45, 1.35, -4.47, .26, .32, .04); b.add(P.box, tc, 0, 1.75, -4.46, 0, 0, 0, 1.6, .12, .05);
+    b.m(P.cyl(.09, .12, .3, 8), C.brass, 0, 2.35, -4.3); b.add(P.ball(.1, 8, 6), 0xffe0a0, 0, 2.3, -4.3);
+    for (let i = -3; i <= 3; i++) box(b, i % 2 ? tc : C.dwood, i * .3, 2.12, -2.05, .16, .22, .08); // stern rail
+    b.add(P.box, C.wood, 0, .95, 3.4, 0, 0, 0, hullWidth(L, W, 3.4) * 1.85, .85, 1.5); b.add(P.box, C.dwood, 0, 1.4, 3.4, 0, 0, 0, hullWidth(L, W, 3.4) * 1.9, .07, 1.55);
+    b.add(P.cyl(.05, .09, 3.2, 8), C.wood, 0, 1.75, 5.2, -1.15, 0, 0); // bowsprit
+    b.add(P.ball(.16, 10, 8), C.gold, 0, 1.2, 4.75, 0, 0, 0, .7, 1, 1.3); // figurehead
+    // gun deck: 5 ports and cannons a side (black barrels poking out), a red stripe along the ports
+    for (const sd of [-1, 1]) {
+      for (let i = 0; i < 5; i++) { const z = -1.9 + i * .95, x = sd * hullWidth(L, W, z); box(b, 0x141414, x * .99, .62, z, .06, .34, .36); b.m(P.cyl(.075, .1, .85, 8), 0x222326, x + sd * .22, .62, z, 0, 0, sd * Math.PI / 2); b.m(P.cyl(.11, .11, .08, 8), 0x2c2c2e, x + sd * .62, .62, z, 0, 0, Math.PI / 2); }
+      for (let i = 0; i < 24; i++) { const z0 = -L / 2 * .86 + L * .86 * i / 24, z1 = z0 + L * .86 / 24; b.add(P.box, tc, sd * hullWidth(L, W, (z0 + z1) / 2) * 1.01, .9, (z0 + z1) / 2, 0, Math.atan2(sd * (hullWidth(L, W, z1) - hullWidth(L, W, z0)), z1 - z0), 0, .04, .12, L * .86 / 24 * 1.08); }
+    }
+    for (const [z, x] of [[-.8, .6], [.7, -.6], [1.6, .5]]) { b.m(P.cyl(.08, .1, 1.0, 8), 0x222326, x, .82, z, Math.PI / 2, 0, 0); box(b, C.dwood, x, .62, z - .1, .35, .2, .6); } // deck guns
+    // masts and sails: main, fore, and a lateen mizzen
+    for (const [z, h, sw, sh, top] of [[.4, 7.0, 3.3, 2.6, 2.3], [3.0, 5.6, 2.6, 2.1, 1.7]]) {
+      b.add(P.cyl(.06, .1, h, 9), C.wood, 0, .5 + h / 2, z);
+      sails.add(squareSail(sw, sh, .5), 0xffffff, 0, 3.0 + sh / 2 - .4, z + .15); b.add(P.cyl(.035, .035, sw + .3, 6), C.wood, 0, 3.0 + sh - .35, z + .1, 0, 0, Math.PI / 2);
+      sails.add(squareSail(top, sh * .6, .3), 0xffffff, 0, 3.4 + sh + sh * .3, z + .12); b.add(P.cyl(.025, .025, top + .3, 6), C.wood, 0, 3.4 + sh + sh * .6 - .05, z + .1, 0, 0, Math.PI / 2);
+      b.add(P.cyl(.28, .22, .25, 10), C.dwood, 0, 3.15 + sh, z); // fighting top
+      for (const sd of [-1, 1]) { rope(b, [0, .5 + h, z], [sd * hullWidth(L, W, z - .9) * .95, .85, z - .9]); rope(b, [0, .5 + h, z], [sd * hullWidth(L, W, z + .9) * .95, .85, z + .9]); }
+    }
+    b.add(P.cyl(.05, .07, 4.4, 8), C.wood, 0, 2.6 + 1.6, -2.7); sails.add(lateenSail().scale(1.1, 1.25, 1.1), 0xffffff, .02, 2.1, -2.6);
+    rope(b, [0, 7.5, .4], [0, 2.5, 5.9]); rope(b, [0, 6.1, 3.0], [0, 1.9, 5.4]); rope(b, [0, 7.5, .4], [0, 2.2, -4.2]);
+    b.add(P.cyl(.012, .012, 1.2, 4), C.wood, 0, 8.0, .4); box(b, tc, .45, 8.35, .4, .9, .42, .015); // great flag
+    crew(b, tc, .5, .52, -1.2); crew(b, tc, -.5, .52, .2); crew(b, tc, .3, 2.02, -3.4); crew(b, tc, -.4, 1.42, 3.4, 'archer', Math.PI);
+  } else if (kind === 'cog') { // a big round-bellied transport with castles fore and aft and shields along the rails
+    const L = 7.2, W = 3.1; addHull(L, W, 1.55, .6, .85, .58);
+    for (const [z, len, h] of [[-2.55, 1.9, 1.1], [2.6, 1.5, .9]]) {
+      b.add(P.box, C.wood, 0, .85 + h / 2, z, 0, 0, 0, hullWidth(L, W, z) * 1.85, h, len); b.add(P.box, C.dwood, 0, .87 + h, z, 0, 0, 0, hullWidth(L, W, z) * 1.92, .07, len + .05);
+      for (let i = -3; i <= 3; i++) box(b, i % 2 ? tc : C.dwood, i * .36, .95 + h + .12, z + Math.sign(z) * (len / 2 - .04), .22, .24, .08); // crenellations
+      for (const sd of [-1, 1]) for (let i = -1; i <= 1; i++) box(b, i % 2 ? tc : C.dwood, sd * hullWidth(L, W, z) * .93, .95 + h + .12, z + i * len * .33, .08, .24, .22);
+    }
+    for (const sd of [-1, 1]) for (let i = 0; i < 6; i++) { const z = -1.3 + i * .55; b.add(P.cyl(.22, .22, .05, 12), i % 2 ? tc : C.gold, sd * (hullWidth(L, W, z) + .02), 1.02, z, 0, 0, Math.PI / 2); b.m(P.ball(.05, 6, 4), C.dsteel, sd * (hullWidth(L, W, z) + .05), 1.02, z); }
+    b.add(P.cyl(.08, .12, 6.2, 10), C.wood, 0, 3.6, 0); b.add(P.cyl(.04, .04, 3.6, 6), C.wood, 0, 5.4, .12, 0, 0, Math.PI / 2);
+    b.add(P.cyl(.36, .28, .45, 12), C.dwood, 0, 6.1, 0); for (let i = 0; i < 6; i++) box(b, tc, Math.cos(i) * .34, 6.38, Math.sin(i) * .34, .12, .16, .05, 0, -i, 0); // crow's nest
+    sails.add(squareSail(3.4, 3.0, .6), 0xffffff, 0, 3.75, .2);
+    for (const sd of [-1, 1]) { rope(b, [0, 6.6, 0], [sd * 1.4, .95, -.8]); rope(b, [0, 6.6, 0], [sd * 1.4, .95, 1.0]); rope(b, [sd * 1.75, 5.4, .12], [sd * 1.2, .95, 2.0]); }
+    rope(b, [0, 6.6, 0], [0, 1.8, 3.5]); rope(b, [0, 6.6, 0], [0, 2.0, -3.4]);
+    b.add(P.box, C.dwood, 0, .2, -3.65, 0, 0, 0, .07, 1.1, .6); // rudder
+    for (const [x, z] of [[-.7, .9], [.6, -.7], [.7, .7], [-.5, -.9]]) b.add(P.cyl(.22, .24, .5, 10), C.wood, x, .8, z);
+    crew(b, tc, .3, 1.95, -2.6); crew(b, tc, -.4, .58, .3); b.add(P.cyl(.012, .012, 1.0, 4), C.wood, 0, 6.9, 0); box(b, tc, .36, 7.2, 0, .7, .32, .015);
+  } else if (kind === 'fireship') { // a lean, fast galley with a bronze fire-spout and a blazing brazier at the bow, barrels of pitch on deck
+    const L = 5.8, W = 1.55; addHull(L, W, .8, .55, .42, .28);
+    b.m(P.cyl(.06, .1, 1.3, 8), C.brass, 0, .75, 2.75, Math.PI / 2 - .25, 0, 0); b.m(P.ball(.13, 8, 6), C.brass, 0, .62, 2.1); // the siphon
+    b.m(P.cyl(.3, .18, .3, 10), 0x2c2a28, 0, .78, 1.55); b.add(P.ball(.24, 8, 6), 0xff7a22, 0, .9, 1.55, 0, 0, 0, 1, .45, 1); // brazier of glowing coals
+    for (const [x, z] of [[-.3, .7], [.3, .5], [0, -.2], [-.3, -.8], [.3, -1.0]]) { b.add(P.cyl(.17, .19, .42, 10), 0x2a1c12, x, .5, z); b.m(P.cyl(.18, .18, .03, 10), C.dsteel, x, .62, z); }
+    for (const sd of [-1, 1]) for (let i = 0; i < 6; i++) { const z = -1.8 + i * .6; b.add(P.cyl(.02, .016, 2.0, 5), C.wood, sd * (hullWidth(L, W, z) + .62), .05, z, 0, 0, sd * (Math.PI / 2 + .55)); }
+    b.add(P.cyl(.04, .055, 3.4, 8), C.wood, 0, 2.0, .2); b.add(P.cyl(.025, .025, 3.4, 6), C.wood, 0, 2.3, .1, .95, 0, 0);
+    sails.add(lateenSail().scale(1.2, 1.15, 1.25), 0xffffff, .02, .55, .2); sails.add(lateenSail().scale(-1.2, 1.15, 1.25), 0xffffff, -.02, .55, .2);
+    rope(b, [0, 3.6, .2], [0, .5, 2.6]); rope(b, [0, 3.6, .2], [0, .5, -2.5]);
+    crew(b, tc, .25, .28, 2.2); crew(b, tc, -.2, .28, -2.0); b.add(P.cyl(.012, .012, .9, 4), C.wood, 0, 4.0, .2); box(b, 0x8a1a10, .3, 4.3, .2, .55, .28, .015);
   } else { // warship (galley)
     const L = 7.2, W = 1.75; addHull(L, W, .85, .65, .45, .3);
     b.add(P.cyl(.06, .03, 1.3, 8), C.dwood, 0, .85, 3.65, -.5, 0, 0); b.add(P.ball(.14, 10, 8), tc, 0, 1.45, 3.9, 0, 0, 0, .8, 1, 1.4); // curved prow + figurehead
@@ -570,7 +624,7 @@ function shipParts(team, kind) {
     for (const z of [-1.2, -.3, 1.3, 2.2]) crew(b, tc, (z * 7 % 2 > 1 ? .3 : -.3), .3, z, 'archer');
     b.add(P.cyl(.012, .012, 1.0, 4), C.wood, 0, 4.7, .5); box(b, tc, .32, 5.0, .5, .6, .3, .015);
   }
-  const s = b.split(), style = kind === 'warship' ? 'stripes' : kind === 'transport' ? 'emblem' : 'plain';
+  const s = b.split(), style = kind === 'warship' || kind === 'galleon' ? 'stripes' : kind === 'transport' || kind === 'cog' ? 'emblem' : 'plain';
   return [{ c: s.c, m: s.m, extra: [{ geo: hull.build(), mat: hullMat() }, { geo: sails.build(), mat: sailMat(team, style) }], pivot: [0, 0, 0], anim: null }];
 }
 let wakeMatCache = null;
@@ -585,7 +639,7 @@ export function scaffoldGeo(size, h) {
   for (const s of [-1, 1]) { b.add(P.box, 0x7a5a32, 0, h / 2, s * r, 0, 0, Math.atan2(h, size) * s, Math.hypot(h, size) * .95, .04, .04); }
   g = b.build(); scaffoldCache.set(k, g); return g;
 }
-export const SHIP_LEN = { fishboat: 3.2, transport: 5.4, warship: 7.2 };
+export const SHIP_LEN = { fishboat: 3.2, transport: 5.4, warship: 7.2, fireship: 5.8, cog: 7.2, galleon: 9.4 };
 
 function figureParts(team, kind, style) {
   const d = UD[kind];

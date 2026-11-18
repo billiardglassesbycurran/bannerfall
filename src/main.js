@@ -12,7 +12,7 @@ import { initIcons, symbolHtml, portrait } from './icons.js';
 import { MISSIONS, progress, saveProgress } from './campaign.js';
 import { saveGame, loadSave, applySave, saveInfo, clearSave } from './save.js';
 import { Sound } from './audio.js';
-import { Figures, ghostObject, RINGS, COLORS, CIV_COLOR, setTeamColors } from './models.js';
+import { Figures, ghostObject, RINGS, COLORS, CIV_COLOR, setTeamColors, SHIP_LEN } from './models.js';
 import { Game } from './game.js';
 import { AI } from './ai.js';
 import { RTSView } from './rts.js';
@@ -348,10 +348,11 @@ function setupGame(mode, diff, civ = 'franks', enemyCiv, god) {
     else if (t.kind === 'bld') fx.dust(t.x, t.y + .5, t.z, 3, .8);
   };
   g.onShoot = (src, kind, f, t) => {
-    if (kind === 'fire' && f && t) { fx.breath(f.x, f.y, f.z, t.x, (t.y ?? f.y - 6) + 1, t.z); app.sfx('collapse', src.x, src.z, .35); if (src.team === 0 && Math.random() < .5) sound.voice('dragon', 'attack'); return; } // dragon fire (and a roar)
+    if (kind === 'fire' && f && t) { fx.breath(f.x, f.y, f.z, t.x, (t.y ?? f.y - 6) + 1, t.z); app.sfx('collapse', src.x, src.z, .35); if (src.type === 'dragon' && src.team === 0 && Math.random() < .5) sound.voice('dragon', 'attack'); return; } // dragon / fire-ship fire (and a roar)
+    if (kind === 'cannon' && f) { fx.muzzle(f.x, f.y, f.z, Math.sign((t.x - src.x) * Math.cos(src.yaw) - (t.z - src.z) * Math.sin(src.yaw)) * Math.cos(src.yaw), Math.sign((t.x - src.x) * Math.cos(src.yaw) - (t.z - src.z) * Math.sin(src.yaw)) * -Math.sin(src.yaw)); app.sfx('cannon', f.x, f.z, 1); return; } // BOOM: flash and smoke from the gun port
     if (kind === 'stone') app.sfx('thud', src.x, src.z, .6); else if (Math.random() < .5) app.sfx('arrow', src.x, src.z, .5);
   };
-  g.onSplash = (x, z) => { const h = heightAt(x, z); if (h < WL) { fx.splash(x, WL, z, 16); app.sfx('splash', x, z); } else { fx.dust(x, h, z, 14, 2.2); app.sfx('stone', x, z); } };
+  g.onSplash = (x, z, kind) => { const h = heightAt(x, z); if (h < WL) { fx.splash(x, WL, z, kind === 'cannon' ? 26 : 16); app.sfx('splash', x, z); } else { fx.dust(x, h, z, 14, 2.2); app.sfx('stone', x, z); } if (kind === 'cannon' && h >= WL) { fx.sparks(x, h + .4, z, 6); for (let i = 0; i < 3; i++) fx.smoke(x, h + .3, z, .2, 1); } };
   g.onDestroyed = b => { fx.dust(b.x, b.y, b.z, 30, b.size * .9, [.42, .38, .34]); for (let i = 0; i < 8; i++) fx.smoke(b.x, b.y + 1, b.z, .25, 1.5); app.sfx('collapse', b.x, b.z); };
   g.onBuilt = b => { fx.dust(b.x, b.y, b.z, 16, b.size * .6); if (b.team === 0) app.sfx('chime'); };
   g.onWork = (u, kind) => { if (kind) app.sfx(kind, u.x, u.z, .45); };
@@ -783,7 +784,8 @@ function emitEffects(dt) {
     if (b.type === 'smith') { if (Math.random() < .35) fx.chimney(b.x + .8, b.y + 3.9, b.z - .8); if (Math.random() < .25) fx.ember(b.x - .3, b.y + .8, b.z - .15); }
   }
   if (pov.room) { const r = pov.room, c = Math.cos(r.ry), sn = Math.sin(r.ry); for (const [x, y, z] of r.it.fires) fx.fire(r.b.x + x * c + z * sn, r.b.mesh.position.y + y, r.b.z - x * sn + z * c, .45); }
-  for (const u of g.units) if (u.alive && u.d.ship && u.speedNow > 0 && Math.random() < .5) { const fxx = Math.sin(u.yaw), fz = Math.cos(u.yaw), L = u.type === 'warship' ? 3.6 : u.type === 'transport' ? 2.7 : 1.6; fx.splash(u.x + fxx * L, WL, u.z + fz * L, 2); }
+  for (const u of g.units) if (u.alive && u.d.ship && u.speedNow > 0 && Math.random() < .5) { const fxx = Math.sin(u.yaw), fz = Math.cos(u.yaw), L = (SHIP_LEN[u.type] || 3.2) / 2; fx.splash(u.x + fxx * L, WL, u.z + fz * L, 2); }
+  for (const u of g.units) if (u.type === 'fireship' && u.alive && !u.fowHidden && Math.random() < .35) fx.fire(u.x + Math.sin(u.yaw) * 1.55, WL + .75, u.z + Math.cos(u.yaw) * 1.55, .45); // the bow brazier burns
 }
 
 // ---------------- boot ----------------

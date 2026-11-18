@@ -154,8 +154,9 @@ export class AI {
     }
     const dock = g.blds.find(b => b.alive && b.built && b.team === this.team && b.type === 'dock');
     if (dock && dock.queue.length < 1 && T.pop < T.cap) {
-      const nf = this.my(u => u.type === 'fishboat').length, nw = this.my(u => u.type === 'warship').length;
-      if (nf < 2 + this.g.diff) g.train(dock, 'fishboat'); else if (nw < this.g.diff + (MAP.sea ? 3 : 0) && T.g > 100) g.train(dock, 'warship');
+      const nf = this.my(u => u.type === 'fishboat').length, nw = this.my(u => u.d.ship && u.d.acq).length;
+      if (nf < 2 + this.g.diff) g.train(dock, 'fishboat');
+      else if (nw < this.g.diff + (MAP.sea ? 4 : 0) && T.g > 100) { const r = Math.random(); g.train(dock, T.age >= 2 && T.g > 160 && r < .45 ? 'galleon' : T.age >= 1 && r > .7 ? 'fireship' : 'warship'); } // a mixed fleet
     }
     this.navy();
     if (!short && hasBarracks && time > 260 && nOf('tower') < this.g.diff + 1 && T.g > 120 && g.afford(this.team, BD.tower.cost)) { // towers guard the gold mines and the road in
@@ -216,7 +217,7 @@ export class AI {
   }
   /** Warships go raiding: off to the enemy shore nearest them (docks, ships, buildings by the water) to shoot it up. */
   navy() {
-    const g = this.g, ships = this.my(u => u.type === 'warship' && u.task.type === 'idle');
+    const g = this.g, ships = this.my(u => u.d.ship && u.d.acq && u.task.type === 'idle');
     if (ships.length < (MAP.sea ? 3 : 4) || g.time < (this.navyT || 0)) return;
     this.navyT = g.time + 45;
     const s0 = ships[0]; let best = null, bd = 1e9;

@@ -218,7 +218,22 @@ label.set input:disabled { opacity:.35; }
 #godp .gh { display:flex; align-items:center; justify-content:space-between; color:#ffe066; font-size:15px; margin-bottom:2px; }
 #godp .gsec { margin:8px 0 2px; color:var(--gold2); font-size:11px; letter-spacing:.12em; text-transform:uppercase; border-top:1px solid rgba(216,180,90,.3); padding-top:6px; }
 #godp .gsec small { text-transform:none; letter-spacing:0; opacity:.7; }
-#godp label.set { min-height:36px; font-size:13px; }
+#godp label.set { min-height:40px; font-size:13px; }
+#godp { touch-action:pan-y; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; }
+#godp .gcheats { display:flex; flex-direction:column; } #godp .gcheats #godAge { margin-top:6px; min-height:44px; }
+/* phones on their side: a wide panel with cheats on the left and summoning on the right, so everything shows at once */
+@media (max-height: 520px) {
+  #godp { left:auto; width:min(720px, calc(100vw - 16px - var(--sl) - var(--sr))); bottom:calc(6px + var(--sb)); top:calc(40px + var(--st)); padding:4px 8px; z-index:12; }
+  #godp .gbody { display:grid; grid-template-columns:minmax(170px, .8fr) 1.4fr; gap:12px; }
+  #godp .gcheats label.set { min-height:40px; font-size:12px; } #godp .gcheats #godAge { margin-top:4px; }
+  #godp .gsec { margin-top:2px; padding-top:3px; }
+  #godU { grid-template-columns:repeat(auto-fill, minmax(70px, 1fr)); gap:4px; } #godU .btn { min-height:50px; font-size:10.5px; } #godU .btn .bi { width:24px; height:24px; }
+}
+/* phones held upright: a slimmer top bar so the God, map and pause buttons stay on screen */
+@media (max-width: 560px) {
+  #top { gap:7px; font-size:12.5px; } .res { min-width:0; gap:3px; } #clock, #ver, #info { display:none; }
+  #top #bGod { margin-left:auto; } #top .btn.sm { min-width:44px; padding:0 6px; }
+}
 #godU { display:grid; grid-template-columns:repeat(3, 1fr); gap:5px; margin-top:4px; }
 #godU .btn { min-width:0; min-height:58px; padding:3px; font-size:11px; flex-direction:column; } #godU .btn.on { border-color:#ffe066; box-shadow:0 0 0 2px rgba(255,224,102,.45); }
 #godU .btn .bi { width:28px; height:28px; }
