@@ -68,6 +68,17 @@ SIM = """(secs) => { const a = window.bannerfall, g = a.game; let err = null;
   return { err, t: Math.round(g.time), over: g.over, mine: n(0), enemy: n(1), age: [g.T[0].age, g.T[1].age] }; }"""
 
 
+BOXDRAG = """async (hold) => { const a = bannerfall, rts = a.rts, cv = a.canvas; a.select([]);
+  const pts = a.game.units.filter(u => u.team === 0).map(u => { const w = new (a.camera.position.constructor)(u.x, u.y + 1, u.z).project(a.camera); return [(w.x + 1) / 2 * innerWidth, (1 - w.y) / 2 * innerHeight]; });
+  const x0 = Math.min(...pts.map(p => p[0])) - 30, y0 = Math.min(...pts.map(p => p[1])) - 30, x1 = Math.max(...pts.map(p => p[0])) + 30, y1 = Math.max(...pts.map(p => p[1])) + 30;
+  const ev = (t, x, y, tgt) => tgt.dispatchEvent(new PointerEvent(t, { pointerId: 7, pointerType: 'touch', clientX: x, clientY: y, bubbles: true, isPrimary: true }));
+  ev('pointerdown', x0, y0, cv); await new Promise(r => setTimeout(r, hold));
+  for (let i = 1; i <= 8; i++) { ev('pointermove', x0 + (x1 - x0) * i / 8, y0 + (y1 - y0) * i / 8, window); await new Promise(r => setTimeout(r, 16)); } ev('pointerup', x1, y1, window);
+  const selected = a.sel.length, f = [rts.focus.x, rts.focus.z];
+  ev('pointerdown', 300, 200, cv); for (let i = 1; i <= 8; i++) { ev('pointermove', 300 - i * 15, 200, window); await new Promise(r => setTimeout(r, 16)); } ev('pointerup', 180, 200, window);
+  return { selected, dragPans: +Math.hypot(rts.focus.x - f[0], rts.focus.z - f[1]).toFixed(2) }; }"""
+
+
 def main():
     live = '--live' in sys.argv
     base = LIVE if live else serve()
@@ -228,6 +239,13 @@ def main():
         small = [b for b in boxes if b[4] < 44 and b[5] < 44]
         check(not small, 'buttons are big enough to tap' + (f' (too small: {small})' if small else ''))
         page.screenshot(path=str(OUT / 'phone.png'))
+        r = page.evaluate(BOXDRAG, 500)  # hold a finger still, then drag a box round the troops
+        check(r['selected'] > 0 and r['dragPans'] > 1, f'touch: hold-then-drag boxes troops, and a plain drag pans afterwards {r}')
+        r = page.evaluate("""() => { const a = bannerfall, m = document.getElementById('mini').getBoundingClientRect(); a.hud.mini.dispatchEvent(new PointerEvent('pointerdown', { clientX: m.left + m.width * .75, clientY: m.top + m.height * .25, bubbles: true }));
+          dispatchEvent(new PointerEvent('pointerup', {})); return [a.rts.focus.x | 0, a.rts.focus.z | 0, a.hud.mini.width]; }""")
+        check(abs(r[0] - 192) < 3 and abs(r[1] - 64) < 3 and r[2] == 512, f'tapping the minimap jumps there (whole map shown) {r}')
+        r = page.evaluate("""() => { const g = bannerfall.game, h = g.blds.find(b => b.team === 0 && b.type === 'hall'); let n = 0; for (let cz = 4; cz < 252; cz++) for (let cx = 4; cx < 252; cx++) if (g.canPlace('dock', cx, cz)) n++; return n; }""")
+        check(r > 200, f'plenty of shore where a Dock fits ({r} spots)')
         check(not err_box(page) and not errors, 'phone: no errors ' + (err_box(page) + ' '.join(errors))[:300])
         page.context.browser.close()
 

@@ -7,6 +7,18 @@ import { resources, takeRes, animals } from './world.js';
 const PEERJS = 'https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js';
 const CODE_CH = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 export const newCode = () => Array.from({ length: 5 }, () => CODE_CH[Math.random() * CODE_CH.length | 0]).join('');
+// Address-lookup (STUN) servers let each device find its own public address; relay (TURN) servers pass the game's
+// messages along when two networks won't let the devices talk directly (mobile data, some routers). The free public
+// relays are unreliable (all were down in Nov 2026), so TURN is filled in from assets/turn.json when that file exists.
+const STUN = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'] }, { urls: 'stun:stun.cloudflare.com:3478' }];
+let turnP = null;
+const iceServers = () => turnP || (turnP = fetch(new URL('../assets/turn.json', import.meta.url)).then(r => r.ok ? r.json() : []).catch(() => []).then(t => [...STUN, ...(Array.isArray(t) ? t : t.iceServers || [])]));
+const NOCONNECT = "Found the game, but your two networks wouldn't let the devices connect (this often happens on mobile data). Put both devices on the same Wi-Fi and try again.";
+/** Watch a connection's network handshake; calls fail() if it gives up. */
+function watchIce(c, fail) {
+  const t = setInterval(() => { const s = c.peerConnection?.iceConnectionState; if (c.open || s === 'connected' || s === 'completed') clearInterval(t); else if (s === 'failed') { clearInterval(t); fail(); } }, 300);
+  setTimeout(() => clearInterval(t), 60000);
+}
 let peerLib = null;
 function loadPeer() {
   if (peerLib) return peerLib;
@@ -35,20 +47,25 @@ export class Link {
   }
   async host(code) {
     if (/[?&]loop/.test(location.search)) return this.loop(code, 'host');
-    const Peer = await loadPeer();
+    const [Peer, ice] = await Promise.all([loadPeer(), iceServers()]);
     return new Promise((ok, bad) => {
-      const p = this.peer = new Peer('bannerfall-' + code);
+      const p = this.peer = new Peer('bannerfall-' + code, { config: { iceServers: ice } });
       p.on('open', () => ok(code));
-      p.on('connection', c => { if (this.conn?.open) this.conn.close(); this.wire(c); c.on('open', () => this.emit('guest')); });
+      p.on('disconnected', () => { try { p.reconnect(); } catch { /* ignore */ } }); // keep the code alive if the matchmaking server drops us
+      p.on('connection', c => { if (this.conn?.open) return c.close(); this.wire(c); this.emit('trying'); c.on('open', () => this.emit('guest')); watchIce(c, () => this.emit('failed', NOCONNECT)); });
       p.on('error', e => bad(new Error(e.type === 'unavailable-id' ? 'That code is busy, try again.' : 'Online play is unavailable right now (' + e.type + ').')));
     });
   }
   async join(code) {
     if (/[?&]loop/.test(location.search)) return this.loop(code.toUpperCase(), 'guest');
-    const Peer = await loadPeer();
+    const [Peer, ice] = await Promise.all([loadPeer(), iceServers()]);
     return new Promise((ok, bad) => {
-      const p = this.peer = new Peer();
-      p.on('open', () => { const c = p.connect('bannerfall-' + code.toUpperCase(), { reliable: true }); this.wire(c); c.on('open', () => ok()); setTimeout(() => { if (!c.open) bad(new Error('No game found with that code. Check it and that your friend is hosting.')); }, 12000); });
+      const p = this.peer = new Peer({ config: { iceServers: ice } });
+      p.on('open', () => {
+        const c = p.connect('bannerfall-' + code.toUpperCase(), { reliable: true }); this.wire(c); c.on('open', () => ok());
+        watchIce(c, () => bad(new Error(NOCONNECT)));
+        setTimeout(() => { if (!c.open) bad(new Error(c.peerConnection?.iceConnectionState === 'checking' ? NOCONNECT : 'No game found with that code. Check the code, and that your friend has pressed Host and is still waiting.')); }, 30000); // mobile networks can be slow
+      });
       p.on('error', e => bad(new Error(e.type === 'peer-unavailable' ? 'No game found with that code.' : 'Online play is unavailable right now (' + e.type + ').')));
     });
   }

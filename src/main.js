@@ -243,6 +243,11 @@ function moveGhost(x, z) {
   const s = BD[p.btype].size; p.cx = Math.round(x - s / 2); p.cz = Math.round(z - s / 2);
   ghost.position.set(p.cx + s / 2, BD[p.btype].dock ? WL + .02 : heightAt(p.cx + s / 2, p.cz + s / 2) + .05, p.cz + s / 2);
   p.ok = app.game.canPlace(p.btype, p.cx, p.cz) || ((p.btype === 'gate' || p.btype === 'walltower') && !!app.game.gateSpot(0, p.cx, p.cz));
+  if (!p.ok && BD[p.btype].dock) { // docks snap onto the nearest bit of shore, so a tap near (or on) the water is enough
+    let best = null, bd = 1e9;
+    for (let dz = -6; dz <= 6; dz++) for (let dx = -6; dx <= 6; dx++) { const d = dx * dx + dz * dz; if (d < bd && app.game.canPlace(p.btype, p.cx + dx, p.cz + dz)) { bd = d; best = [p.cx + dx, p.cz + dz]; } }
+    if (best) { [p.cx, p.cz] = best; p.ok = true; ghost.position.set(p.cx + s / 2, WL + .02, p.cz + s / 2); }
+  }
   if (LINE[p.btype]) { ghost.visible = !p.a; if (p.a) showWallLine(p); } const gm = ghostMats[p.ok ? 0 : 1]; if (ghost.isMesh) ghost.material = gm; else ghost.traverse(o => { if (o.isMesh) o.material = gm; });
 }
 function confirmPlace(keep) {
@@ -475,7 +480,7 @@ onBtn('bRotR', () => rts.rotateBy(-Math.PI / 4));
 onBtn('bNorth', () => rts.resetView());
 for (const id of ['bRotL', 'bRotR', 'bNorth']) $(id).addEventListener('pointerdown', e => e.stopPropagation());
 canvas.addEventListener('dblclick', () => { if (app.mode === 'pov') pov.lockMouse(); });
-onBtn('bBox', () => { rts.boxMode = !rts.boxMode; $('bBox').classList.toggle('on', rts.boxMode); app.toast(rts.boxMode ? 'Box select: drag a box around units. Tap Box again to pan.' : 'Drag to move the camera.', 2.5); });
+onBtn('bBox', () => { rts.setBoxMode(!rts.boxMode); app.toast(rts.boxMode ? 'Drag a box around your troops. After that, dragging moves the map again. (Tip: hold a finger still for a moment, then drag, to box without this button.)' : 'Drag to move the map.', 3.5); });
 if (!isTouch) $('bBox').classList.add('hide');
 onBtn('bRide', () => { const u = rideTarget(); if (u) enterPOV(u); else app.toast('Select one of your units first.', 2); });
 onBtn('bLead', () => { if (app.game.hero?.alive) enterPOV(app.game.hero); else app.toast('Your Commander will return soon.', 2); });
@@ -653,7 +658,9 @@ onBtn('bHost', async () => {
   }
   const link = new Link(), code = newCode(); onlineMsg('Setting up…');
   try { await link.host(code); } catch (e) { onlineMsg(e.message); return; }
-  onlineMsg(`Your code: <b>${code}</b><br>Tell your friend to pick Online, type this code and press Join. Waiting…`);
+  const waiting = `Your code: <b>${code}</b><br>Tell your friend to pick Online, type this code and press Join. Waiting…`; onlineMsg(waiting);
+  link.on('trying', () => onlineMsg(`Your code: <b>${code}</b><br>Your friend found the game. Connecting…`));
+  link.on('failed', msg => { onlineMsg(`${msg}<br><br>${waiting}`); link.conn = null; });
   link.on('hello', m => {
     if (m.ver !== window.BF_VERSION) { link.send({ k: 'bad', msg: `Versions differ (host ${window.BF_VERSION}, you ${m.ver}). Both reload the game page.` }); return; }
     link.guestCiv = CIVS[m.civ] ? m.civ : 'romans'; link.guestGod = !!m.god; link.send({ k: 'map', map: MAP.id, seed: MAP.seed });
@@ -666,7 +673,7 @@ onBtn('bHost', async () => {
 });
 async function joinGame(code) {
   code = (code || '').trim().toUpperCase(); if (code.length < 5) { onlineMsg('Type the 5-letter code your friend sees.'); return; }
-  const link = new Link(); onlineMsg('Connecting…');
+  const link = new Link(); onlineMsg('Looking for the game…');
   try { await link.join(code); } catch (e) { onlineMsg(e.message); return; }
   link.on('bad', m => onlineMsg(m.msg));
   link.on('map', m => {

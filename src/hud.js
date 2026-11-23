@@ -23,7 +23,7 @@ const SHORT = { Crossbowman: 'Crossbow', 'Light Cavalry': 'Light Cav', 'Horse Ar
 export class HUD {
   constructor(app) {
     this.a = app; this.ov = $('ov'); this.ctx = this.ov.getContext('2d');
-    this.mini = $('mini'); this.mctx = this.mini.getContext('2d');
+    this.mini = $('mini'); this.mini.width = this.mini.height = N * 2; this.mctx = this.mini.getContext('2d'); // 2 pixels per map cell
     // minimap background: terrain colours with hill shading (light from the north-west), drawn at 2x for crisp lines
     const base = minimapColors();
     for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
@@ -219,13 +219,13 @@ export class HUD {
   // ---------------- minimap ----------------
   ping(x, z) { this.pings.push({ x, z, t: performance.now() }); if (this.pings.length > 6) this.pings.shift(); }
   drawMini() {
-    const c = this.mctx, g = this.a.game, K = 2; c.drawImage(this.bg, 0, 0);
-    for (const r of resources) if (r.alive && (r.rt === 'g' || r.rt === 's' || r.fish || r.animal)) { c.fillStyle = r.fish ? '#cfefff' : r.animal ? '#c08a50' : r.rt === 's' ? '#d8d4ca' : '#ffd84a'; c.beginPath(); c.arc(r.x * K, r.z * K, r.fish || r.animal ? 2 : 3, 0, 6.3); c.fill(); }
+    const c = this.mctx, g = this.a.game, K = this.mini.width / N; c.drawImage(this.bg, 0, 0, N * K, N * K);
+    for (const r of resources) if (r.alive && (r.rt === 'g' || r.rt === 's' || r.fish || r.animal)) { c.fillStyle = r.fish ? '#cfefff' : r.animal ? '#c08a50' : r.rt === 's' ? '#d8d4ca' : '#ffd84a'; c.beginPath(); c.arc(r.x * K, r.z * K, r.fish || r.animal ? 2.6 : 4, 0, 6.3); c.fill(); }
     const F = g.fow?.on ? g.fow : null;
     for (const b of g.blds) if (b.alive && (!F || !b.team || F.explored(b.x, b.z))) { c.fillStyle = (TEAM_CSS[b.team] || TEAM_CSS[1]).map; c.strokeStyle = 'rgba(0,0,0,.8)'; c.lineWidth = 1; c.fillRect(b.cx * K, b.cz * K, b.size * K, b.size * K); c.strokeRect(b.cx * K + .5, b.cz * K + .5, b.size * K - 1, b.size * K - 1); }
     for (const u of g.units) if (u.alive && !u.boarded && !u.fowHidden) {
       c.fillStyle = u.selected ? '#ffffff' : (TEAM_CSS[u.team] || TEAM_CSS[1]).dot; c.strokeStyle = 'rgba(0,0,0,.85)'; c.lineWidth = 1;
-      const r = u.d.ship ? 3 : 1.8; c.beginPath(); c.arc(u.x * K, u.z * K, r, 0, 6.3); c.fill(); c.stroke();
+      const r = u.d.ship ? 4.5 : 2.8; c.beginPath(); c.arc(u.x * K, u.z * K, r, 0, 6.3); c.fill(); c.stroke();
     }
     if (F) { // fog of war on the minimap: unexplored black, out of sight dimmed
       const img = this.fogImg || (this.fogImg = c.createImageData(N, N)), d = img.data;
@@ -233,30 +233,21 @@ export class HUD {
       const fc = this.fogCan || (this.fogCan = Object.assign(document.createElement('canvas'), { width: N, height: N }));
       fc.getContext('2d').putImageData(img, 0, 0); c.imageSmoothingEnabled = true; c.drawImage(fc, 0, 0, N * K, N * K);
     }
-    // the part of the map you're looking at: a clean white rectangle, turned with the camera. It's fitted to the
-    // visible play area (between the top bar and the bottom panel), so it matches what's on screen.
+    // where you're looking: a small white square (turned with the camera, an arrow shows which way you face), sized to
+    // the width of the view across the middle of the screen
     const rts = this.a.rts, cam = this.a.camera, ray = this.ray || (this.ray = new THREE.Raycaster()), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -rts.focus.y);
-    const topY = (document.getElementById('top')?.offsetHeight || 0) / innerHeight, botY = 1 - (document.getElementById('bottom')?.offsetHeight || 0) / innerHeight;
+    const topY = (document.getElementById('top')?.offsetHeight || 0) / innerHeight, botY = 1 - (document.getElementById('bottom')?.offsetHeight || 0) / innerHeight, midY = (topY + botY) / 2;
     const at = (sx, sy) => { ray.setFromCamera(new THREE.Vector2(sx * 2 - 1, -(sy * 2 - 1)), cam); const h = new THREE.Vector3(); return ray.ray.intersectPlane(plane, h) ? h : null; };
-    const nl = at(0, botY), nr = at(1, botY);
-    if (nl && nr) {
+    const ml = at(0, midY), mr = at(1, midY), mc = at(.5, midY);
+    if (ml && mr && mc) {
       const fx = -Math.sin(rts.yaw), fz = -Math.cos(rts.yaw), rx = -fz, rz = fx; // camera forward / right on the ground
-      const near = nl.clone().add(nr).multiplyScalar(.5), nearW = nl.distanceTo(nr);
-      let fl = at(0, topY), fr = at(1, topY);
-      const maxD = nearW * 1.4; // looking toward the horizon: cap how far the box reaches
-      if (!fl || !fr || fl.distanceTo(near) > maxD * 1.6) { fl = near.clone().add(new THREE.Vector3(fx * maxD - rx * nearW * .7, 0, fz * maxD - rz * nearW * .7)); fr = near.clone().add(new THREE.Vector3(fx * maxD + rx * nearW * .7, 0, fz * maxD + rz * nearW * .7)); }
-      const far = fl.clone().add(fr).multiplyScalar(.5);
-      const w = (nearW + Math.min(fl.distanceTo(fr), nearW * 1.8)) / 2, d = Math.max(4, (far.x - near.x) * fx + (far.z - near.z) * fz);
-      const cx = near.x + fx * d / 2, cz = near.z + fz * d / 2;
-      const pts = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b2]) => [(cx + rx * a * w / 2 + fx * b2 * d / 2) * K, (cz + rz * a * w / 2 + fz * b2 * d / 2) * K]);
-      const path = () => { c.beginPath(); pts.forEach((p, i) => i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1])); c.closePath(); };
+      const w = Math.min(ml.distanceTo(mr), 90) / 2;
+      const pts = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b2]) => [(mc.x + rx * a * w + fx * b2 * w) * K, (mc.z + rz * a * w + fz * b2 * w) * K]);
       c.save(); c.beginPath(); c.rect(0, 0, N * K, N * K); c.clip();
-      path(); c.fillStyle = 'rgba(255,255,255,.10)'; c.fill();
-      c.lineJoin = 'round'; c.lineWidth = 4.5; c.strokeStyle = 'rgba(0,0,0,.55)'; c.stroke();
-      c.lineWidth = 2.2; c.strokeStyle = '#ffffff'; c.stroke();
-      // small arrow on the far edge shows which way you're facing
-      const ax = (pts[2][0] + pts[3][0]) / 2, az = (pts[2][1] + pts[3][1]) / 2;
-      c.fillStyle = '#ffffff'; c.beginPath(); c.moveTo(ax + fx * 9, az + fz * 9); c.lineTo(ax + rx * 6, az + rz * 6); c.lineTo(ax - rx * 6, az - rz * 6); c.closePath(); c.fill();
+      c.beginPath(); pts.forEach((p, i) => i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1])); c.closePath();
+      c.fillStyle = 'rgba(255,255,255,.12)'; c.fill(); c.lineJoin = 'round'; c.lineWidth = 5; c.strokeStyle = 'rgba(0,0,0,.6)'; c.stroke(); c.lineWidth = 2.5; c.strokeStyle = '#ffffff'; c.stroke();
+      const ax = (pts[2][0] + pts[3][0]) / 2, az = (pts[2][1] + pts[3][1]) / 2; // arrow on the far edge: which way you're facing
+      c.fillStyle = '#ffffff'; c.beginPath(); c.moveTo(ax + fx * 10, az + fz * 10); c.lineTo(ax + rx * 7, az + rz * 7); c.lineTo(ax - rx * 7, az - rz * 7); c.closePath(); c.fill();
       c.restore();
     }
     // red pulses where you're under attack

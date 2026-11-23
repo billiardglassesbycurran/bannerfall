@@ -191,14 +191,20 @@ export class Game {
   }
   canPlace(type, cx, cz) {
     const s = BD[type].size; let lo = 1e9, hi = -1e9;
-    if (BD[type].dock) { // docks straddle the shoreline: some water cells, some land cells
+    if (BD[type].dock) { // docks sit on the shoreline: part on the bank, part over the water, with boat-deep water alongside
       let w = 0, l = 0;
       for (let z = cz; z < cz + s; z++) for (let x = cx; x < cx + s; x++) {
         if (x < 4 || z < 4 || x >= N - 4 || z >= N - 4) return false;
         const i = z * N + x, v = blocked[i];
-        if (water[i] && v === 1 && !navBlock[i]) w++; else if (v === 0) l++; else return false;
+        if (navBlock[i] || bldAt[i]) return false;
+        const low = Math.min(heightAt(x, z), heightAt(x + 1, z), heightAt(x, z + 1), heightAt(x + 1, z + 1));
+        if (v === 0) { l++; if (low < WL + .05) w++; } // a bank cell that dips into the water counts for both
+        else if (v === 1 && low < WL + .15) w++;           // the water and the muddy edge (not a cliff)
+        else return false;                                  // trees, rocks, buildings, cliffs
       }
-      return w >= 3 && l >= 2;
+      if (w < 2 || l < 1) return false;
+      for (let z = cz - 2; z < cz + s + 2; z++) for (let x = cx - 2; x < cx + s + 2; x++) if (navCell(x, z)) return true; // ships can reach it
+      return false;
     }
     for (let z = cz; z < cz + s; z++) for (let x = cx; x < cx + s; x++) {
       if (x < 4 || z < 4 || x >= N - 4 || z >= N - 4 || blocked[z * N + x] !== 0) return false;

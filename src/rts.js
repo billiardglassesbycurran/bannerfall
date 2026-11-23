@@ -159,6 +159,11 @@ export class RTSView {
     const p = { id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, t: performance.now(), btn: e.button, type: e.pointerType, mode: null, alt: e.altKey };
     this.ptrs.set(e.pointerId, p);
     if (p.type === 'touch' && this.ptrs.size === 2) { for (const q of this.ptrs.values()) q.mode = 'multi'; this.box.classList.add('hide'); this.pinch = null; }
+    // touch: hold a finger still for a moment and the next drag draws a selection box (a short buzz tells you it's ready)
+    if (p.type === 'touch' && this.ptrs.size === 1 && !this.a.pending) setTimeout(() => {
+      if (this.ptrs.get(p.id) !== p || p.mode || Math.hypot(p.x - p.x0, p.y - p.y0) > 10 || this.a.pending) return;
+      p.armed = true; try { navigator.vibrate?.(15); } catch { /* ignore */ } this.showBox(p.x0 - 3, p.y0 - 3, p.x0 + 3, p.y0 + 3);
+    }, 380);
   }
   move(e) {
     const p = this.ptrs.get(e.pointerId);
@@ -170,7 +175,7 @@ export class RTSView {
     if (!p.mode && moved > (p.type === 'touch' ? 10 : 6) && p.btn === 0 && !p.alt && this.a.lineDrag?.('start', p.x0, p.y0)) p.mode = 'line'; // drawing a wall / fence
     if (p.mode === 'line') { this.a.lineDrag('move', p.x, p.y); return; }
     if (p.type === 'touch') {
-      if (!p.mode && moved > 10) p.mode = (this.boxMode || performance.now() - p.t > 420) && !this.a.pending ? 'box' : 'pan';
+      if (!p.mode && moved > 10) p.mode = (this.boxMode || p.armed) && !this.a.pending ? 'box' : 'pan';
       if (p.mode === 'pan') {
         this.pan(dx, dy);
         const now = performance.now(), dtm = Math.max(1, now - (p.lt || now - 16)); p.lt = now;
@@ -200,11 +205,13 @@ export class RTSView {
     const touch = p.type === 'touch';
     if (p.mode === 'pan' && touch && this.ptrs.size === 0 && performance.now() - (p.lt || 0) < 80) { this.vel.x = p.vx || 0; this.vel.y = p.vy || 0; }
     if (p.mode === 'line') this.a.lineDrag('end', p.x, p.y);
-    else if (p.mode === 'box') { this.boxSelect(p.x0, p.y0, p.x, p.y, e.shiftKey); this.box.classList.add('hide'); }
-    else if (!p.mode) this.tap(p.x, p.y, touch, p.btn, e.shiftKey, e.ctrlKey || e.metaKey);
+    else if (p.mode === 'box') { this.boxSelect(p.x0, p.y0, p.x, p.y, e.shiftKey); this.box.classList.add('hide'); if (touch) this.setBoxMode(false); } // one box, then dragging moves the map again
+    else if (!p.mode) { if (p.armed) this.box.classList.add('hide'); this.tap(p.x, p.y, touch, p.btn, e.shiftKey, e.ctrlKey || e.metaKey); }
     if (this.ptrs.size < 2) this.pinch = null;
+    if (p.mode === 'multi') this.box.classList.add('hide');
     if (p.mode === 'multi') for (const q of this.ptrs.values()) q.mode = 'done';
   }
+  setBoxMode(on) { this.boxMode = on; document.getElementById('bBox')?.classList.toggle('on', on); }
   cancel() { this.ptrs.clear(); this.pinch = null; this.box.classList.add('hide'); this.vel.x = this.vel.y = 0; }
   wheel(e) {
     // trackpad: two-finger sideways swipe rotates, pinch (ctrl+wheel) zooms; mouse wheel zooms

@@ -84,6 +84,10 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
 - `src/net.js` — online 1v1 over WebRTC (PeerJS 1.5.4 from jsDelivr, loaded on demand). Host runs the game (`HostSync`:
   10 Hz snapshots, team-swapped); guest is a puppet (`GuestSync`: `game.puppet`, game methods in `RPC` forwarded to the host).
   `?loop` in the URL = two-tab test link (BroadcastChannel) used by test_game.py; the sandbox here blocks real WebRTC.
+  ICE: several STUN servers plus optional relay (TURN) servers from `assets/turn.json` (`[{urls, username, credential}]`
+  or `{iceServers: [...]}`; absent = STUN only). The free public relays (PeerJS's, openrelay, freestun) were all dead in
+  Nov 2026, so phone-on-mobile-data ↔ laptop can fail without a TURN account; `watchIce` shows a clear message then.
+  Real two-tab PeerJS tests work in the built-in browser pane (localhost preview or the live site).
 - Ages: `AGES` = Stone, Bronze, Iron, Castle (tech keys `feudal`, `kingdom`, `castleage`); soldiers' metal gear is tinted per
   age (`AGE_TINT`, `Figures.setAge`). Castle (BD.castle, Castle Age, one per side). Castle mode (`mode 'castle'`): skirmish rules,
   Bronze start, win by holding a built Castle `CASTLE_HOLD` (300 s) or eliminating the enemy; AI saves for ages/castle (`goal`).
@@ -137,7 +141,8 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
   Skirmish AI (Knight/Warlord): counters the player's army (`counterW`), gathers at a rally point and attacks only when
   strong enough (`power`), targets the weakest spot (`weakSpot`), retreats when losing, cavalry raids on peasants (`raid`),
   scouting, towers by its gold, storehouses by wood/gold, rebalances workers; Warlord rings the bell. Squire stays simple.
-- `src/rts.js` — aerial camera, picking, selection, touch/mouse orders. `src/pov.js` — 1st/3rd person: strike, Follow me,
+- `src/rts.js` — aerial camera, picking, selection, touch/mouse orders. Touch: drag pans; hold a finger still ~0.4 s (buzz)
+  then drag = box select; the Box button arms one box and switches itself off. Minimap canvas is 2 px per cell (`N * 2`). `src/pov.js` — 1st/3rd person: strike, Follow me,
   Act button (G: board/steer/leave ships, enter/leave buildings — rooms from `interiorGeo` in models.js), Mount (M).
 - `src/hud.js` — resource bar, selection panel (portrait + HP bar, `head()`), command card, minimap, health bars, toasts.
   Command card buttons carry `grp` ('Gather', 'Build', 'Orders', 'Train', 'Research', 'Actions', 'Trade', 'Commander'...) and are
