@@ -13,6 +13,8 @@ export const newCode = () => Array.from({ length: 5 }, () => CODE_CH[Math.random
 const STUN = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'] }, { urls: 'stun:stun.cloudflare.com:3478' }];
 let turnP = null;
 const iceServers = () => turnP || (turnP = fetch(new URL('../assets/turn.json', import.meta.url)).then(r => r.ok ? r.json() : []).catch(() => []).then(t => [...STUN, ...(Array.isArray(t) ? t : t.iceServers || [])]));
+// ?relay in the address forces every connection through the relay (to test it)
+const policy = () => (/[?&]relay/.test(location.search) ? 'relay' : 'all');
 const NOCONNECT = "Found the game, but your two networks wouldn't let the devices connect (this often happens on mobile data). Put both devices on the same Wi-Fi and try again.";
 /** Watch a connection's network handshake; calls fail() if it gives up. */
 function watchIce(c, fail) {
@@ -49,7 +51,7 @@ export class Link {
     if (/[?&]loop/.test(location.search)) return this.loop(code, 'host');
     const [Peer, ice] = await Promise.all([loadPeer(), iceServers()]);
     return new Promise((ok, bad) => {
-      const p = this.peer = new Peer('bannerfall-' + code, { config: { iceServers: ice } });
+      const p = this.peer = new Peer('bannerfall-' + code, { config: { iceServers: ice, iceTransportPolicy: policy() } });
       p.on('open', () => ok(code));
       p.on('disconnected', () => { try { p.reconnect(); } catch { /* ignore */ } }); // keep the code alive if the matchmaking server drops us
       p.on('connection', c => { if (this.conn?.open) return c.close(); this.wire(c); this.emit('trying'); c.on('open', () => this.emit('guest')); watchIce(c, () => this.emit('failed', NOCONNECT)); });
@@ -60,7 +62,7 @@ export class Link {
     if (/[?&]loop/.test(location.search)) return this.loop(code.toUpperCase(), 'guest');
     const [Peer, ice] = await Promise.all([loadPeer(), iceServers()]);
     return new Promise((ok, bad) => {
-      const p = this.peer = new Peer({ config: { iceServers: ice } });
+      const p = this.peer = new Peer({ config: { iceServers: ice, iceTransportPolicy: policy() } });
       p.on('open', () => {
         const c = p.connect('bannerfall-' + code.toUpperCase(), { reliable: true }); this.wire(c); c.on('open', () => ok());
         watchIce(c, () => bad(new Error(NOCONNECT)));

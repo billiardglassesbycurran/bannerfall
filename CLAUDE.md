@@ -86,7 +86,9 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
   `?loop` in the URL = two-tab test link (BroadcastChannel) used by test_game.py; the sandbox here blocks real WebRTC.
   ICE: several STUN servers plus optional relay (TURN) servers from `assets/turn.json` (`[{urls, username, credential}]`
   or `{iceServers: [...]}`; absent = STUN only). The free public relays (PeerJS's, openrelay, freestun) were all dead in
-  Nov 2026, so phone-on-mobile-data ↔ laptop can fail without a TURN account; `watchIce` shows a clear message then.
+  Nov 2026. Since v0.38.1 `assets/turn.json` holds the owner's free Metered "Open Relay" credential (app `bannerfall`,
+  free no-card plan: 500 MB/month, dashboard.metered.ca; the 20 GB free plan needs a card). `?relay` in the URL forces
+  relay-only connections to test it. `watchIce` shows a clear message if two devices still can't connect.
   Real two-tab PeerJS tests work in the built-in browser pane (localhost preview or the live site).
 - Ages: `AGES` = Stone, Bronze, Iron, Castle (tech keys `feudal`, `kingdom`, `castleage`); soldiers' metal gear is tinted per
   age (`AGE_TINT`, `Figures.setAge`). Castle (BD.castle, Castle Age, one per side). Castle mode (`mode 'castle'`): skirmish rules,
