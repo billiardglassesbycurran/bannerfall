@@ -35,9 +35,13 @@ SLOTS = {
     'smith': dict(kind='building', height=3.5, size=3, faces=6000, hint='a medieval blacksmith forge'),
     'tower': dict(kind='building', height=6.5, size=2, faces=5000, hint='a medieval stone watchtower'),
     'dock': dict(kind='building', height=2.5, size=3, faces=5000, hint='a small wooden medieval dock'),
+    'temple': dict(kind='building', height=6.0, size=4, faces=8000, hint='a medieval stone chapel with a bell tower'),
     'fishboat': dict(kind='ship', length=3.2, faces=4000, hint='a small medieval fishing boat with one sail'),
     'transport': dict(kind='ship', length=5.4, faces=6000, hint='a medieval cog transport ship with a square sail'),
     'warship': dict(kind='ship', length=7.2, faces=7000, hint='a medieval war galley with oars and a square sail'),
+    'fireship': dict(kind='ship', length=5.8, faces=7000, hint='a fast galley carrying fire'),
+    'cog': dict(kind='ship', length=7.2, faces=8000, hint='a big round-bellied medieval cog'),
+    'galleon': dict(kind='ship', length=9.4, faces=9000, hint='a three-masted gun ship'),
     'tree_pine': dict(kind='tree', height=5.0, faces=700, hint='a pine tree'),
     'tree_oak': dict(kind='tree', height=4.5, faces=700, hint='an oak tree'),
     'bush': dict(kind='tree', height=.8, faces=300, hint='a berry bush'),
@@ -52,18 +56,18 @@ def save_manifest(m):
     MODELS.mkdir(parents=True, exist_ok=True); MANIFEST.write_text(json.dumps(m, indent=2) + '\n')
 
 
-def prepare(src, slot, faces=None, yaw=0, height=None, length=None):
+def prepare(src, slot, faces=None, yaw=0, height=None, length=None, tex=None, extra=None):
     if slot not in SLOTS: sys.exit(f'Unknown slot "{slot}". Run: models.py slots')
     if not pathlib.Path(BLENDER).exists(): sys.exit(f'Blender not found at {BLENDER}')
     s = SLOTS[slot]; out = MODELS / f'{slot}.glb'
     size = ['--length', str(length or s['length'])] if s['kind'] == 'ship' else ['--height', str(height or s['height'])]
     cmd = [BLENDER, '-b', '--factory-startup', '-P', str(ROOT / 'tools/blender/prepare_model.py'), '--', str(src), str(out),
-           *size, '--faces', str(faces or s['faces']), '--tex', '1024' if s['kind'] != 'tree' else '512', '--yaw', str(yaw)]
+           *size, '--faces', str(faces or s['faces']), '--tex', str(tex or (512 if s['kind'] != 'ship' else 1024)), '--yaw', str(yaw)]  # 512 px keeps phones' downloads small
     r = subprocess.run(cmd, capture_output=True, text=True)
     line = next((l for l in r.stdout.splitlines() if l.startswith('PREPARED')), None)
     if r.returncode or not line: sys.exit('Blender failed:\n' + (r.stdout[-2000:] + r.stderr[-2000:]))
     print(line)
-    m = load_manifest(); m[slot] = {'file': f'{slot}.glb', **{k: v for k, v in s.items() if k != 'hint'}, 'yaw': yaw}; save_manifest(m)
+    m = load_manifest(); m[slot] = {'file': f'{slot}.glb', **{k: v for k, v in s.items() if k != 'hint'}, 'yaw': yaw, **(extra or {})}; save_manifest(m)
     print(f'Installed for "{slot}". Bump BF_VERSION in index.html, test, commit and push to see it live.')
 
 
@@ -99,11 +103,11 @@ def tripo(slot, prompt, faces=None, yaw=0):
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('cmd'); p.add_argument('args', nargs='*')
-    p.add_argument('--faces', type=int); p.add_argument('--yaw', type=float, default=0); p.add_argument('--height', type=float); p.add_argument('--length', type=float)
+    p.add_argument('--faces', type=int); p.add_argument('--yaw', type=float, default=0); p.add_argument('--height', type=float); p.add_argument('--length', type=float); p.add_argument('--tex', type=int); p.add_argument('--source', help='credit line saved in the manifest')
     a = p.parse_args()
     if a.cmd == 'slots':
         for k, v in SLOTS.items(): print(f'  {k:10s} {v["kind"]:8s} e.g. "{v["hint"]}"')
-    elif a.cmd == 'prepare' and len(a.args) == 2: prepare(pathlib.Path(a.args[0]).expanduser(), a.args[1], a.faces, a.yaw, a.height, a.length)
+    elif a.cmd == 'prepare' and len(a.args) == 2: prepare(pathlib.Path(a.args[0]).expanduser(), a.args[1], a.faces, a.yaw, a.height, a.length, a.tex, {'source': a.source} if a.source else None)
     elif a.cmd == 'tripo-setup':
         k = getpass.getpass('Paste your Tripo API key (it will not be shown) and press Enter: ').strip()
         if not k: sys.exit('Nothing entered.')

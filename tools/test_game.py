@@ -46,7 +46,8 @@ def open_game(pw, base, hash_='', **ctx):
     errors = []
     page.on('pageerror', lambda e: errors.append(str(e)))
     page.on('console', lambda m: errors.append(m.text) if m.type == 'error' and 'favicon' not in m.text and 'Failed to load resource' not in m.text else None)
-    page.on('requestfailed', lambda r: errors.append(f'request failed: {r.url} ({r.failure})') if 'favicon' not in r.url else None)
+    # ERR_ABORTED = the browser cancelled a request it no longer needed (the files still arrive: custom models are checked separately)
+    page.on('requestfailed', lambda r: errors.append(f'request failed: {r.url} ({r.failure})') if 'favicon' not in r.url and 'ERR_ABORTED' not in (r.failure or '') else None)
     for attempt in range(2):  # the software renderer occasionally stalls a first load: reload once before failing
         page.goto(base + ('#' + hash_ if hash_ else '')) if attempt == 0 else page.reload()
         for _ in range(90):  # poll ourselves: the software renderer can starve Playwright's own waiting
@@ -107,6 +108,10 @@ def main():
             check(page.is_visible('#top') and page.is_visible('#bottom'), f'{mode}: game HUD visible')
             r = page.evaluate(SIM, 150)
             check(r['err'] is None, f'{mode}: 150 s of simulated play without errors {r}')
+            if mode == 'skirmish':
+                r = page.evaluate("""async () => { const G = (await import(new URL('src/gltfmodels.js', location.href).href)).GM, m = await (await fetch('assets/models/manifest.json')).json();
+                  return { want: Object.keys(m).sort(), got: Object.keys(G).sort() }; }""")
+                check(r['want'] == r['got'], f"every custom model loaded {r['got']} (manifest: {r['want']})")
             time.sleep(.5); page.screenshot(path=str(OUT / f'{mode}.png'))
             check(not err_box(page) and not errors, f'{mode}: no errors ' + (err_box(page) + ' '.join(errors))[:300])
             page.context.browser.close()

@@ -29,7 +29,7 @@ const MODELS = {
   heraklios: { file: 'mx_heraklios.glb', mixamo: 1, bright: 1.3, team: [] },                         // fur-and-iron steppe warrior
   // animals (CC0, Quaternius): their own skeleton and clips, flat colours instead of a texture
   horse: { file: 'animal_horse.glb', animal: true, height: 2.3 },
-  deer: { file: 'animal_deer.glb', animal: true, height: 1.55 },
+  deer: { file: 'animal_elk.glb', animal: true, height: 2.1 }, // realistic elk (WildMesh 3D, Sketchfab, CC BY) with its own texture and clips
 };
 const CLIP_FILES = ['char_knight.glb', 'rig_tools.glb', 'rig_ranged.glb']; // where the KayKit characters' clips come from
 const MX_CLIPS = 'mx_clips.glb'; // every Mixamo character shares one skeleton, so they share these clips
@@ -69,7 +69,7 @@ Object.assign(KINDS, {
 const BEAST = { idle: 'Idle', walk: 'Walk', run: 'Gallop', death: 'Death' };
 const HORSE = { model: 'horse', show: [], clips: BEAST, noAttack: 1, pace: { walk: 1.9, run: 6.2, runAt: 3.2 }, cloth: 1 };
 Object.assign(KINDS, {
-  deer: { model: 'deer', show: [], clips: BEAST, noAttack: 1, pace: { walk: 1.1, run: 4.6, runAt: 2 } },
+  deer: { model: 'deer', show: [], clips: { idle: 'Eat', walk: 'Walk', run: 'Run', death: 'Death' }, noAttack: 1, pace: { walk: 1.3, run: 5.5, runAt: 2 } }, // grazes when standing
   h_bay: { ...HORSE },
   h_light: { ...HORSE, coat: { Main: 0x7a4a26, Main_Dark: 0x4a2a14, Main_Light: 0xa8743e, Hair: 0x2a1a10 } },
   h_dark: { ...HORSE, coat: { Main: 0x2a1c14, Main_Dark: 0x17100c, Main_Light: 0x3c2a1e, Hair: 0x0c0a08 } },

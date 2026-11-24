@@ -29,7 +29,21 @@ Photo-scanned **CC0** models from [Poly Haven](https://polyhaven.com), reduced t
 
 ## Custom 3D models (assets/models)
 
-None yet. Models made with Tripo (tripo.com) go here with the account/plan they were made under.
+| File | Source | Licence |
+|---|---|---|
+| warship.glb (Viking longship, used for every side's warship) | ["Viking longship"](https://sketchfab.com/3d-models/viking-longship-3d649f8373514860b69ff6f874c0efb5) by massive-graphisme (Sketchfab), slimmed to ~7k triangles | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
+| hall.glb (Town Hall) | ["Medieval house \| Generic Textures \| Game ready"](https://sketchfab.com/3d-models/medieval-house-generic-textures-game-ready-3eb9e3b600264e2f99100fc43619497e) by by__Rx (Sketchfab) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
+| house.glb (House) | ["Medieval house"](https://sketchfab.com/3d-models/medieval-house-a8ad9d2723444b1b8ac054c232e61f12) by DoniTodorov (Sketchfab), slimmed to ~4.6k triangles | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
+| store.glb (Storehouse) | ["Medieval Tavern (2k vertices) - free game asset"](https://sketchfab.com/3d-models/medieval-tavern-2k-vertices-free-game-asset-a06dfdc919334bfc95de720ad98f4295) by Andy Woodhead (Sketchfab) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
+| barracks.glb (Barracks) | ["Romano-British House in Medieval London - free"](https://sketchfab.com/3d-models/romano-british-house-in-medieval-london-free-a13b6ace269945a78918518d69378eef) by Andy Woodhead (Sketchfab), slimmed to ~8k triangles | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
+| stable.glb (Stable) | ["Old wooden barn"](https://sketchfab.com/3d-models/old-wooden-barn-4887c7e3de244a9db3eb5b4974418b1b) by Elizabeth Watts (Sketchfab), slimmed to ~7k triangles | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
+| temple.glb (Temple) | ["Medieval house"](https://sketchfab.com/3d-models/medieval-house-904038d693b945d4843decee87fb0eb5) by Vanuartw (Sketchfab), slimmed to ~8k triangles | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
+| fishboat.glb (Fishing Boat) | ["Rowing Boat"](https://sketchfab.com/3d-models/rowing-boat-4eedc7ec7bac481f957474ecd89f5ba2) by carlcapu9 (Sketchfab) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
+| transport.glb (Transport Ship) | ["Gislinge Viking Boat"](https://sketchfab.com/3d-models/gislinge-viking-boat-01098ad7973647a9b558f41d2ebc5193) by Opus Poly (Sketchfab) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
+| fireship.glb (Fire Ship) | ["Dromon medieval ship"](https://sketchfab.com/3d-models/dromon-medieval-ship-740f6d7c5e92476f98d5507ab8422b4c) by Mitro123 (Sketchfab) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
+| cog.glb (War Cog) | ["Caravel Ship"](https://sketchfab.com/3d-models/caravel-ship-c9819a0e8a57429f888b74978219fb7a) by Ginny Sutton (Sketchfab), slimmed to ~12k triangles | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
+
+Models made with Tripo (tripo.com) go here too, with the account/plan they were made under.
 
 ## Animated characters
 
@@ -50,3 +64,9 @@ None yet. Models made with Tripo (tripo.com) go here with the account/plan they 
   `tools/blender/mixamo.py creature` → `assets/anim/creature_dragon.glb`.
 - **Ultimate Animated Animal Pack** by Quaternius (quaternius.com), CC0. Horse and Deer with their walk/gallop/idle/death
   clips in `assets/anim/animal_*.glb` (slimmed with `tools/kaykit.py --animals`; licence text in `assets/anim/LICENSE-Quaternius.txt`).
+
+## Animated animals (assets/anim)
+
+| File | Source | Licence |
+|---|---|---|
+| animal_elk.glb (the wild deer/elk herds) | ["Realistic Animated Elk 3D Model"](https://sketchfab.com/3d-models/realistic-animated-elk-3d-model-787834f9caa2474d9f1814b807c072d7) by WildMesh 3D (Sketchfab), 5 of its 53 clips kept | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |

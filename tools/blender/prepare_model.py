@@ -34,6 +34,9 @@ for o in list(bpy.context.scene.objects):
     if o.type == 'MESH':
         for m in list(o.modifiers):
             if m.type == 'ARMATURE': o.modifiers.remove(m)
+        if o.data.shape_keys:  # animated shapes (e.g. billowing sails) block slimming: keep the resting shape
+            for kb in reversed(o.data.shape_keys.key_blocks[1:]): o.shape_key_remove(kb)
+            o.shape_key_remove(o.data.shape_keys.key_blocks[0])
 for o in meshes:
     mw = o.matrix_world.copy(); o.parent = None; o.matrix_world = mw
 for o in list(bpy.context.scene.objects):

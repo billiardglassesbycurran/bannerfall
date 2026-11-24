@@ -163,7 +163,17 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
 - **Custom models**: `tools/models.py` (Tripo API → `tools/blender/prepare_model.py` → `assets/models/<slot>.glb` +
   `manifest.json`); the game loads them via `src/gltfmodels.js` for buildings, ships, trees and bushes. Owner-facing guide:
   `docs/MODELS.md`. Raw downloads go in `assets/incoming/` (git-ignored). Budget: buildings ≤10k triangles, ships ≤7k,
-  trees ≤700 (they're instanced hundreds of times). Units/horses still procedural (need rigged, animated models).
+  trees ≤700 (they're instanced hundreds of times). `models.py prepare <file> <slot> [--yaw 90] [--tex 512] [--source "credit"]`
+  (default textures 512 px for buildings; `prepare_model.py` drops shape keys before slimming). Manifest extras: `sink` = metres
+  of hull under water for ships (`shipParts`), `source` = credit line. Small buildings (size ≤2) may overhang their footprint
+  (`buildingParts`). **v0.39 art (all CC BY, Sketchfab, credited in CREDITS.md):** warship = Viking longship, hall/house/store/
+  barracks/stable/temple = realistic medieval houses, fishboat/transport/fireship/cog = rowing boat/Gislinge boat/Dromon/caravel;
+  galleon is still procedural. Sketchfab downloads: open the model page in the browser pane, Download → pick glTF (or GLB with
+  1K textures), then read the `/i/archives/latest?archiveType=…` response in the network log for the one-time S3 link and curl it
+  (never call Sketchfab's API with the page's token). Search with the public Sketchfab API and judge picture contact sheets (Pillow is installed in the tools env).
+  Animated animals: `tools/blender/animal.py IN OUT --keep A,B --rename A=Idle --tex 1024` keeps only the clips we use; the elk
+  (WildMesh 3D, 53 clips) replaces the deer (`MODELS.deer` → `animal_elk.glb`, clips Eat/Walk/Run/Death). WildMesh's bear (81 clips)
+  and an animated eagle were found but not added yet.
 - **Unity bridge** (`tools/unity.py`): `export` writes every unit/building as FBX+GLB to `exports/unity/` (git-ignored; built
   from `figureGroup`/`buildingMesh` in models.js); `unpack <x.unitypackage>` safely copies models/textures to `assets/incoming/unity/`.
   The game itself stays Three.js on the web. Asset Store models: check the licence allows non-Unity use before publishing.

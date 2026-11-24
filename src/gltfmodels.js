@@ -51,6 +51,7 @@ export async function loadModels(pbr) {
 /** Parts for a building, scaled so the model sits inside its footprint. */
 export function buildingParts(kind, size) {
   const m = GM[kind]; if (!m) return null;
-  const w = Math.max(m.box.max.x - m.box.min.x, m.box.max.z - m.box.min.z), k = Math.min(1, (size * .96) / Math.max(w, .01));
+  // fit the footprint; small buildings (houses) may spill over it a little so they aren't dwarfed by the soldiers
+  const w = Math.max(m.box.max.x - m.box.min.x, m.box.max.z - m.box.min.z), k = Math.min(1, (size * (size <= 2 ? 1.45 : 1.02)) / Math.max(w, .01));
   return m.parts.map(p => ({ geo: k === 1 ? p.geo : p.geo.clone().scale(k, k, k), mat: p.mat }));
 }

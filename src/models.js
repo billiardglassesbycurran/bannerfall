@@ -524,7 +524,7 @@ function lateenSail() {
 }
 function shipParts(team, kind) {
   if (GM[kind]) { // custom ship model: sink it to a waterline about a third of its height, add a team pennant
-    const m = GM[kind], h = m.box.max.y - m.box.min.y, drop = -(h * .3) + (kind === 'fishboat' ? .12 : .28);
+    const m = GM[kind], h = m.box.max.y - m.box.min.y, drop = -(m.info.sink ?? h * .3) + (kind === 'fishboat' ? .12 : .28); // sink = metres of hull below the water (manifest), else a third of the height
     const fb = new Builder(); box(fb, TEAM[team], .3, h * .95 + drop, 0, .6, .3, .02); fb.add(P.cyl(.015, .015, .8, 4), C.wood, 0, h * .85 + drop, 0);
     return [{ ...fb.split(), extra: m.parts.map(p => ({ geo: p.geo.clone().translate(0, drop, 0), mat: p.mat })), pivot: [0, 0, 0], anim: null }];
   }

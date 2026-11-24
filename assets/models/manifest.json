@@ -1,1 +1,101 @@
-{}
+{
+  "warship": {
+    "file": "warship.glb",
+    "kind": "ship",
+    "length": 7.2,
+    "faces": 7000,
+    "yaw": 90,
+    "sink": 0.45,
+    "source": "Viking longship by massive-graphisme (Sketchfab), CC BY 4.0"
+  },
+  "hall": {
+    "file": "hall.glb",
+    "kind": "building",
+    "height": 6.0,
+    "size": 5,
+    "faces": 10000,
+    "yaw": 0,
+    "source": "\"Medieval house | Generic Textures\" by by__Rx (Sketchfab), CC BY 4.0"
+  },
+  "house": {
+    "file": "house.glb",
+    "kind": "building",
+    "height": 3.0,
+    "size": 2,
+    "faces": 4000,
+    "yaw": 0,
+    "source": "\"Medieval house\" by DoniTodorov (Sketchfab), CC BY 4.0"
+  },
+  "store": {
+    "file": "store.glb",
+    "kind": "building",
+    "height": 3.0,
+    "size": 3,
+    "faces": 5000,
+    "yaw": 0,
+    "source": "\"Medieval Tavern\" by Andy Woodhead (Sketchfab), CC BY 4.0"
+  },
+  "barracks": {
+    "file": "barracks.glb",
+    "kind": "building",
+    "height": 3.5,
+    "size": 4,
+    "faces": 8000,
+    "yaw": 0,
+    "source": "\"Romano-British House in Medieval London\" by Andy Woodhead (Sketchfab), CC BY 4.0"
+  },
+  "stable": {
+    "file": "stable.glb",
+    "kind": "building",
+    "height": 3.0,
+    "size": 4,
+    "faces": 7000,
+    "yaw": 0,
+    "source": "\"Old wooden barn\" by Elizabeth Watts (Sketchfab), CC BY 4.0"
+  },
+  "temple": {
+    "file": "temple.glb",
+    "kind": "building",
+    "height": 6.0,
+    "size": 4,
+    "faces": 8000,
+    "yaw": 0,
+    "source": "\"Medieval house\" by Vanuartw (Sketchfab), CC BY 4.0"
+  },
+  "fishboat": {
+    "file": "fishboat.glb",
+    "kind": "ship",
+    "length": 3.2,
+    "faces": 4000,
+    "yaw": 0,
+    "source": "\"Rowing Boat\" by carlcapu9 (Sketchfab), CC BY 4.0",
+    "sink": 0.2
+  },
+  "fireship": {
+    "file": "fireship.glb",
+    "kind": "ship",
+    "length": 5.8,
+    "faces": 7000,
+    "yaw": 90.0,
+    "source": "\"Dromon medieval ship\" by Mitro123 (Sketchfab), CC BY 4.0",
+    "sink": 0.4
+  },
+  "transport": {
+    "file": "transport.glb",
+    "kind": "ship",
+    "length": 5.4,
+    "faces": 6000,
+    "yaw": 0,
+    "source": "\"Gislinge Viking Boat\" by Opus Poly (Sketchfab), CC BY 4.0",
+    "sink": 0.35
+  },
+  "cog": {
+    "file": "cog.glb",
+    "kind": "ship",
+    "length": 7.2,
+    "faces": 8000,
+    "yaw": 0,
+    "source": "\"Caravel Ship\" by Ginny Sutton (Sketchfab), CC BY 4.0",
+    "sink": 0.6
+  }
+}
