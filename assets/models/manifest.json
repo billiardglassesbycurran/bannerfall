@@ -97,5 +97,14 @@
     "yaw": 0,
     "source": "\"Caravel Ship\" by Ginny Sutton (Sketchfab), CC BY 4.0",
     "sink": 0.6
+  },
+  "galleon": {
+    "file": "galleon.glb",
+    "kind": "ship",
+    "length": 9.4,
+    "faces": 9000,
+    "yaw": 180.0,
+    "source": "\"Empty Ship\" by Liaval (Sketchfab), CC BY 4.0",
+    "sink": 0.55
   }
 }

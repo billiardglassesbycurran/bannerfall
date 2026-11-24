@@ -256,7 +256,18 @@ export class Game {
   edgeDist(p, b) { const h = b.size / 2, dx = Math.max(Math.abs(p.x - b.x) - h, 0), dz = Math.max(Math.abs(p.z - b.z) - h, 0); return Math.hypot(dx, dz); }
   reachDist(u, t) { return t.kind === 'bld' ? this.edgeDist(u, t) : dist(u, t) - (t.d?.rad ?? t.r ?? .5) - u.d.rad * .5; }
   nearestDrop(u) { let best = null, bd = 1e9; for (const b of this.blds) if (b.alive && b.built && b.team === u.team && b.d.drop && (typeof b.d.drop !== 'string' || !u.carry || b.d.drop.includes(u.carry.rt)) && (!u.d.ship || b.d.dock)) { const d = this.edgeDist(u, b); if (d < bd) { bd = d; best = b; } } return best; }
-  nearestRes(x, z, rt, r = 18, fish = false) { let best = null, bd = r; for (const s of resources) if (s.alive && s.rt === rt && !!s.fish === fish) { const d = Math.hypot(s.x - x, s.z - z); if (d < bd) { bd = d; best = s; } } return best; }
+  /** Bears: notice anyone who wanders close, and maul whoever they are chasing. */
+  bears(dt) {
+    if ((this.bearT = (this.bearT || 0) + dt) > .5) { this.bearT = 0; for (const a of animals) if (a.bear && a.alive && a.hp > 0 && !a.angry && !(a.calmT > this.time)) { let best = null, bd = 4.5; this.unitsNear(a.x, a.z, bd, u => { if (u.alive && !u.d.ship && !u.d.fly && !u.boarded) { const d = Math.hypot(u.x - a.x, u.z - a.z); if (d < bd) { bd = d; best = u; } } }); if (best) { a.angry = best; this.onBear?.(a, best); } } }
+    for (const a of animals) {
+      const e = a.bear && a.hp > 0 && a.angry; if (!e || !e.alive) continue;
+      if (Math.hypot(e.x - a.x, e.z - a.z) < 2 && this.time - a.biteAt > 1.6) {
+        a.biteAt = this.time; this.damage(e, e.type === 'peasant' ? 9 : 14, null);
+        if (e.alive && e.type !== 'peasant' && e.d.dmg > 0 && !e.possessed && (e.task.type === 'idle' || e.task.type === 'move' && !e.task.forced)) this.attack(e, a); // soldiers fight back
+      }
+    }
+  }
+  nearestRes(x, z, rt, r = 18, fish = false) { let best = null, bd = r; for (const s of resources) if (s.alive && s.rt === rt && !!s.fish === fish && !(s.bear && s.hp > 0)) { const d = Math.hypot(s.x - x, s.z - z); if (d < bd) { bd = d; best = s; } } return best; }
   recount() {
     for (const t of this.T) { t.pop = 0; t.cap = 0; }
     for (const u of this.units) if (u.alive) this.T[u.team].pop++;
@@ -522,7 +533,8 @@ export class Game {
     const kind = src?.d?.fire ? 'fire' : src?.d?.cannon ? 'cannon' : src?.d?.stone ? 'stone' : src?.d?.bolt ? 'bolt' : 'arrow';
     const f = from || new THREE.Vector3(src.x, src.y + (src.d?.fly ? 5.6 : src.d?.horse ? 2.4 : src.d?.cannon ? .9 : src.d?.ship ? 1.8 : 1.5) * (src.scale || 1), src.z);
     if (kind === 'fire') f.addScaledVector(new THREE.Vector3(Math.sin(src.yaw), 0, Math.cos(src.yaw)), src.d.ship ? 3 : 2.2); // from the dragon's jaws / the fire ship's bow
-    if (kind === 'cannon') { const sx = Math.cos(src.yaw), sz = -Math.sin(src.yaw), side = (t.x - src.x) * sx + (t.z - src.z) * sz > 0 ? 1 : -1, al = (Math.random() - .5) * 4; f.x += sx * side * 1.5 + Math.sin(src.yaw) * al; f.z += sz * side * 1.5 + Math.cos(src.yaw) * al; } // a gun port on the side facing the target
+    if (kind === 'cannon' && !src.d.ship) { f.x += Math.sin(src.yaw) * 1.5; f.z += Math.cos(src.yaw) * 1.5; } // a bombard: out of the muzzle
+    else if (kind === 'cannon') { const sx = Math.cos(src.yaw), sz = -Math.sin(src.yaw), side = (t.x - src.x) * sx + (t.z - src.z) * sz > 0 ? 1 : -1, al = (Math.random() - .5) * 4; f.x += sx * side * 1.5 + Math.sin(src.yaw) * al; f.z += sz * side * 1.5 + Math.cos(src.yaw) * al; } // a gun port on the side facing the target
     this.onShoot?.(src, kind, f, t);
     const mesh = new THREE.Mesh(kind === 'stone' || kind === 'fire' || kind === 'cannon' ? stoneGeo : kind === 'bolt' ? boltGeo : arrowGeo, kind === 'cannon' ? cannonMat : M.vc); mesh.castShadow = kind === 'stone'; mesh.visible = kind !== 'fire'; if (kind === 'cannon') mesh.scale.setScalar(.45); this.scene.add(mesh);
     const d = Math.hypot(t.x - f.x, t.z - f.z), speed = kind === 'stone' ? 13 : kind === 'fire' ? 24 : kind === 'cannon' ? 28 : kind === 'bolt' ? 30 : 22;
@@ -797,7 +809,7 @@ export class Game {
     this.rebuildHash();
     if ((this.moraleT = (this.moraleT || 0) + dt) >= 1) { this.moraleT = 0; this.moraleTick(); this.envNews(); }
     if (this.cycle) stepEnv(this.env, dt);
-    updateAnimals(dt, this.time);
+    updateAnimals(dt, this.time); this.bears(dt);
     this.field?.update(dt); this.fow?.update(dt); if (this.mission && !this.over) { this.mission.tick?.(this, dt); if ((this.misT = (this.misT || 0) + dt) > 1) { this.misT = 0; this.checkEnd(); } }
     for (const b of this.blds) b.nbNow = 0;
     for (const u of this.units) if (u.alive) { if (u.boarded) { u.x = u.boarded.x; u.z = u.boarded.z; continue; } this.updateUnit(u, dt); }

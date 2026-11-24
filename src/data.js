@@ -10,6 +10,10 @@ export const UD = {
   lightcav:  { age: 1, name: 'Light Cavalry', plural: 'Light Cavalry', cls: 'cav', hp: 120, spd: 5.8, dmg: 8, rng: 1.6, cd: 1.0, arm: 1, cost: { f: 80 }, time: 14, rad: .7, acq: 11, horse: 1, melee: 1, vsArch: 2.2, desc: 'Cheap, very fast raiders. 2× damage vs archers' },
   horsearcher: { age: 2, name: 'Horse Archer', plural: 'Horse Archers', cls: 'cav', hp: 100, spd: 5.0, dmg: 7, rng: 7.5, cd: 1.7, arm: 1, cost: { f: 40, g: 70 }, time: 18, rad: .7, acq: 10, horse: 1, ranged: 1, desc: 'Mounted archer: shoot and run' },
   catapult:  { age: 2, name: 'Catapult', plural: 'Catapults', cls: 'siege', hp: 170, spd: 1.6, dmg: 45, rng: 15, cd: 5.5, arm: 4, cost: { w: 160, g: 120 }, time: 28, rad: .95, acq: 15, ranged: 1, stone: 1, vsBld: 3, splash: 1.8, desc: 'Hurls rocks: wrecks buildings and packed troops' },
+  // elite troops (Castle Age, trained at the Castle) and the gunpowder bombard (Siege Workshop)
+  guard:     { age: 3, name: 'Royal Guard', plural: 'Royal Guards', cls: 'inf', hp: 230, spd: 3.0, dmg: 22, rng: 1.6, cd: 1.15, arm: 5, cost: { f: 90, g: 95 }, time: 22, rad: .45, acq: 10, melee: 1, scale: 1.06, desc: 'Elite: polished steel and a great sword. Hits very hard, shrugs off blows' },
+  halberd:   { age: 3, name: 'Halberdier', plural: 'Halberdiers', cls: 'inf', hp: 170, spd: 3.0, dmg: 15, rng: 2.0, cd: 1.1, arm: 3, cost: { f: 70, w: 30, g: 45 }, time: 18, rad: .42, acq: 10, melee: 1, vsHorse: 1, desc: 'Elite: a long axe-spear. Long reach; ×3 damage vs cavalry' },
+  bombard:   { age: 3, name: 'Bombard', plural: 'Bombards', cls: 'siege', hp: 200, spd: 1.3, dmg: 70, rng: 17, cd: 7, arm: 4, cost: { w: 180, g: 220 }, time: 32, rad: 1.0, acq: 17, ranged: 1, cannon: 1, vsBld: 3, splash: 1.5, desc: 'Gunpowder cannon: smashes walls and castles from long range. Slow to reload' },
   // unique units (one per civilization)
   legion:    { age: 2, name: 'Legionary', plural: 'Legionaries', cls: 'inf', hp: 150, spd: 2.8, dmg: 13, rng: 1.35, cd: 1.0, arm: 4, cost: { f: 60, g: 35 }, time: 15, rad: .42, acq: 9, melee: 1, desc: 'Roman unique: heavily armoured shield wall infantry' },
   repeater:  { age: 2, name: 'Repeater', plural: 'Repeaters', cls: 'arch', hp: 60, spd: 2.9, dmg: 5, rng: 8, cd: .7, arm: 0, cost: { w: 30, g: 45 }, time: 14, rad: .4, acq: 10, ranged: 1, bolt: 1, desc: 'Chinese unique: repeating crossbow, a hail of bolts' },
@@ -48,7 +52,7 @@ export const BD = {
   barracks: { name: 'Barracks', hp: 850, size: 4, cost: { w: 150 }, time: 24, trains: ['sword', 'spear'], arm: 2, desc: 'Trains swordsmen and spearmen' },
   range:    { age: 1, name: 'Archery Range', hp: 750, size: 4, cost: { w: 150 }, time: 24, trains: ['archer', 'crossbow'], arm: 2, desc: 'Trains archers and crossbowmen' },
   stable:   { age: 1, name: 'Stable', hp: 750, size: 4, cost: { w: 150, g: 50 }, time: 26, trains: ['lightcav', 'knight', 'horsearcher'], req: 'barracks', arm: 2, desc: 'Trains cavalry (needs a Barracks)' },
-  workshop: { age: 2, name: 'Siege Workshop', hp: 700, size: 4, cost: { w: 200, g: 60 }, time: 28, trains: ['catapult'], req: 'range', arm: 2, desc: 'Builds catapults (needs an Archery Range)' },
+  workshop: { age: 2, name: 'Siege Workshop', hp: 700, size: 4, cost: { w: 200, g: 60 }, time: 28, trains: ['catapult', 'bombard'], req: 'range', arm: 2, desc: 'Builds catapults, and bombards in the Castle Age (needs an Archery Range)' },
   smith:    { age: 1, name: 'Blacksmith', hp: 650, size: 3, cost: { w: 120 }, time: 22, arm: 2, desc: 'Researches better weapons and armour' },
   wall:     { name: 'Wall', hp: 420, size: 1, cost: { w: 4 }, time: 3, arm: 6, wall: 1, desc: 'Blocks enemies. Press and drag to draw a whole line (or tap the start, then the end)' },
   fence:    { name: 'Fence', hp: 140, size: 1, cost: { w: 2 }, time: 1.5, arm: 2, wall: 1, fence: 1, desc: 'Cheap wooden fence: slows raiders and pens in your fields. Press and drag to draw a line' },
@@ -56,7 +60,7 @@ export const BD = {
   well:     { name: 'Well', hp: 450, size: 2, cost: { w: 40, s: 40 }, time: 18, arm: 4, mend: 8, desc: 'Fresh water for the town: your buildings within 8 tiles slowly repair themselves' },
   walltower: { age: 1, name: 'Wall Tower', hp: 900, size: 1, cost: { w: 20, s: 60 }, time: 14, arm: 7, wall: 1, wtower: 1, atk: { dmg: 8, rng: 10, cd: 1.6 }, desc: 'A tower in your wall line that shoots arrows. Place it on your own wall (or open ground)' },
   gate:     { name: 'Gate', hp: 700, size: 1, cost: { w: 25 }, time: 8, arm: 6, wall: 1, gate: 1, desc: 'Your troops pass, enemies can\'t. Place it on your own wall' },
-  castle:   { age: 3, name: 'Castle', hp: 5000, size: 6, cost: { w: 400, s: 650, g: 300 }, time: 90, trains: ['knight', 'crossbow'], pop: 15, drop: 0, atk: { dmg: 18, rng: 13, cd: .9 }, arm: 8, one: 1, desc: 'The mightiest building: 5000 hit points, rains arrows, trains your unique unit, knights and crossbowmen. One per side' },
+  castle:   { age: 3, name: 'Castle', hp: 5000, size: 6, cost: { w: 400, s: 650, g: 300 }, time: 90, trains: ['knight', 'crossbow', 'guard', 'halberd'], pop: 15, drop: 0, atk: { dmg: 18, rng: 13, cd: .9 }, arm: 8, one: 1, desc: 'The mightiest building: 5000 hit points, rains arrows, trains your unique unit, knights and crossbowmen. One per side' },
   tower:    { age: 1, name: 'Watchtower', hp: 600, size: 2, cost: { w: 50, s: 100 }, time: 20, atk: { dmg: 11, rng: 11, cd: 1.4 }, arm: 4, desc: 'Shoots arrows at enemies' },
   dock:     { name: 'Dock', hp: 900, size: 3, cost: { w: 150 }, time: 22, trains: ['fishboat', 'transport', 'warship', 'fireship', 'cog', 'galleon'], drop: 1, dock: 1, arm: 2, desc: 'Build on the shore. Builds ships, stores fish' },
 };

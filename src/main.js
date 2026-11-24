@@ -87,8 +87,23 @@ buildDistant(scene);
 buildFish(scene);
 const figures = new Figures(scene, Q.shadow > 0);
 // deer: animated when the animated models are on
-const deerBatch = ANIM.on && ANIM.rigs.deer && animals.length ? new AnimBatch(scene, 0, 'deer', animals.length, Q.shadow > 0, 0) : null;
-if (deerBatch) { useAnimatedDeer(); animals.forEach(() => deerBatch.alloc()); }
+// bears get their own animated batch (WildMesh bear, CC BY)
+const deerList = animals.filter(a => !a.bear), bearList = animals.filter(a => a.bear);
+const deerBatch = ANIM.on && ANIM.rigs.deer && deerList.length ? new AnimBatch(scene, 0, 'deer', deerList.length, Q.shadow > 0, 0) : null;
+const bearBatch = deerBatch && ANIM.rigs.bear && bearList.length ? new AnimBatch(scene, 0, 'bear', bearList.length, Q.shadow > 0, 0) : null;
+// eagles: a few circling high over the land (scenery only: not part of the game)
+const EAGLES = [];
+if (ANIM.on && ANIM.rigs.eagle) {
+  for (let k = 0, t = 0; k < 6 && t < 200; t++) {
+    const cx = 30 + Math.random() * (SIZE - 60), cz = 30 + Math.random() * (SIZE - 60);
+    if (EAGLES.some(e => Math.hypot(e.cx - cx, e.cz - cz) < 50)) continue;
+    const R = 14 + Math.random() * 16; let top = WL; for (let a = 0; a < 6.28; a += .8) top = Math.max(top, heightAt(cx + Math.cos(a) * R, cz + Math.sin(a) * R));
+    EAGLES.push({ cx, cz, R, h: top + 11 + Math.random() * 5, w: (Math.random() < .5 ? -1 : 1) * (5.5 + Math.random() * 2) / R, ph: Math.random() * 6.28 }); k++;
+  }
+}
+const eagleBatch = EAGLES.length ? new AnimBatch(scene, 0, 'eagle', EAGLES.length, false, 0) : null;
+if (eagleBatch) EAGLES.forEach(() => eagleBatch.alloc());
+if (deerBatch && (bearBatch || !bearList.length)) { useAnimatedDeer(); deerList.forEach(() => deerBatch.alloc()); bearList.forEach(() => bearBatch.alloc()); }
 
 // ---------------- film look: bloom, ambient-occlusion (PC), colour grading ----------------
 const GRADE = {
@@ -345,6 +360,7 @@ function setupGame(mode, diff, civ = 'franks', enemyCiv, god) {
     if (app.sel.includes(u)) app.select(app.sel.filter(e => e !== u));
     if (pov.unit === u) { app.toast('You have fallen!', 3); setTimeout(() => { if (pov.unit === u) exitPOV(); }, 1500); }
   };
+  g.onBear = (a, u) => { if (u.team !== 0) return; hud.ping(a.x, a.z); if (performance.now() - (app.lastBear || 0) > 12000) { app.lastBear = performance.now(); app.toast('A bear is charging your people! Send soldiers or run.', 3); sound.voice('troll', 'attack'); } };
   g.onAlert = (x, z) => { hud.ping(x, z); if (performance.now() - (app.lastHorn || 0) > 15000) { app.lastHorn = performance.now(); app.sfx('horn'); } };
   g.onHit = (t, src, amt) => {
     if (t.kind === 'unit' && src?.kind === 'unit' && (t.team === 0 || src.team === 0)) app.lastFight = g.time;
@@ -354,6 +370,7 @@ function setupGame(mode, diff, civ = 'franks', enemyCiv, god) {
   };
   g.onShoot = (src, kind, f, t) => {
     if (kind === 'fire' && f && t) { fx.breath(f.x, f.y, f.z, t.x, (t.y ?? f.y - 6) + 1, t.z); app.sfx('collapse', src.x, src.z, .35); if (src.type === 'dragon' && src.team === 0 && Math.random() < .5) sound.voice('dragon', 'attack'); return; } // dragon / fire-ship fire (and a roar)
+    if (kind === 'cannon' && f && !src.d.ship) { fx.muzzle(f.x, f.y, f.z, Math.sin(src.yaw), Math.cos(src.yaw)); app.sfx('cannon', f.x, f.z, 1); return; } // bombard: flash and smoke from the muzzle
     if (kind === 'cannon' && f) { fx.muzzle(f.x, f.y, f.z, Math.sign((t.x - src.x) * Math.cos(src.yaw) - (t.z - src.z) * Math.sin(src.yaw)) * Math.cos(src.yaw), Math.sign((t.x - src.x) * Math.cos(src.yaw) - (t.z - src.z) * Math.sin(src.yaw)) * -Math.sin(src.yaw)); app.sfx('cannon', f.x, f.z, 1); return; } // BOOM: flash and smoke from the gun port
     if (kind === 'stone') app.sfx('thud', src.x, src.z, .6); else if (Math.random() < .5) app.sfx('arrow', src.x, src.z, .5);
   };
@@ -760,7 +777,12 @@ renderer.setAnimationLoop(() => {
     rts.lookAt(SIZE / 2 + Math.cos(menuYaw * .7) * 16, SIZE / 2 + Math.sin(menuYaw * .7) * 16); rts.update(real);
   }
   if (g) g.syncVisuals(dt, pov.first && pov.unit ? pov.unit.id : -1);
-  if (deerBatch) { const gt = g ? g.time : t; animals.forEach((a, i) => deerBatch.set(i, { x: a.x, y: a.y ?? heightAt(a.x, a.z), z: a.z, yaw: a.yaw, scale: 1, dt, spd: a.moving ? (a.spd || .9) : 0, dead: a.hp <= 0, dT: a.hp <= 0 ? gt - (a.deadAt ?? gt - 9) : 0, hidden: !a.alive })); deerBatch.flush(); }
+  if (deerBatch && (bearBatch || !bearList.length)) {
+    const gt = g ? g.time : t, pose = a => ({ x: a.x, y: a.y ?? heightAt(a.x, a.z), z: a.z, yaw: a.yaw, scale: 1, dt, spd: a.moving ? (a.spd || .9) : 0, dead: a.hp <= 0, dT: a.hp <= 0 ? gt - (a.deadAt ?? gt - 9) : 0, hidden: !a.alive || a.fowHidden, swT: a.bear ? gt - a.biteAt : 9 });
+    deerList.forEach((a, i) => deerBatch.set(i, pose(a))); deerBatch.flush();
+    if (bearBatch) { bearList.forEach((a, i) => bearBatch.set(i, pose(a))); bearBatch.flush(); }
+  }
+  if (eagleBatch) { const et = (app.eagleT = (app.eagleT || 0) + dt); EAGLES.forEach((e, i) => { const a = e.ph + et * e.w, s = Math.sign(e.w); eagleBatch.set(i, { x: e.cx + Math.cos(a) * e.R, y: e.h + Math.sin(a * 2.3) * 1.5, z: e.cz + Math.sin(a) * e.R, yaw: Math.atan2(-Math.sin(a) * s, Math.cos(a) * s), scale: 1.5, dt, spd: 1 }); }); eagleBatch.flush(); }
   else syncAnimals(t);
   water.userData.update(t); U.time.value = t; updateFish(t);
   if (g) emitEffects(dt);
@@ -813,4 +835,4 @@ const m = /play=(\w+),(\d)(?:,(\w+))?(?:,(\w+))?/.exec(location.hash);
 if (location.hash === '#resume' && loadSave()) { const d = loadSave(); app.cfg = { mode: d.mode, diff: d.diff, civ: d.civs[0], map: MAP.id }; setupGame(d.mode, d.diff, d.civs[0], d.civs[1]); applySave(app, d); app.toast('Welcome back! Your game has been restored.', 3); history.replaceState(null, '', location.pathname + location.search); }
 else if (m && MODES[m[1]]) { app.cfg = { mode: m[1], diff: +m[2], civ: m[3] || 'franks', god: app.cfg.god || /[?&#]god/.test(location.href), map: app.cfg.map }; setupGame(m[1], +m[2], m[3], m[4]); }
 else if (!app.bootSetup) showHome();
-window.bannerfall = app; // handy for debugging in the browser console
+app.eagles = EAGLES; window.bannerfall = app; // handy for debugging in the browser console

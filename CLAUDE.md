@@ -173,7 +173,16 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
   (never call Sketchfab's API with the page's token). Search with the public Sketchfab API and judge picture contact sheets (Pillow is installed in the tools env).
   Animated animals: `tools/blender/animal.py IN OUT --keep A,B --rename A=Idle --tex 1024` keeps only the clips we use; the elk
   (WildMesh 3D, 53 clips) replaces the deer (`MODELS.deer` → `animal_elk.glb`, clips Eat/Walk/Run/Death). WildMesh's bear (81 clips)
-  and an animated eagle were found but not added yet.
+  and the eagle were added in v0.40 (below).
+- **v0.40 wildlife + elite troops:** Bears (`addBear` in world.js, `a.bear`, 70 hp, 320 meat) roam the wilds far from towns;
+  they charge anyone within 4.5 m or whoever hurts them (`a.angry`), give up 22 m from home (`calmT`); bites are in
+  `Game.bears()` (`onBear` warns the player); `nearestRes` never auto-picks a living bear. Drawn by `bearBatch` in main.js
+  (`animal_bear.glb`, `KINDS.bear` with an Attack clip, `swT` from `a.biteAt`). Eagles: scenery only (`EAGLES` in main.js,
+  `animal_eagle.glb`), circling 11-16 m up. `animal.py --atlas` packs a multi-material animal into one texture (the game
+  uses one map per animated model). Castle trains elite **Royal Guard** (`guard`: paladin, look 'steel', great-sword clips,
+  team plume) and **Halberdier** (`halberd`: look 'black', GEAR `halberd` + `plume`; gear colour 'team' = team colour,
+  `head` slot); Siege Workshop builds the **Bombard** (`bombard`, Castle Age, `cannon` shot from the muzzle, `bombardParts`).
+  Galleon = "Empty Ship" by Liaval (yaw 180, sink .55).
 - **Unity bridge** (`tools/unity.py`): `export` writes every unit/building as FBX+GLB to `exports/unity/` (git-ignored; built
   from `figureGroup`/`buildingMesh` in models.js); `unpack <x.unitypackage>` safely copies models/textures to `assets/incoming/unity/`.
   The game itself stays Three.js on the web. Asset Store models: check the licence allows non-Unity use before publishing.

@@ -15,7 +15,7 @@ export const missing = (T, c) => ['f', 'w', 'g', 's'].filter(k => (c?.[k] || 0) 
 const TASK = { patrol: 'Patrolling', garrison: 'Running to the Town Hall', repair: 'Repairing', board: 'Boarding ship', unload: 'Sailing to land troops', idle: 'Idle', move: 'Moving', amove: 'Attacking', attack: 'Fighting', follow: 'Following', build: 'Building', farm: 'Farming', return: 'Carrying to storage' };
 const RN = { f: 'food', w: 'wood', g: 'gold', s: 'stone' };
 // button names short enough to fit (the full name is in the tooltip and the selection panel)
-const SHORT = { Crossbowman: 'Crossbow', 'Light Cavalry': 'Light Cav', 'Horse Archer': 'H. Archer', 'Fishing Boat': 'Fisher', 'Transport Ship': 'Transport', 'Cannon Galleon': 'Galleon', 'Lumber Camp': 'Lumber', 'Mining Camp': 'Mining', Storehouse: 'Store',
+const SHORT = { Crossbowman: 'Crossbow', 'Royal Guard': 'Guard', Halberdier: 'Halberd', 'Light Cavalry': 'Light Cav', 'Horse Archer': 'H. Archer', 'Fishing Boat': 'Fisher', 'Transport Ship': 'Transport', 'Cannon Galleon': 'Galleon', 'Lumber Camp': 'Lumber', 'Mining Camp': 'Mining', Storehouse: 'Store',
   'Archery Range': 'Range', 'Siege Workshop': 'Siege', Blacksmith: 'Smith', 'Wall Tower': 'W. Tower', Watchtower: 'Tower', 'Bronze Age': 'Bronze', 'Castle Age': 'Castle', 'Town Watch': 'Watch', Wheelbarrow: 'Barrow',
   'Stone Walls': 'St. Walls', 'Castle Walls': 'C. Walls', 'Fortified Hall': 'Fortify', 'Double-Bit Axe': 'Axe', 'Gold Mining': 'Gold Mine', 'Heavy Plough': 'Plough', 'Iron Casting': 'Casting', 'Bodkin Arrows': 'Bodkin',
   'Chain Mail': 'Chainmail', 'Plate Armour': 'Plate', 'Veteran Infantry': 'Veterans', 'Elite Guard': 'Elite', 'Royal Bowmen': 'R. Bowmen', 'Blast Furnace': 'Furnace', 'Guard Towers': 'Guard Tw.', "Khan's Guard": 'Khan Guard' };
@@ -74,6 +74,7 @@ export class HUD {
     this.head(sel[0], sel.length);
     if (!sel.length) { name.textContent = this.a.game.mode === 'battle' ? 'Select your soldiers' : 'Nothing selected'; desc.innerHTML = this.a.hint(); return; }
     const e = sel[0];
+    if (e.kind === 'res' && e.bear) { name.textContent = e.hp > 0 ? 'Bear' : 'Bear (hunted)'; desc.textContent = e.hp > 0 ? `Dangerous! It charges anyone who comes close. Send soldiers to bring it down (${Math.ceil(e.hp)}/${e.maxHp} health) for lots of meat.` : `${Math.ceil(e.amt)} meat left. Peasants gather it fast.`; return; }
     if (e.kind === 'res' && e.animal) { name.textContent = e.hp > 0 ? 'Deer' : 'Deer (hunted)'; desc.textContent = e.hp > 0 ? 'Send peasants to hunt it for meat (food). Deer run when hunted.' : `${Math.ceil(e.amt)} meat left. Peasants gather it fast.`; return; }
     if (e.kind === 'res') { name.textContent = e.fish ? 'Fish' : { f: 'Berry bush', w: 'Tree', g: 'Gold mine', s: 'Stone quarry' }[e.rt]; desc.textContent = `${Math.ceil(e.amt)} ${RN[e.rt]} left. ` + (e.fish ? 'Fishing boats (from a Dock) can catch it.' : 'Send peasants to gather it.'); return; }
     if (e.kind === 'bld') {
@@ -220,7 +221,7 @@ export class HUD {
   ping(x, z) { this.pings.push({ x, z, t: performance.now() }); if (this.pings.length > 6) this.pings.shift(); }
   drawMini() {
     const c = this.mctx, g = this.a.game, K = this.mini.width / N; c.drawImage(this.bg, 0, 0, N * K, N * K);
-    for (const r of resources) if (r.alive && (r.rt === 'g' || r.rt === 's' || r.fish || r.animal)) { c.fillStyle = r.fish ? '#cfefff' : r.animal ? '#c08a50' : r.rt === 's' ? '#d8d4ca' : '#ffd84a'; c.beginPath(); c.arc(r.x * K, r.z * K, r.fish || r.animal ? 2.6 : 4, 0, 6.3); c.fill(); }
+    for (const r of resources) if (r.alive && (r.rt === 'g' || r.rt === 's' || r.fish || r.animal)) { c.fillStyle = r.fish ? '#cfefff' : r.bear ? '#5a3418' : r.animal ? '#c08a50' : r.rt === 's' ? '#d8d4ca' : '#ffd84a'; c.beginPath(); c.arc(r.x * K, r.z * K, r.fish || r.animal ? 2.6 : 4, 0, 6.3); c.fill(); }
     const F = g.fow?.on ? g.fow : null;
     for (const b of g.blds) if (b.alive && (!F || !b.team || F.explored(b.x, b.z))) { c.fillStyle = (TEAM_CSS[b.team] || TEAM_CSS[1]).map; c.strokeStyle = 'rgba(0,0,0,.8)'; c.lineWidth = 1; c.fillRect(b.cx * K, b.cz * K, b.size * K, b.size * K); c.strokeRect(b.cx * K + .5, b.cz * K + .5, b.size * K - 1, b.size * K - 1); }
     for (const u of g.units) if (u.alive && !u.boarded && !u.fowHidden) {

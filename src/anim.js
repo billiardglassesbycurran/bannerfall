@@ -30,6 +30,8 @@ const MODELS = {
   // animals (CC0, Quaternius): their own skeleton and clips, flat colours instead of a texture
   horse: { file: 'animal_horse.glb', animal: true, height: 2.3 },
   deer: { file: 'animal_elk.glb', animal: true, height: 2.1 }, // realistic elk (WildMesh 3D, Sketchfab, CC BY) with its own texture and clips
+  eagle: { file: 'animal_eagle.glb', animal: true, height: .9 }, // "White Eagle Animation Fast Fly" by GremorySaiyan (Sketchfab, CC BY)
+  bear: { file: 'animal_bear.glb', animal: true, height: 1.5, bright: .82 }, // realistic brown bear (WildMesh 3D, Sketchfab, CC BY)
 };
 const CLIP_FILES = ['char_knight.glb', 'rig_tools.glb', 'rig_ranged.glb']; // where the KayKit characters' clips come from
 const MX_CLIPS = 'mx_clips.glb'; // every Mixamo character shares one skeleton, so they share these clips
@@ -52,6 +54,8 @@ Object.assign(KINDS, {
   spear: { model: 'paladin', parts: ['Body', 'Helmet', 'Shield'], show: [], gear: ['spear'], clips: { ...SS, attack: 'ss_atk4' }, atk: { from: .3, rate: 1.4, len: .6 } },
   legion: { model: 'paladin', look: 'bronze', parts: ['Body', 'Helmet', 'Sword', 'Shield'], show: [], clips: { ...SS, attack: 'ss_atk3' }, atk: { from: .45, rate: 1.4, len: .7 } },
   hero: { model: 'paladin', look: 'gold', parts: ['Body', 'Helmet', 'Sword'], show: [], clips: { ...GS, attack: 'gs_slash' }, atk: { from: .3, rate: 1.25, len: .7 }, size: 1.04 },
+  guard: { model: 'paladin', look: 'steel', parts: ['Body', 'Helmet', 'Sword'], show: [], gear: ['plume'], clips: { ...GS, attack: 'gs_slash' }, atk: { from: .3, rate: 1.25, len: .7 }, size: 1.06 },
+  halberd: { model: 'paladin', look: 'black', parts: ['Body', 'Helmet'], show: [], gear: ['halberd', 'plume'], clips: { ...GS, attack: 'gs_attack' }, atk: { from: .3, rate: 1.3, len: .7 } },
   berserker: { model: 'brute', show: [], clips: { ...GS, attack: 'gs_attack' }, atk: { from: .3, rate: 1.4, len: .6 } },
   archer: { model: 'mxarcher', parts: ['Body', 'Helmet', 'Extra', 'Bow'], show: [], ranged: 'bow', clips: { ...BOW, attack: 'ss_atk4', aim: 'bow_draw', shoot: 'bow_draw' } },
   crossbow: { model: 'mxarcher', parts: ['Body', 'Helmet', 'Extra'], show: [], gear: ['xbow'], ranged: 'xbow', clips: XB },
@@ -70,6 +74,8 @@ const BEAST = { idle: 'Idle', walk: 'Walk', run: 'Gallop', death: 'Death' };
 const HORSE = { model: 'horse', show: [], clips: BEAST, noAttack: 1, pace: { walk: 1.9, run: 6.2, runAt: 3.2 }, cloth: 1 };
 Object.assign(KINDS, {
   deer: { model: 'deer', show: [], clips: { idle: 'Eat', walk: 'Walk', run: 'Run', death: 'Death' }, noAttack: 1, pace: { walk: 1.3, run: 5.5, runAt: 2 } }, // grazes when standing
+  bear: { model: 'bear', show: [], clips: { idle: 'Eat', walk: 'Walk', run: 'Run', attack: 'Attack', death: 'Death' }, atk: { from: .2, rate: 1.2, len: 1.1 }, pace: { walk: 1.1, run: 5, runAt: 1.8 } },
+  eagle: { model: 'eagle', show: [], clips: { idle: 'Fly', walk: 'Fly', run: 'Fly', death: 'Fly' }, noAttack: 1, pace: { walk: 1, run: 99, runAt: 99 } },
   h_bay: { ...HORSE },
   h_light: { ...HORSE, coat: { Main: 0x7a4a26, Main_Dark: 0x4a2a14, Main_Light: 0xa8743e, Hair: 0x2a1a10 } },
   h_dark: { ...HORSE, coat: { Main: 0x2a1c14, Main_Dark: 0x17100c, Main_Light: 0x3c2a1e, Hair: 0x0c0a08 } },
@@ -229,7 +235,7 @@ function bake(gltf, all, names, M = {}) {
 function teamMap(rig, teamColor, look) {
   if (!rig.map?.image) return rig.map;
   const key = teamColor + (look || ''); if (rig.teamMaps[key]) return rig.teamMaps[key];
-  const S = rig.map.image.width >= 1024 ? 512 : 256, cv = document.createElement('canvas'); cv.width = cv.height = S; const cx = cv.getContext('2d', { willReadFrequently: true });
+  const S = MODELS[rig.id]?.animal ? Math.min(1024, rig.map.image.width) : rig.map.image.width >= 1024 ? 512 : 256, cv = document.createElement('canvas'); cv.width = cv.height = S; const cx = cv.getContext('2d', { willReadFrequently: true });
   cx.drawImage(rig.map.image, 0, 0, S, S); const img = cx.getImageData(0, 0, S, S), d = img.data;
   const th = {}; new THREE.Color(teamColor).getHSL(th, THREE.SRGBColorSpace); const c = new THREE.Color(), hsl = {}, rules = MODELS[rig.id]?.team || [];
   for (let i = 0; i < d.length; i += 4) {
@@ -240,6 +246,8 @@ function teamMap(rig, teamColor, look) {
       c.setHSL(th.h, Math.min(1, (shade === 1 ? hsl.s * (.55 + th.s * .6) : th.s * (minL ? .62 : .85))), Math.max(minL + hsl.l * .6, hsl.l * (.6 + th.l) * (shade === 1 ? 1 : shade)), THREE.SRGBColorSpace); hit = true; break;
     }
     if (!hit && look === 'gold' && hsl.s < .25 && hsl.l > (rig.mixamo ? .05 : .22) && hsl.l < .85) { c.setHSL(.115, .62, Math.min(.78, rig.mixamo ? hsl.l * 1.7 + .08 : hsl.l * 1.05), THREE.SRGBColorSpace); hit = true; } // the Commander's gilded armour
+    if (!hit && look === 'steel' && hsl.s < .2 && hsl.l > .06 && hsl.l < .85) { c.setHSL(.6, .05, Math.min(.86, hsl.l * 1.55 + .14), THREE.SRGBColorSpace); hit = true; } // the Royal Guard's polished plate
+    if (!hit && look === 'black' && hsl.s < .2 && hsl.l > .1) { c.setHSL(.62, .08, hsl.l * .42 + .03, THREE.SRGBColorSpace); hit = true; } // blackened steel
     if (!hit && look === 'bronze' && hsl.s < .22 && hsl.l > .12 && hsl.l < .8) { c.setHSL(.075, .5, Math.min(.62, hsl.l * 1.15 + .04), THREE.SRGBColorSpace); hit = true; } // Roman bronze
     if (!hit && look === 'lacquer' && hsl.l < .3 && hsl.s < .5) { c.setHSL(.01, .55, hsl.l * .9 + .04, THREE.SRGBColorSpace); hit = true; } // red-lacquered leather
     if (!hit && look === 'raider' && hsl.s < .25 && hsl.l > .5) { c.setHSL(.07, .35, hsl.l * .55, THREE.SRGBColorSpace); hit = true; } // weathered: no pale cloth, darker hair
@@ -284,6 +292,11 @@ const GEAR = {
   },
   bigaxe: () => [['handslotr', new THREE.CylinderGeometry(.03, .036, 1.25, 6), WOOD, T(0, .35, 0)], ['handslotr', new THREE.CylinderGeometry(.24, .24, .035, 10, 1, false, 0, 2.2).rotateZ(Math.PI / 2).rotateY(Math.PI / 2), STEEL, T(0, .82, .05)], ['handslotr', new THREE.BoxGeometry(.06, .14, .1), DARK, T(0, .86, -.03)]],
   xbow: () => [['gripr', new THREE.BoxGeometry(.06, .7, .07), WOOD, T(0, .18, .05)], ['gripr', new THREE.TorusGeometry(.32, .02, 4, 10, 2.2).rotateZ(-1.1 + Math.PI / 2).rotateX(Math.PI / 2).rotateY(Math.PI / 2), DARK, T(0, .48, 0)], ['gripr', new THREE.BoxGeometry(.08, .12, .05), STEEL, T(0, .08, .08)]],
+  // elite weapons and trim
+  halberd: () => [['handslotr', new THREE.CylinderGeometry(.027, .032, 2.4, 6), WOOD, T(0, .5, 0)], ['handslotr', new THREE.ConeGeometry(.045, .38, 6), STEEL, T(0, 1.88, 0)],
+    ['handslotr', new THREE.CylinderGeometry(.21, .21, .028, 12, 1, false, 0, Math.PI).rotateZ(Math.PI / 2).rotateY(Math.PI / 2), STEEL, T(0, 1.5, .03)],
+    ['handslotr', new THREE.BoxGeometry(.03, .05, .2), STEEL, T(0, 1.56, -.12, -.35, 0, 0)], ['handslotr', new THREE.BoxGeometry(.05, .34, .05), DARK, T(0, 1.42, 0)]],
+  plume: () => [['head', new THREE.BoxGeometry(.035, .1, .3), 'team', T(0, .29, -.04)], ['head', new THREE.BoxGeometry(.03, .08, .14), 'team', T(0, .26, -.22, .5, 0, 0)]],
   quiver: () => [['chest', new THREE.CylinderGeometry(.09, .075, .6, 7), DARK, T(.1, .1, -.3, 0, 0, -.45)], ['chest', new THREE.CylinderGeometry(.07, .07, .12, 5), 0xd8d2c0, T(.25, .42, -.3, 0, 0, -.45)]],
 };
 // Mixamo hands: fingers run along the bone's +Y and the palm faces +Z. A slot maps the gear's own space (+Y up the weapon,
@@ -292,7 +305,7 @@ const MXR = new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 1, 0), new THREE.
 const MXL = new THREE.Matrix4().makeBasis(new THREE.Vector3(0, -1, 0), new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 0, -1)).setPosition(0, .085, .035);
 // a gun-style grip (crossbows on the rifle clips): the stock runs along the fingers' direction
 const MXG = new THREE.Matrix4().makeBasis(new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, -1)).setPosition(0, .085, .035);
-const MX_SLOT = { handslotr: ['mixamorigRightHand', MXR], handslotl: ['mixamorigLeftHand', MXL], gripr: ['mixamorigRightHand', MXG], chest: ['mixamorigSpine2', new THREE.Matrix4()] };
+const MX_SLOT = { handslotr: ['mixamorigRightHand', MXR], handslotl: ['mixamorigLeftHand', MXL], gripr: ['mixamorigRightHand', MXG], chest: ['mixamorigSpine2', new THREE.Matrix4()], head: ['mixamorigHead', new THREE.Matrix4()] };
 function unitGeo(rig, def, teamColor = 0x888888) {
   const list = [];
   for (const m of rig.parts) {
@@ -316,7 +329,7 @@ function unitGeo(rig, def, teamColor = 0x888888) {
     if (bi === undefined) continue;
     geo.applyMatrix4(mat);
     if (slot) { const s = new THREE.Vector3().setFromMatrixScale(rig.bind[bi]).x; geo.applyMatrix4(slot).applyMatrix4(new THREE.Matrix4().makeScale(1 / s, 1 / s, 1 / s)); }
-    list.push(withAttrs(geo.applyMatrix4(rig.bind[bi]), bi, 1, color));
+    list.push(withAttrs(geo.applyMatrix4(rig.bind[bi]), bi, 1, color === 'team' ? teamColor : color));
   }
   return mergeGeometries(list, false);
 }
@@ -368,6 +381,7 @@ export class AnimBatch {
     this.rows = new THREE.InstancedBufferAttribute(new Float32Array(cap), 1); this.rows.setUsage(THREE.DynamicDrawUsage); geo.setAttribute('aRow', this.rows);
     const map = teamMap(rig, teamColor, def.look), look = def.look === 'gold' ? { roughness: .42, metalness: .45 } : { roughness: .62, metalness: .08 };
     if (def.look === 'bronze') Object.assign(look, { roughness: .5, metalness: .35 });
+    if (def.look === 'steel') Object.assign(look, { roughness: .32, metalness: .6 }); if (def.look === 'black') Object.assign(look, { roughness: .45, metalness: .45 });
     const mat = patch(ANIM.pbr ? new THREE.MeshStandardMaterial({ map, vertexColors: true, ...look, ...(rig.alphaTest ? { alphaTest: rig.alphaTest, side: rig.double ? THREE.DoubleSide : THREE.FrontSide } : {}), ...(rig.nmap ? { normalMap: rig.nmap, normalScale: rig.nscale.clone().multiplyScalar(.9) } : {}) }) : new THREE.MeshLambertMaterial({ map, vertexColors: true }), false, rig);
     const m = this.mesh = new THREE.InstancedMesh(geo, mat, cap); m.count = 0; m.frustumCulled = false; m.castShadow = shadows; m.receiveShadow = false;
     if (shadows) { rig.depthMat = rig.depthMat || patch(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }), true, rig); m.customDepthMaterial = rig.depthMat; }

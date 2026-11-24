@@ -194,6 +194,12 @@ function addHerd(x, z, n) {
     resources.push(res); animals.push(res);
   }
 }
+/** A bear: lots of meat, but it charges anyone who comes too close (and fights back when hunted). */
+function addBear(x, z) {
+  if (!cellFree0(x | 0, z | 0)) return;
+  const res = { id: nextResId++, kind: 'res', rt: 'f', animal: true, bear: true, x, z, hx: x, hz: z, amt: 320, max: 320, r: .8, cells: [], alive: true, hp: 70, maxHp: 70, yaw: rr(0, TAU), wT: rr(0, 4), tx: x, tz: z, fleeT: 0, biteAt: -9 };
+  resources.push(res); animals.push(res);
+}
 function addMine(x, z, amt) {
   const cx = x | 0, cz = z | 0, cells = [];
   for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) { if (!cellFree0(cx + dx, cz + dz)) return; cells.push((cz + dz) * N + cx + dx); }
@@ -238,21 +244,34 @@ if (MAP.river) for (const s0 of [40, 52, 72, 92, 108, 148, 164, 184, 204, 216]) 
 }
 // deer: a herd near each town, more roaming the wilds (mirrored so it's fair)
 H(addHerd, 40, 92, 4); H(addHerd, 16, 86, 3); F(addHerd, 50, 72, 4); H(addHerd, 30, 120, 3); F(addHerd, 24, 58, 4); F(addHerd, 70, 112, 4); F(addHerd, 40, 32, 3);
+// bears: a few out in the wilds, well away from both towns (mirrored so it's fair)
+for (let k = 0, t = 0; k < 4 && t < 900; t++) {
+  const x = rr(20, SIZE - 20), z = rr(20, SIZE - 20);
+  if (nearBase(x, z, 45) || nearBase(SIZE - x, SIZE - z, 45) || distToRoad(x, z) < 6 || heightAt(x, z) > 9 || !cellFree0(x | 0, z | 0) || !cellFree0(SIZE - x | 0, SIZE - z | 0)) continue;
+  if (Math.hypot(x - (SIZE - x), z - (SIZE - z)) < 30 || animals.some(a => a.bear && Math.hypot(a.x - x, a.z - z) < 40)) continue;
+  mirror(addBear, x, z); k++;
+}
 if (MAP.sea) for (let k = 0, t = 0; k < 16 && t < 800; t++) { // fish all over the sea
   const x = rr(20, SIZE - 20), z = rr(20, SIZE - 20); if (heightAt(x, z) > WL - 1.4 || heightAt(SIZE - x, SIZE - z) > WL - 1.4) continue;
   if (resources.some(r => r.fish && Math.hypot(r.x - x, r.z - z) < 14)) continue; k++;
   for (const [fx, fz] of [[x, z], [SIZE - x, SIZE - z]]) resources.push({ id: nextResId++, kind: 'res', rt: 'f', fish: true, x: fx, z: fz, amt: 300, max: 300, r: 1.2, cells: [], alive: true });
 }
 for (const r of resources) r.y = r.fish ? WL : heightAt(r.x, r.z);
-/** Deer graze and wander; a hunted deer bolts away from the hunter. Dead deer lie still until eaten. */
+/** Deer graze and wander; a hunted deer bolts away from the hunter. Dead deer lie still until eaten.
+ *  Bears amble about; an angry bear (a.angry = the unit it is after) charges, but gives up once dragged far from home. */
 export function updateAnimals(dt, t) {
   for (const a of animals) {
     if (!a.alive || a.hp <= 0) continue;
-    const fleeing = a.fleeT > t, sp = fleeing ? 4.2 : .9; a.spd = sp;
-    if (!fleeing && (a.wT -= dt) <= 0) { a.wT = 3 + Math.random() * 6; const ang = Math.random() * TAU, d = Math.random() * 5; a.tx = a.hx + Math.cos(ang) * d; a.tz = a.hz + Math.sin(ang) * d; }
-    const dx = a.tx - a.x, dz = a.tz - a.z, l = Math.hypot(dx, dz);
-    if (l > .15 && (fleeing || a.wT < 2.5)) { const nx = a.x + dx / l * sp * dt, nz = a.z + dz / l * sp * dt; if (cellWalk(nx | 0, nz | 0)) { a.x = nx; a.z = nz; a.moving = true; } else { a.tx = a.x; a.tz = a.z; a.moving = false; } a.yaw = Math.atan2(dx, dz); }
-    else a.moving = false;
+    if (a.bear && a.angry) {
+      const e = a.angry;
+      if (!e.alive || e.boarded || Math.hypot(a.x - a.hx, a.z - a.hz) > 22) { a.angry = null; a.tx = a.hx; a.tz = a.hz; a.wT = 6; a.calmT = t + 6; }
+      else { a.tx = e.x; a.tz = e.z; }
+    }
+    const fleeing = a.fleeT > t, charging = a.bear && a.angry, sp = charging ? 4.4 : a.bear ? (a.calmT > t ? 2.2 : .7) : fleeing ? 4.2 : .9; a.spd = sp;
+    if (!fleeing && !charging && (a.wT -= dt) <= 0) { a.wT = 3 + Math.random() * 6; const ang = Math.random() * TAU, d = Math.random() * (a.bear ? 8 : 5); a.tx = a.hx + Math.cos(ang) * d; a.tz = a.hz + Math.sin(ang) * d; }
+    const dx = a.tx - a.x, dz = a.tz - a.z, l = Math.hypot(dx, dz), stop = charging ? 1.5 : .15;
+    if (l > stop && (fleeing || charging || a.wT < 2.5 || a.calmT > t)) { const nx = a.x + dx / l * sp * dt, nz = a.z + dz / l * sp * dt; if (cellWalk(nx | 0, nz | 0)) { a.x = nx; a.z = nz; a.moving = true; } else { a.tx = a.x; a.tz = a.z; a.moving = false; } a.yaw = Math.atan2(dx, dz); }
+    else { a.moving = false; if (charging && l > .01) a.yaw = Math.atan2(dx, dz); }
     a.y = heightAt(a.x, a.z);
   }
 }
@@ -260,6 +279,7 @@ export function updateAnimals(dt, t) {
 export function hurtAnimal(a, dmg, from, t) {
   if (a.hp <= 0) return false; a.hp -= dmg;
   if (a.hp <= 0) { a.hp = 0; a.moving = false; a.deadAt = t; return true; }
+  if (a.bear) { if (from?.kind === 'unit' && from.alive && !from.d?.ship) a.angry = from; return false; } // bears turn on the hunter
   const dx = a.x - from.x, dz = a.z - from.z, l = Math.hypot(dx, dz) || 1; a.tx = a.x + dx / l * 7; a.tz = a.z + dz / l * 7; a.fleeT = t + 2.2; return false;
 }
 

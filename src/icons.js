@@ -24,7 +24,7 @@ export function portrait(key, team = 0, style = 'franks', look = { age: 1 }) {
   const box = new THREE.Box3().setFromObject(obj); let c = box.getCenter(new THREE.Vector3()); const s = box.getSize(new THREE.Vector3());
   let r = Math.max(s.x, s.y * 1.05, s.z) * .5;
   const ud = kind === 'u' && UD[type];
-  if (ud && !ud.ship && type !== 'catapult') { const horse = ud.horse; c = new THREE.Vector3(0, horse ? 1.75 : 1.2, 0); r = horse ? 1.05 : .62; } // frame the body, not the spear tip
+  if (ud && !ud.ship && type !== 'catapult' && type !== 'bombard') { const horse = ud.horse; c = new THREE.Vector3(0, horse ? 1.75 : 1.2, 0); r = horse ? 1.05 : .62; } // frame the body, not the spear tip
   const d = r / Math.tan(THREE.MathUtils.degToRad(14)) * (kind === 'u' ? 1.12 : 1.05);
   const dir = kind === 'u' ? new THREE.Vector3(.5, .32, 1) : new THREE.Vector3(.75, .7, 1); dir.normalize();
   cam.position.copy(c).addScaledVector(dir, d); cam.lookAt(c); cam.updateMatrixWorld();

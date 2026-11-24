@@ -41,6 +41,7 @@ Photo-scanned **CC0** models from [Poly Haven](https://polyhaven.com), reduced t
 | fishboat.glb (Fishing Boat) | ["Rowing Boat"](https://sketchfab.com/3d-models/rowing-boat-4eedc7ec7bac481f957474ecd89f5ba2) by carlcapu9 (Sketchfab) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | transport.glb (Transport Ship) | ["Gislinge Viking Boat"](https://sketchfab.com/3d-models/gislinge-viking-boat-01098ad7973647a9b558f41d2ebc5193) by Opus Poly (Sketchfab) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | fireship.glb (Fire Ship) | ["Dromon medieval ship"](https://sketchfab.com/3d-models/dromon-medieval-ship-740f6d7c5e92476f98d5507ab8422b4c) by Mitro123 (Sketchfab) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
+| galleon.glb (Cannon Galleon) | ["Empty Ship"](https://sketchfab.com/3d-models/empty-ship-f254f07be1324a138da32833b32486d8) by Liaval (Sketchfab), slimmed to ~10k triangles | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | cog.glb (War Cog) | ["Caravel Ship"](https://sketchfab.com/3d-models/caravel-ship-c9819a0e8a57429f888b74978219fb7a) by Ginny Sutton (Sketchfab), slimmed to ~12k triangles | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 
 Models made with Tripo (tripo.com) go here too, with the account/plan they were made under.
@@ -70,3 +71,5 @@ Models made with Tripo (tripo.com) go here too, with the account/plan they were 
 | File | Source | Licence |
 |---|---|---|
 | animal_elk.glb (the wild deer/elk herds) | ["Realistic Animated Elk 3D Model"](https://sketchfab.com/3d-models/realistic-animated-elk-3d-model-787834f9caa2474d9f1814b807c072d7) by WildMesh 3D (Sketchfab), 5 of its 53 clips kept | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
+| animal_bear.glb (bears in the wilds) | ["Realistic Animated Bear 3D Model"](https://sketchfab.com/3d-models/realistic-animated-bear-3d-model-bffc3c87d2d148ff8533e1cc8a11c9f1) by WildMesh 3D (Sketchfab), 5 of its 81 clips kept, textures packed into one | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
+| animal_eagle.glb (eagles circling overhead) | ["White Eagle Animation Fast Fly"](https://sketchfab.com/3d-models/white-eagle-animation-fast-fly-30203bf39e5145f19c79e83c550139d3) by GremorySaiyan (Sketchfab) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |

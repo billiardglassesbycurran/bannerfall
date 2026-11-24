@@ -49,7 +49,7 @@ export class TeamRings {
     if (RINGS.on) for (const u of units) {
       if (u.dead || !u.alive || u.boarded || u.fowHidden || u.d.ship || u.team > 1) continue;
       const k = n[u.team]; if (k >= this.cap) continue; n[u.team]++;
-      const r = (u.d.horse ? 1.25 : u.d.siege || u.type === 'catapult' ? 1.5 : .78) * (u.d.hero ? 1.25 : 1) * (u.scale || 1);
+      const r = (u.d.horse ? 1.25 : u.d.siege || u.d.cls === 'siege' ? 1.5 : .78) * (u.d.hero ? 1.25 : 1) * (u.scale || 1);
       m.makeScale(r, 1, r).setPosition(u.x, (u.yOver ?? u.y) + .06, u.z); this.meshes[u.team].setMatrixAt(k, m);
     }
     this.meshes.forEach((mesh, t) => { mesh.count = n[t]; mesh.instanceMatrix.needsUpdate = true; });
@@ -192,6 +192,8 @@ const KIND = {
   knight:      { torso: 'mail', skirt: 'mail', legs: 'mail', helm: 'great', tabard: 1, pauld: 1, R: 'lance', L: 'kite' },
   lightcav:    { torso: 'gamb', skirt: 'gamb', legs: 'pants', helm: 'nasal', R: 'saber', L: 'round' },
   horsearcher: { torso: 'green', skirt: 'green', legs: 'hose', helm: 'hood', L: 'bow', quiver: 1 },
+  guard:       { torso: 'plate', skirt: 'mail', legs: 'mail', helm: 'great', tabard: 1, pauld: 1, R: 'sword', scab: 1 },
+  halberd:     { torso: 'mail', skirt: 'mail', legs: 'mail', helm: 'kettle', tabard: 1, pauld: 1, R: 'spear' },
   legion:      { torso: 'segmentata', skirt: 'tunic', legs: 'skin', helm: 'galea', R: 'gladius', L: 'scutum', scab: 1 },
   repeater:    { torso: 'lamellar', skirt: 'lamellar', legs: 'pants', helm: 'chinese', R: 'repeater', quiver: 1 },
   berserker:   { torso: 'fur', skirt: 'pants', legs: 'pants', helm: 'bare', beard: 1, R: 'axe', L: 'axe', bare: 1 },
@@ -412,6 +414,20 @@ function catapultParts(team) {
   b.add(P.ball(.25, 10, 8), C.linen, 0, .6, -.2, 0, 0, 0, 1.6, .6, 1); // rope bundle / counter
   box(arm, C.wood, 0, 0, -.8, .12, .12, 1.7); arm.add(P.cyl(.2, .15, .14, 10), C.dwood, 0, .05, -1.6); arm.add(P.ball(.15, 8, 6), 0x7a766e, 0, .15, -1.6);
   return [{ ...b.split(), pivot: [0, 0, 0], anim: null }, { ...arm.split(), pivot: [0, .9, .2], anim: 'cat' }];
+}
+/** A gunpowder bombard: a fat iron-banded barrel on a heavy wooden carriage with two big wheels. Faces +Z. */
+function bombardParts(team) {
+  const b = new Builder(), tc = TEAM[team];
+  for (const s of [-1, 1]) box(b, C.wood, s * .32, .55, -.35, .12, .3, 2.0, .12); // carriage cheeks, tail on the ground
+  box(b, C.dwood, 0, .45, -1.2, .7, .14, .3); box(b, C.dwood, 0, .62, .25, .78, .16, .5);
+  for (const s of [-1, 1]) { b.add(P.cyl(.52, .52, .1, 16), C.dwood, s * .55, .52, .25, 0, 0, Math.PI / 2); b.m(P.cyl(.12, .12, .14, 8), C.dsteel, s * .55, .52, .25, 0, 0, Math.PI / 2); for (let i = 0; i < 6; i++) box(b, C.wood, s * .55, .52, .25, .06, .9, .06, i * Math.PI / 6); }
+  b.m(P.cyl(.24, .3, 1.9, 14), 0x3a3836, 0, 1.0, .35, Math.PI / 2 - .08, 0, 0);              // the barrel, tipped up a little
+  for (const z of [-.35, .05, .45, .85, 1.18]) b.m(P.cyl(.32, .32, .08, 14), 0x23211f, 0, 1.0 + z * .08, z + .35, Math.PI / 2 - .08, 0, 0); // iron hoops
+  b.m(P.cyl(.18, .18, .04, 12), 0x0c0b0a, 0, 1.11, 1.31, Math.PI / 2 - .08, 0, 0);             // the dark muzzle
+  b.m(P.ball(.27, 10, 8), 0x2e2c2a, 0, .93, -.6);                                            // breech
+  for (let i = 0; i < 3; i++) b.m(P.ball(.12, 8, 6), 0x1c1b1a, -.25 + i * .12, .52, -1.0);    // a few cannonballs
+  b.add(P.cyl(.025, .025, 1.5, 5), C.wood, .4, 1.35, -1.1); box(b, tc, .62, 1.9, -1.1, .42, .28, .02); // team pennant
+  return [{ ...b.split(), pivot: [0, 0, 0], anim: null }];
 }
 // ---------------- God mode: dragon, war wagon, battle car ----------------
 /** A big winged dragon (stand-in until a model file is present): scaled body, long neck and tail, horned head; wings flap. */
@@ -645,6 +661,7 @@ function figureParts(team, kind, style) {
   const d = UD[kind];
   if (d.ship) return shipParts(team, kind);
   if (kind === 'catapult') return catapultParts(team);
+  if (kind === 'bombard') return bombardParts(team);
   if (kind === 'dragon') return dragonParts(team);
   if (kind === 'warwagon') return warwagonParts(team);
   if (kind === 'battlecar') return battlecarParts(team);
