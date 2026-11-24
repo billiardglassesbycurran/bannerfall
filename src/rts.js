@@ -1,6 +1,6 @@
 // Aerial command view: camera, picking, selection, orders and building placement — mouse/keyboard and touch.
 import * as THREE from 'three';
-import { SIZE, N, heightAt, resCell, animals } from './world.js';
+import { SIZE, N, heightAt, resCell, animals, resources } from './world.js';
 import { bldAt } from './game.js';
 import { clamp, lerp } from './util.js';
 
@@ -59,14 +59,15 @@ export class RTSView {
     out.set(x, y, z).project(this.cam);
     return out.z < 1 ? [(out.x * .5 + .5) * innerWidth, (-out.y * .5 + .5) * innerHeight] : null;
   }
+  /** The unit whose body (feet to head) is nearest the tap; rad = finger/mouse margin in pixels. Sets this.unitScore. */
   pickUnit(sx, sy, rad, team) {
-    const v = new THREE.Vector3(); let best = null, bd = rad * rad;
+    const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(); let best = null, bs = 1;
     for (const u of this.a.game.units) {
       if (!u.alive || u.possessed || u.boarded || u.fowHidden || (team !== undefined && u.team !== team)) continue;
-      const p = this.toScreen(u.x, u.y + .9 * u.scale * (u.d.horse ? 1.6 : 1), u.z, v); if (!p) continue;
-      const d = (p[0] - sx) ** 2 + (p[1] - sy) ** 2 - (u.team === 0 ? 60 : 0); if (d < bd) { bd = d; best = u; }
+      const s = this.hitScore(sx, sy, u.x, u.y, u.z, 1.8 * u.scale * (u.d.horse ? 1.4 : 1), u.d.ship ? 1.5 : .45, rad * .75, v1, v2) * (u.team === 0 ? .9 : 1);
+      if (s < bs) { bs = s; best = u; }
     }
-    return best;
+    this.unitScore = bs; return best;
   }
   pickGround(sx, sy) {
     this.ray.setFromCamera(new THREE.Vector2(sx / innerWidth * 2 - 1, -(sy / innerHeight) * 2 + 1), this.cam);
@@ -79,11 +80,36 @@ export class RTSView {
     const hit = this.ray.intersectObjects(meshes, true)[0]; // custom models are groups of meshes
     return hit ? this.a.game.blds.find(b => b.mesh === hit.object || b.mesh === hit.object.parent) : null;
   }
+  /** Screen distance from (sx, sy) to the upright shape of an object (a line from its foot to its top), in units of `allow`
+   * pixels (wider for big or near objects). <1 = the tap is on it or close enough. */
+  hitScore(sx, sy, x, y0, z, h, r, allow, v1, v2) {
+    const a = this.toScreen(x, y0, z, v1); if (!a) return 9; const b = this.toScreen(x, y0 + h, z, v2); if (!b) return 9;
+    const dx = b[0] - a[0], dy = b[1] - a[1], L = dx * dx + dy * dy, t = L ? Math.max(0, Math.min(1, ((sx - a[0]) * dx + (sy - a[1]) * dy) / L)) : 0;
+    const d = Math.hypot(sx - a[0] - dx * t, sy - a[1] - dy * t), px = Math.sqrt(L) / Math.max(h, .1); // pixels per metre here
+    return d / (allow + r * px);
+  }
+  /** The resource or animal whose visible shape is nearest the tap (so tapping the top of a rock, bush or deer works too). */
+  pickRes(sx, sy, touch) {
+    const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), allow = touch ? 30 : 16, R = 40 + this.dist * 2.5; let best = null, bs = 1;
+    for (const r of resources) {
+      if (!r.alive || r.amt <= 0 || r.fowHidden) continue;
+      if (Math.abs(r.x - this.focus.x) > R || Math.abs(r.z - this.focus.z) > R) continue; // far off screen
+      const h = r.animal ? (r.bear ? 1.4 : 1.6) : r.fish ? .3 : r.rt === 'w' ? 4.5 : r.rt === 'f' ? .9 : 1.2;
+      const y0 = r.fish ? 0 : r.animal && r.y !== undefined ? r.y : heightAt(r.x, r.z);
+      const s = this.hitScore(sx, sy, r.x, y0, r.z, h, r.rt === 'w' ? .8 : Math.max(.5, r.r || .5), allow, v1, v2) * (r.rt === 'w' ? 1.15 : 1); // trees are everywhere: a nearer bush/rock/animal wins a tie
+      if (s < bs) { bs = s; best = r; }
+    }
+    return best ? { ent: best, s: bs } : null;
+  }
   /** What is under the screen point? Returns {ent, p} where ent is a unit, building, resource or null. */
   pick(sx, sy, touch) {
     const p = this.pickGround(sx, sy);
-    const u = this.pickUnit(sx, sy, touch ? 40 : 24); if (u) return { ent: u, p: p || new THREE.Vector3(u.x, u.y, u.z) };
+    const u = this.pickUnit(sx, sy, touch ? 40 : 24), rs = this.pickRes(sx, sy, touch);
+    // a unit wins unless the tap is clearly on a resource/animal and not really on the unit
+    if (u) { const us = this.unitScore;
+      if (!rs || us <= rs.s * 1.6 || us < .5) return { ent: u, p: p || new THREE.Vector3(u.x, u.y, u.z) }; }
     const b = this.pickBuilding(sx, sy); if (b) return { ent: b, p: p || new THREE.Vector3(b.x, b.y, b.z) };
+    if (rs) return { ent: rs.ent, p: p || new THREE.Vector3(rs.ent.x, 0, rs.ent.z) };
     if (!p) return { ent: null, p: null };
     { let best = null, bd = touch ? 2 : 1.3; for (const a of animals) if (a.alive) { const d = Math.hypot(a.x - p.x, a.z - p.z); if (d < bd) { bd = d; best = a; } } if (best) return { ent: best, p }; } // deer
     const cx = p.x | 0, cz = p.z | 0, r = touch ? 1 : 0;

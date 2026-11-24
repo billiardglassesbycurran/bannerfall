@@ -27,6 +27,8 @@ const MODELS = {
   dragon: { file: 'creature_dragon.glb', animal: 1, lazy: 1, height: 4.0 }, // "Animated Dragon Three Motion Loops" by LasquetiSpice (CC-BY)
   brute: { file: 'mx_brute.glb', mixamo: 1, team: [[0, 1, 0, .2, .9, .17]] },                         // bare-chested, tattooed; trousers dyed
   heraklios: { file: 'mx_heraklios.glb', mixamo: 1, bright: 1.3, team: [] },                         // fur-and-iron steppe warrior
+  cguard1: { file: 'mx_guard01.glb', mixamo: 1, bright: 1.15, team: [[.95, 1.035, .3, .7, 1], [.53, .7, .15, .8, .7]] },  // Castle Guard 01: great helm; red tabard and blue padding dyed
+  cguard2: { file: 'mx_guard02.glb', mixamo: 1, bright: 1.15, team: [] },                             // Castle Guard 02: kettle helm, leather and mail
   // animals (CC0, Quaternius): their own skeleton and clips, flat colours instead of a texture
   horse: { file: 'animal_horse.glb', animal: true, height: 2.3 },
   deer: { file: 'animal_elk.glb', animal: true, height: 2.1 }, // realistic elk (WildMesh 3D, Sketchfab, CC BY) with its own texture and clips
@@ -54,8 +56,8 @@ Object.assign(KINDS, {
   spear: { model: 'paladin', parts: ['Body', 'Helmet', 'Shield'], show: [], gear: ['spear'], clips: { ...SS, attack: 'ss_atk4' }, atk: { from: .3, rate: 1.4, len: .6 } },
   legion: { model: 'paladin', look: 'bronze', parts: ['Body', 'Helmet', 'Sword', 'Shield'], show: [], clips: { ...SS, attack: 'ss_atk3' }, atk: { from: .45, rate: 1.4, len: .7 } },
   hero: { model: 'paladin', look: 'gold', parts: ['Body', 'Helmet', 'Sword'], show: [], clips: { ...GS, attack: 'gs_slash' }, atk: { from: .3, rate: 1.25, len: .7 }, size: 1.04 },
-  guard: { model: 'paladin', look: 'steel', parts: ['Body', 'Helmet', 'Sword'], show: [], gear: ['plume'], clips: { ...GS, attack: 'gs_slash' }, atk: { from: .3, rate: 1.25, len: .7 }, size: 1.06 },
-  halberd: { model: 'paladin', look: 'black', parts: ['Body', 'Helmet'], show: [], gear: ['halberd', 'plume'], clips: { ...GS, attack: 'gs_attack' }, atk: { from: .3, rate: 1.3, len: .7 } },
+  guard: { model: 'cguard1', look: 'steel', show: [], gear: ['greatsword', 'crest'], clips: { ...GS, attack: 'gs_slash' }, atk: { from: .3, rate: 1.25, len: .7 }, size: 1.06 },
+  halberd: { model: 'cguard2', look: 'black', show: [], gear: ['halberd', 'crest'], clips: { ...GS, attack: 'gs_attack' }, atk: { from: .3, rate: 1.3, len: .7 } },
   berserker: { model: 'brute', show: [], clips: { ...GS, attack: 'gs_attack' }, atk: { from: .3, rate: 1.4, len: .6 } },
   archer: { model: 'mxarcher', parts: ['Body', 'Helmet', 'Extra', 'Bow'], show: [], ranged: 'bow', clips: { ...BOW, attack: 'ss_atk4', aim: 'bow_draw', shoot: 'bow_draw' } },
   crossbow: { model: 'mxarcher', parts: ['Body', 'Helmet', 'Extra'], show: [], gear: ['xbow'], ranged: 'xbow', clips: XB },
@@ -255,7 +257,7 @@ function teamMap(rig, teamColor, look) {
     if (hit) { c.getRGB(hsl, THREE.SRGBColorSpace); d[i] = hsl.r * 255; d[i + 1] = hsl.g * 255; d[i + 2] = hsl.b * 255; }
   }
   cx.putImageData(img, 0, 0);
-  cx.fillStyle = '#fff'; cx.fillRect(0, 0, 4, 4); // a white corner: extra gear (spear, bow...) samples it and is coloured per vertex instead
+  cx.fillStyle = '#fff'; cx.fillRect(0, 0, 8, 8); // a white corner: extra gear (spear, bow...) samples it and is coloured per vertex instead
   const t = new THREE.CanvasTexture(cv); t.flipY = false; t.colorSpace = THREE.SRGBColorSpace; t.magFilter = t.minFilter = THREE.LinearFilter; t.generateMipmaps = false;
   return (rig.teamMaps[key] = t);
 }
@@ -293,9 +295,13 @@ const GEAR = {
   bigaxe: () => [['handslotr', new THREE.CylinderGeometry(.03, .036, 1.25, 6), WOOD, T(0, .35, 0)], ['handslotr', new THREE.CylinderGeometry(.24, .24, .035, 10, 1, false, 0, 2.2).rotateZ(Math.PI / 2).rotateY(Math.PI / 2), STEEL, T(0, .82, .05)], ['handslotr', new THREE.BoxGeometry(.06, .14, .1), DARK, T(0, .86, -.03)]],
   xbow: () => [['gripr', new THREE.BoxGeometry(.06, .7, .07), WOOD, T(0, .18, .05)], ['gripr', new THREE.TorusGeometry(.32, .02, 4, 10, 2.2).rotateZ(-1.1 + Math.PI / 2).rotateX(Math.PI / 2).rotateY(Math.PI / 2), DARK, T(0, .48, 0)], ['gripr', new THREE.BoxGeometry(.08, .12, .05), STEEL, T(0, .08, .08)]],
   // elite weapons and trim
+  greatsword: () => [['handslotr', new THREE.CylinderGeometry(.026, .03, .3, 6), DARK, T(0, .02, 0)], ['handslotr', new THREE.SphereGeometry(.045, 6, 4), STEEL, T(0, -.15, 0)],
+    ['handslotr', new THREE.BoxGeometry(.4, .045, .05), STEEL, T(0, .19, 0)], ['handslotr', new THREE.BoxGeometry(.075, 1.05, .016), STEEL, T(0, .73, 0)],
+    ['handslotr', new THREE.ConeGeometry(.053, .16, 4).scale(1, 1, .3), STEEL, T(0, 1.33, 0)]],
   halberd: () => [['handslotr', new THREE.CylinderGeometry(.027, .032, 2.4, 6), WOOD, T(0, .5, 0)], ['handslotr', new THREE.ConeGeometry(.045, .38, 6), STEEL, T(0, 1.88, 0)],
     ['handslotr', new THREE.CylinderGeometry(.21, .21, .028, 12, 1, false, 0, Math.PI).rotateZ(Math.PI / 2).rotateY(Math.PI / 2), STEEL, T(0, 1.5, .03)],
     ['handslotr', new THREE.BoxGeometry(.03, .05, .2), STEEL, T(0, 1.56, -.12, -.35, 0, 0)], ['handslotr', new THREE.BoxGeometry(.05, .34, .05), DARK, T(0, 1.42, 0)]],
+  crest: () => [['head', new THREE.BoxGeometry(.04, .13, .32), 'team', T(0, .37, -.02)], ['head', new THREE.BoxGeometry(.035, .1, .16), 'team', T(0, .33, -.22, .5, 0, 0)]], // on top of a great helm
   plume: () => [['head', new THREE.BoxGeometry(.035, .1, .3), 'team', T(0, .29, -.04)], ['head', new THREE.BoxGeometry(.03, .08, .14), 'team', T(0, .26, -.22, .5, 0, 0)]],
   quiver: () => [['chest', new THREE.CylinderGeometry(.09, .075, .6, 7), DARK, T(.1, .1, -.3, 0, 0, -.45)], ['chest', new THREE.CylinderGeometry(.07, .07, .12, 5), 0xd8d2c0, T(.25, .42, -.3, 0, 0, -.45)]],
 };

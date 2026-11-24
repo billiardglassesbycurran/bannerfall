@@ -143,7 +143,9 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
   Skirmish AI (Knight/Warlord): counters the player's army (`counterW`), gathers at a rally point and attacks only when
   strong enough (`power`), targets the weakest spot (`weakSpot`), retreats when losing, cavalry raids on peasants (`raid`),
   scouting, towers by its gold, storehouses by wood/gold, rebalances workers; Warlord rings the bell. Squire stays simple.
-- `src/rts.js` — aerial camera, picking, selection, touch/mouse orders. Touch: drag pans; hold a finger still ~0.4 s (buzz)
+- `src/rts.js` — aerial camera, picking, selection, touch/mouse orders. Picking (v0.41) is by screen distance to each object's
+  upright shape (`hitScore`: a foot-to-top line + finger margin), so tapping the top, middle or base of a bush/rock/animal/unit all hit;
+  `pickRes` scans resources near the camera, units win unless the tap is clearly on a resource. Touch: drag pans; hold a finger still ~0.4 s (buzz)
   then drag = box select; the Box button arms one box and switches itself off. Minimap canvas is 2 px per cell (`N * 2`). `src/pov.js` — 1st/3rd person: strike, Follow me,
   Act button (G: board/steer/leave ships, enter/leave buildings — rooms from `interiorGeo` in models.js), Mount (M).
 - `src/hud.js` — resource bar, selection panel (portrait + HP bar, `head()`), command card, minimap, health bars, toasts.
@@ -179,8 +181,8 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
   `Game.bears()` (`onBear` warns the player); `nearestRes` never auto-picks a living bear. Drawn by `bearBatch` in main.js
   (`animal_bear.glb`, `KINDS.bear` with an Attack clip, `swT` from `a.biteAt`). Eagles: scenery only (`EAGLES` in main.js,
   `animal_eagle.glb`), circling 11-16 m up. `animal.py --atlas` packs a multi-material animal into one texture (the game
-  uses one map per animated model). Castle trains elite **Royal Guard** (`guard`: paladin, look 'steel', great-sword clips,
-  team plume) and **Halberdier** (`halberd`: look 'black', GEAR `halberd` + `plume`; gear colour 'team' = team colour,
+  uses one map per animated model). Castle trains elite **Royal Guard** (`guard`: Mixamo Castle Guard 01 `cguard1` = `mx_guard01.glb`, look 'steel',
+  GEAR `greatsword` + `crest`, great-sword clips; red tabard dyed team) and **Halberdier** (`halberd`: Castle Guard 02 `cguard2`, look 'black', GEAR `halberd` + `crest`; gear colour 'team' = team colour,
   `head` slot); Siege Workshop builds the **Bombard** (`bombard`, Castle Age, `cannon` shot from the muzzle, `bombardParts`).
   Galleon = "Empty Ship" by Liaval (yaw 180, sink .55).
 - **Unity bridge** (`tools/unity.py`): `export` writes every unit/building as FBX+GLB to `exports/unity/` (git-ignored; built

@@ -54,7 +54,7 @@ Models made with Tripo (tripo.com) go here too, with the account/plan they were 
   (github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0). Knight, Rogue and Hooded Rogue in
   `assets/anim/char_*.glb` (slimmed and re-proportioned in game; licence text in `assets/anim/LICENSE-KayKit-Adventurers.txt`).
 - **Mixamo** (Adobe, mixamo.com): the realistic soldiers and villagers since v0.31 — characters Paladin W/Prop J Nordstrom,
-  Erika Archer With Bow/Arrow, Peasant Man, Brute (berserkers, villagers) and Heraklios (light cavalry riders), and motion-captured clips (sword & shield, great sword, longbow, rifle, farming,
+  Erika Archer With Bow/Arrow, Peasant Man, Brute (berserkers, villagers), Heraklios (light cavalry riders) and Castle Guard 01/02 (Royal Guard, Halberdier), and motion-captured clips (sword & shield, great sword, longbow, rifle, farming,
   sitting). Converted with `tools/blender/mixamo.py` into `assets/anim/mx_*.glb`. **Not CC0**: Mixamo's terms let them be used
   royalty-free inside a game, but not redistributed as standalone assets — please don't reuse these files outside Bannerfall.
 - **God mode creatures:** Mixamo characters Warrok W Kurniawan (Troll), Demon T Wiezzorek (Demon) and Skeletonzombie
