@@ -412,18 +412,15 @@ function setupGame(mode, diff, civ = 'franks', enemyCiv, god) {
     rts.lookAt(cx + 52, cz + 78); rts.dist = rts.distT = 34;
   } else {
     const hall = g.placeBuilding(0, 'hall', B0.x - 2, B0.z - 2, true);
-    for (let i = 0; i < 4; i++) g.spawnUnit(0, 'peasant', hall.x + 4 + i * .8, hall.z - 3.5);
+    // every game starts with one villager standing by the Town Hall: what to do first (and how many more to train) is up to the player
+    g.spawnUnit(0, 'peasant', hall.x + 4, hall.z - 3.5);
     g.hero = g.spawnUnit(0, 'hero', hall.x + 4.5, hall.z - 1);
-    const peas = g.units.filter(u => u.type === 'peasant');
-    const berry = g.nearestRes(hall.x, hall.z, 'f', 20), tree = g.nearestRes(hall.x, hall.z, 'w', 25);
-    peas.forEach((p, i) => { const r = i < 2 ? berry : tree; if (r) g.gather(p, r); });
     if (mode === 'skirmish' || mode === 'castle') {
       const eh = g.placeBuilding(1, 'hall', SIZE - B0.x - 3, SIZE - B0.z - 3, true);
-      for (let i = 0; i < 4; i++) g.spawnUnit(1, 'peasant', eh.x - 4 - i * .8, eh.z + 3.5);
+      g.spawnUnit(1, 'peasant', eh.x - 4, eh.z + 3.5); // the enemy starts the same way
       g.spawnUnit(1, 'hero', eh.x - 4.5, eh.z + 1);
-      if (mode === 'castle') { // a head start: Bronze Age, more people and resources, so the race to the Castle is on
+      if (mode === 'castle') { // a head start: Bronze Age and more resources, so the race to the Castle is on
         for (const t of [0, 1]) { g.applyTech(t, 'feudal'); Object.assign(g.T[t], { f: 700, w: 700, g: 450, s: 450 }); }
-        for (let i = 0; i < 4; i++) { g.spawnUnit(0, 'peasant', hall.x + 4 + i * .8, hall.z - 5); g.spawnUnit(1, 'peasant', eh.x - 4 - i * .8, eh.z + 5); }
       }
     } else {
       Object.assign(g.T[0], { f: 300, w: 350, g: 150, age: 1 }); g.refreshLooks(0); figures.setAge(0, 1);

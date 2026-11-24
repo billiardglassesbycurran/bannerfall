@@ -260,6 +260,7 @@ export class Game {
   bears(dt) {
     if ((this.bearT = (this.bearT || 0) + dt) > .5) { this.bearT = 0; for (const a of animals) if (a.bear && a.alive && a.hp > 0 && !a.angry && !(a.calmT > this.time)) { let best = null, bd = 4.5; this.unitsNear(a.x, a.z, bd, u => { if (u.alive && !u.d.ship && !u.d.fly && !u.boarded) { const d = Math.hypot(u.x - a.x, u.z - a.z); if (d < bd) { bd = d; best = u; } } }); if (best) { a.angry = best; this.onBear?.(a, best); } } }
     for (const a of animals) {
+      if (a.kick) { const k = a.kick; a.kick = null; if (a.hp > 0 && k.alive && Math.hypot(k.x - a.x, k.z - a.z) < 2.8) this.damage(k, 4, null); } // an elk's kick
       const e = a.bear && a.hp > 0 && a.angry; if (!e || !e.alive) continue;
       if (Math.hypot(e.x - a.x, e.z - a.z) < 2 && this.time - a.biteAt > 1.6) {
         a.biteAt = this.time; this.damage(e, e.type === 'peasant' ? 9 : 14, null);
@@ -703,10 +704,10 @@ export class Game {
         let r = t.res;
         if (!r.alive) { r = this.nearestRes(r.x, r.z, r.rt, r.fish ? 40 : 15, !!r.fish); if (!r) { if (u.carry) this.setTask(u, { type: 'return' }); else this.setTask(u, { type: 'idle' }); break; } t.res = r; u.path = null; }
         if (u.carry && (u.carry.rt !== r.rt || u.carry.amt >= this.T[u.team].carry)) { this.setTask(u, { type: 'return', back: t }); break; }
-        if (r.animal && r.hp > 0) { // hunting: get within a spear's throw, then throw
-          const d = Math.hypot(u.x - r.x, u.z - r.z);
-          if (d < 4.5) { u.path = null; this.face(u, Math.atan2(r.x - u.x, r.z - u.z), dt); if (u.cd <= 0) { u.cd = 1.3; u.swingT = 0; this.shoot(u, r, 3); this.shots[this.shots.length - 1].hunt = r; } }
-          else { u.repath = Math.min(u.repath || 0, .6); this.goTo(u, r.x, r.z, 3.5, dt); }
+        if (r.animal && r.hp > 0) { // hunting: walk up and strike with the peasant's own weapon and stats (big animals fight back: see bears())
+          const reach = (u.d.rng || 1.2) + (r.r || .5);
+          if (Math.hypot(u.x - r.x, u.z - r.z) <= reach) { u.path = null; this.face(u, Math.atan2(r.x - u.x, r.z - u.z), dt); if (u.cd <= 0) { u.cd = u.d.cd || 1.3; u.swingT = 0; if (hurtAnimal(r, u.d.dmg, u, this.time)) this.onHunt?.(r); } }
+          else { u.repath = Math.min(u.repath || 0, .6); this.goTo(u, r.x, r.z, reach * .8, dt); }
           break;
         }
         if (Math.hypot(u.x - r.x, u.z - r.z) <= r.r + (u.d.ship ? 1.9 : .95)) {

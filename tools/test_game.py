@@ -228,7 +228,7 @@ def main():
             time.sleep(.5)
             if G.evaluate('() => !!bannerfall.game && bannerfall.game.units.length > 0'): break
         r = G.evaluate("() => { const g = bannerfall.game; return { mine: g.units.filter(u => u.team === 0).length, blds: g.blds.length } }")
-        check(r['mine'] >= 5 and r['blds'] >= 2, f'guest sees the battlefield {r}')
+        check(r['mine'] >= 2 and r['blds'] >= 2, f'guest sees the battlefield {r}')  # 1 villager + Commander
         G.evaluate("() => { const a = bannerfall, g = a.game, p = g.units.find(u => u.team === 0 && u.type === 'peasant'); window._p = p.id; a.select([p]); const t = g.nearestRes(p.x, p.z, 'w', 40); a.order(t, t.x, t.z); }")
         time.sleep(3); pid = G.evaluate('window._p')
         check(H.evaluate(f"() => bannerfall.game.units.find(u => u.id === {pid})?.task.type") == 'gather', "guest's orders are carried out on the host")

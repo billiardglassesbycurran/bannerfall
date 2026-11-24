@@ -157,6 +157,8 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
 - Line building: `LINE` in main.js (wall, fence) — press-and-drag (`app.lineDrag`, rts.js pointer mode 'line') or tap start + end.
   New buildings v0.33: Fence (`BD.fence`, wall-like, split rails), Outpost (sight 21, fow.js), Well (`d.mend`: nearby buildings self-repair).
 - Main menu: crest SVG + gold title + glassy buttons (`.mbtn`, `.primary`), CSS embers, golden-hour cinematic camera (`MENU_ENV`).
+- Game start (v0.42): every mode except Battle begins with ONE idle villager by each Town Hall (plus the Commander); the player
+  decides what to do and trains the rest (the AI does the same). Castle mode keeps its Bronze Age + resource head start.
 - `window.bannerfall` exposes app state for debugging; `#play=skirmish,1` in the URL skips the menu (mode, difficulty 0-2).
 
 ## Tools on this Mac (art pipeline + tests)
@@ -176,9 +178,11 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
   Animated animals: `tools/blender/animal.py IN OUT --keep A,B --rename A=Idle --tex 1024` keeps only the clips we use; the elk
   (WildMesh 3D, 53 clips) replaces the deer (`MODELS.deer` → `animal_elk.glb`, clips Eat/Walk/Run/Death). WildMesh's bear (81 clips)
   and the eagle were added in v0.40 (below).
-- **v0.40 wildlife + elite troops:** Bears (`addBear` in world.js, `a.bear`, 70 hp, 320 meat) roam the wilds far from towns;
+- **v0.40 wildlife + elite troops:** Bears (`addBear` in world.js, `a.bear`, 110 hp, 400 meat) roam the wilds far from towns;
   they charge anyone within 4.5 m or whoever hurts them (`a.angry`), give up 22 m from home (`calmT`); bites are in
-  `Game.bears()` (`onBear` warns the player); `nearestRes` never auto-picks a living bear. Drawn by `bearBatch` in main.js
+  `Game.bears()` (`onBear` warns the player); `nearestRes` never auto-picks a living bear.
+  Hunting (v0.42): peasants walk up and strike with their own `dmg`/`cd` (no more spear throw); elk (8 hp) kick a close attacker
+  for 4 (`a.kick`, handled in `Game.bears()`), a charging bear slides round trees; 1 peasant loses to a bear, ~5 win. Drawn by `bearBatch` in main.js
   (`animal_bear.glb`, `KINDS.bear` with an Attack clip, `swT` from `a.biteAt`). Eagles: scenery only (`EAGLES` in main.js,
   `animal_eagle.glb`), circling 11-16 m up. `animal.py --atlas` packs a multi-material animal into one texture (the game
   uses one map per animated model). Castle trains elite **Royal Guard** (`guard`: Mixamo Castle Guard 01 `cguard1` = `mx_guard01.glb`, look 'steel',

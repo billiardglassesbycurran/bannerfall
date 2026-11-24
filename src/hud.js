@@ -74,8 +74,8 @@ export class HUD {
     this.head(sel[0], sel.length);
     if (!sel.length) { name.textContent = this.a.game.mode === 'battle' ? 'Select your soldiers' : 'Nothing selected'; desc.innerHTML = this.a.hint(); return; }
     const e = sel[0];
-    if (e.kind === 'res' && e.bear) { name.textContent = e.hp > 0 ? 'Bear' : 'Bear (hunted)'; desc.textContent = e.hp > 0 ? `Dangerous! It charges anyone who comes close. Send soldiers to bring it down (${Math.ceil(e.hp)}/${e.maxHp} health) for lots of meat.` : `${Math.ceil(e.amt)} meat left. Peasants gather it fast.`; return; }
-    if (e.kind === 'res' && e.animal) { name.textContent = e.hp > 0 ? 'Deer' : 'Deer (hunted)'; desc.textContent = e.hp > 0 ? 'Send peasants to hunt it for meat (food). Deer run when hunted.' : `${Math.ceil(e.amt)} meat left. Peasants gather it fast.`; return; }
+    if (e.kind === 'res' && e.bear) { name.textContent = e.hp > 0 ? 'Bear' : 'Bear (hunted)'; desc.textContent = e.hp > 0 ? `Dangerous! It charges anyone who comes close and mauls one hunter at a time. Send a group of peasants, or soldiers, to bring it down (${Math.ceil(e.hp)}/${e.maxHp} health) for lots of meat.` : `${Math.ceil(e.amt)} meat left. Peasants gather it fast.`; return; }
+    if (e.kind === 'res' && e.animal) { name.textContent = e.hp > 0 ? 'Elk' : 'Elk (hunted)'; desc.textContent = e.hp > 0 ? `Send peasants or soldiers to hunt it for meat (${Math.ceil(e.hp)}/${e.maxHp || 8} health). It kicks anyone who strikes it up close, then runs.` : `${Math.ceil(e.amt)} meat left. Peasants gather it fast.`; return; }
     if (e.kind === 'res') { name.textContent = e.fish ? 'Fish' : { f: 'Berry bush', w: 'Tree', g: 'Gold mine', s: 'Stone quarry' }[e.rt]; desc.textContent = `${Math.ceil(e.amt)} ${RN[e.rt]} left. ` + (e.fish ? 'Fishing boats (from a Dock) can catch it.' : 'Send peasants to gather it.'); return; }
     if (e.kind === 'bld') {
       name.textContent = (e.team ? 'Enemy ' : '') + e.d.name;
