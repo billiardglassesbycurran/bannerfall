@@ -78,8 +78,8 @@ Object.assign(KINDS, {
 const BEAST = { idle: 'Idle', walk: 'Walk', run: 'Gallop', death: 'Death' };
 const HORSE = { model: 'horse', show: [], clips: BEAST, noAttack: 1, pace: { walk: 1.9, run: 6.2, runAt: 3.2 }, cloth: 1 };
 Object.assign(KINDS, {
-  deer: { model: 'deer', show: [], clips: { idle: 'Eat', walk: 'Walk', run: 'Run', death: 'Death' }, noAttack: 1, pace: { walk: 1.3, run: 5.5, runAt: 2 } }, // grazes when standing
-  bear: { model: 'bear', show: [], clips: { idle: 'Eat', walk: 'Walk', run: 'Run', attack: 'Attack', death: 'Death' }, atk: { from: .2, rate: 1.2, len: 1.1 }, pace: { walk: 1.1, run: 5, runAt: 1.8 } },
+  deer: { model: 'deer', show: [], clips: { idle: 'Eat', walk: 'Walk', run: 'Run', death: 'Death' }, noAttack: 1, pace: { walk: 1.3, run: 5.5, runAt: 2.4 }, minRate: .6 }, // grazes when standing
+  bear: { model: 'bear', show: [], clips: { idle: 'Eat', walk: 'Walk', run: 'Run', attack: 'Attack', death: 'Death' }, atk: { from: .2, rate: 1.2, len: 1.1 }, pace: { walk: 1.1, run: 5, runAt: 1.8 }, minRate: .6 },
   cow: { model: 'cow', show: [], clips: { idle: 'Idle', walk: 'Walk', run: 'Run', death: 'Death' }, noAttack: 1, pace: { walk: 1.2, run: 4.5, runAt: 1.8 } },
   sheep: { model: 'sheep', show: [], clips: { idle: 'Eat', walk: 'Walk', run: 'Run', death: 'Death' }, noAttack: 1, pace: { walk: .9, run: 3.5, runAt: 1.6 } }, // grazes when standing
   eagle: { model: 'eagle', show: [], clips: { idle: 'Fly', walk: 'Fly', run: 'Fly', death: 'Fly' }, noAttack: 1, pace: { walk: 1, run: 99, runAt: 99 } },
@@ -229,6 +229,16 @@ function bake(gltf, all, names, M = {}) {
   }
   const sc = (M.height || 1.74) / (hi - lo), N = new THREE.Matrix4().makeScale(sc, sc, sc).setPosition(0, -lo * sc, 0);
   for (let i = 0; i < data.length; i += 16) { m.fromArray(data, i).premultiply(N); data.set(m.elements, i); }
+  if (M.animal) { // some animals' walk/run clips travel forward (then jump back when they loop): take the travel out, and measure the stride
+    const pb = Object.keys(boneIdx).find(n => /pelvis|hips/i.test(n)), bi = pb ? boneIdx[pb] : 0;
+    for (const n of names) {
+      const t = table[n]; if (!/walk|run|gallop|trot/i.test(n) || t.n < 3) continue;
+      const o0 = (t.start * W + bi * 4) * 4, o1 = ((t.start + t.n - 1) * W + bi * 4) * 4, Dx = data[o1 + 12] - data[o0 + 12], Dz = data[o1 + 14] - data[o0 + 14], D = Math.hypot(Dx, Dz);
+      if (D < .05 * (M.height || 1)) continue;
+      for (let f = 0; f < t.n; f++) { const k = f / (t.n - 1); for (let b = 0; b < nB; b++) { const o = ((t.start + f) * W + b * 4) * 4; data[o + 12] -= Dx * k; data[o + 14] -= Dz * k; } }
+      t.pace = D / t.dur; // the ground speed the legs were animated for
+    }
+  }
   const tex = new THREE.DataTexture(data, W, rows, THREE.RGBAFormat, THREE.FloatType);
   tex.minFilter = tex.magFilter = THREE.NearestFilter; tex.generateMipmaps = false; tex.needsUpdate = true;
   const rig = { parts, attach, table, uBones: { value: tex }, boneIdx, bind, map: parts[0].material.map || null, nmap: M.mixamo ? parts[0].material.normalMap || null : null, alphaTest: parts[0].material.alphaTest || 0, double: parts[0].material.side === THREE.DoubleSide, nscale: parts[0].material.normalScale?.clone() || new THREE.Vector2(1, 1), teamMaps: {}, nB, W, data, sc, lo, raw: { back, wide }, hips: hipsName, mixamo: !!M.mixamo };
@@ -403,6 +413,7 @@ export class AnimBatch {
     this.t = new Float32Array(cap); this.cur = new Int16Array(cap).fill(-1);
     const pw = this.C.walk.pace, pr = this.C.run.pace; // Mixamo clips: the speed they were captured at
     this.P = pw ? { walk: pw, run: pr || pw * 2.2, runAt: Math.max(pw * 1.6, Math.min(4.2, (pw + (pr || pw * 2.2)) / 2)) } : PACE;
+    if (def.pace) this.P = { ...def.pace, walk: pw || def.pace.walk, run: pr || def.pace.run }; // animals: measured stride where the clip had one, else the hand-set pace
   }
   setTint() { /* gear colours are part of the model */ }
   alloc() { const i = this.free.length ? this.free.pop() : this.used++; if (i >= this.cap) throw new Error('too many units'); this.mesh.count = Math.max(this.mesh.count, i + 1); this.cur[i] = -1; return i; }
@@ -422,10 +433,10 @@ export class AnimBatch {
     else if (o.spec && C[o.spec] && swT < C[o.spec].dur * .95) { c = C[o.spec]; t = Math.min(c.dur, swT * 1.15); held = true; } // a special attack plays its own clip
     else if (!C.aim && !this.def.noAttack && swT < A.len) { c = C.attack; t = Math.min(c.dur, A.from + swT * A.rate); held = true; }
     else {
-      const P = this.def.pace || this.P;
+      const P = this.P;
       c = spd > .15 ? (spd > P.runAt ? C.run : C.walk) : (o.work && C.work ? C.work : C.idle);
       if (this.cur[i] !== c.start) { this.cur[i] = c.start; this.t[i] = (i * .37) % c.dur; } // new clip: start out of step with the neighbours
-      this.t[i] += dt * (spd > .15 ? spd / (c === C.run ? P.run : P.walk) : 1); t = this.t[i] % c.dur;
+      this.t[i] += dt * (spd > .15 ? Math.max(this.def.minRate || 0, spd / (c === C.run ? P.run : P.walk)) : 1); t = this.t[i] % c.dur;
     }
     if (held) this.cur[i] = -2;
     this.rows.array[i] = c.start + Math.min(c.n - 1, Math.floor(t * FPS));

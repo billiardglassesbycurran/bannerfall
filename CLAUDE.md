@@ -194,7 +194,8 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
   Hunting (v0.42): peasants walk up and strike with their own `dmg`/`cd` (no more spear throw); elk (8 hp) kick a close attacker
   for 4 (`a.kick`, handled in `Game.bears()`), a charging bear slides round trees; 1 peasant loses to a bear, ~5 win.
   Animal movement (v0.43, `updateAnimals`): rest (`wT`) → pick a spot near home → walk there (`going`), turning at a capped rate and
-  slowing in sharp turns (no instant spins); blocked = pause and try elsewhere.
+  slowing in sharp turns (no instant spins); blocked = pause and try elsewhere. Animal walk/run clips that travel forward (elk, bear) have the
+  travel stripped in `bake` (M.animal) and their stride measured (`table[n].pace`); `minRate` keeps legs from going slow-motion.
   Farm animals (v0.43): `addFarm` puts 3 cows + 4 sheep ~8 m behind each Town Hall (inside its sight); `a.farm` = 'cow'|'sheep' (`FARM`
   hp/meat), tame (slow, short flee), cows kick, sheep don't. Drawn per species (`SPECIES` in main.js). The cow file is exported on its
   side: anim.js `MODELS.x.rot` = where the model's x/y/z axes should point (applied to the baked bones). Drawn by `bearBatch` in main.js

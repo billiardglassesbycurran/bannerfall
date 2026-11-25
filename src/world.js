@@ -282,7 +282,7 @@ export function updateAnimals(dt, t) {
     }
     // wander: rest a while, pick a spot nearby, walk there (turning smoothly), rest again; flee, charge or head home when needed
     const fleeing = a.fleeT > t, charging = a.bear && a.angry, homing = a.bear && a.calmT > t;
-    const sp = charging ? 4.4 : homing ? 2.2 : fleeing ? (a.farm ? 2.4 : 4.2) : a.bear ? .7 : a.farm ? .6 : .9;
+    const sp = charging ? 4.4 : homing ? 2.2 : fleeing ? (a.farm ? 2.4 : 8) : a.bear ? .7 : a.farm ? .6 : 1.3;
     if (!fleeing && !charging && !homing && !a.going && (a.wT -= dt) <= 0) {
       const ang = Math.random() * TAU, d = 1.5 + Math.random() * (a.bear ? 7 : a.farm ? 2.5 : 4);
       a.tx = a.hx + Math.cos(ang) * d; a.tz = a.hz + Math.sin(ang) * d; a.going = true; a.goT = 12;
@@ -312,7 +312,7 @@ export function hurtAnimal(a, dmg, from, t) {
   if (a.hp <= 0) { a.hp = 0; a.moving = false; a.deadAt = t; return true; }
   if (a.bear) { if (from?.kind === 'unit' && from.alive && !from.d?.ship) a.angry = from; return false; } // bears turn on the hunter
   if (a.farm !== 'sheep' && from?.kind === 'unit' && from.alive && Math.hypot(a.x - from.x, a.z - from.z) < 2.6) a.kick = from; // an elk or cow lashes out at whoever hits it up close (Game.bears), then runs
-  const run = a.farm ? 3 : 7, dx = a.x - from.x, dz = a.z - from.z, l = Math.hypot(dx, dz) || 1; a.tx = a.x + dx / l * run; a.tz = a.z + dz / l * run; a.fleeT = t + (a.farm ? 1.3 : 2.2); return false;
+  const run = a.farm ? 3 : 10, dx = a.x - from.x, dz = a.z - from.z, l = Math.hypot(dx, dz) || 1; a.tx = a.x + dx / l * run; a.tz = a.z + dz / l * run; a.fleeT = t + (a.farm ? 1.3 : 2.2); return false;
 }
 
 // ---------------- terrain mesh ----------------
