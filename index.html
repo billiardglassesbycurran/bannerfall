@@ -21,7 +21,7 @@
 </script>
 <script>
   // ===== Game version: bump on every change you publish (see CLAUDE.md). =====
-  window.BF_VERSION = '0.42.0';
+  window.BF_VERSION = '0.43.0';
   // Every game file is loaded as file.js?v=VERSION so phones never mix old and new files from the browser cache.
   // (On localhost a timestamp is used instead, so edits show up immediately while developing.)
   (function () {
@@ -106,7 +106,7 @@
     <button class="btn hide" id="bMount">Mount<small>horse</small></button>
   </div>
   <div id="povabil" class="hide">
-    <button class="btn" id="bCry">War Cry<small>R</small></button><button class="btn" id="bCharge">Charge<small>C</small></button><button class="btn" id="bRally">Rally<small>T</small></button>
+    <button class="btn" id="bSpin">Whirlwind<small>R</small></button><button class="btn" id="bSlam">Earthshaker<small>T</small></button><button class="btn" id="bSpear">Spear<small>Y</small></button>
   </div>
   <div id="povact">
     <button class="btn big hide" id="bAct">Board<small>ship</small></button>
@@ -198,6 +198,7 @@
     <label class="set">Day &amp; night and weather (new games) <input type="checkbox" id="sCycle"></label>
     <label class="set">Fog of war (new games; not in Battle mode) <input type="checkbox" id="sFog"></label>
     <label class="set">Team colour rings under soldiers <input type="checkbox" id="s_rings"></label>
+    <label class="set">Blood &amp; gore (blood from wounds, pools where the fallen lie) <input type="checkbox" id="s_gore"></label>
     <h4 class="lookh">Look</h4>
     <label class="set">Brightness <input type="range" id="s_bright" min="0.7" max="1.4" step="0.05"></label>
     <label class="set">Colour <input type="range" id="s_sat" min="0.6" max="1.5" step="0.05"></label>

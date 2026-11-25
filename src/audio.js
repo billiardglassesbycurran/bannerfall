@@ -67,6 +67,20 @@ export class Sound {
     fetch(`assets/voices/${key}.m4a?v=${window.BF_VERSION || ''}`).then(r => r.arrayBuffer()).then(b => this.ctx.decodeAudioData(b)).then(buf => { V.bufs[key] = buf; go(buf); }).catch(() => { V.list[role] = null; });
     return true;
   }
+  // ---------- animal calls: recorded clips (assets/sounds, made by tools/animal_sounds.py from free recordings) ----------
+  /** Play a random call for 'cow', 'sheep', 'bear', 'elk' or 'eagle'. vol 0..1 (callers scale it by distance), pan -1..1. */
+  animal(name, vol = 1, pan = 0) {
+    if (!this.ctx || !this.on || this.ctx.state !== 'running' || vol < .03) return;
+    const A = this.calls || (this.calls = { list: null, bufs: {}, loading: null });
+    if (!A.list) { if (!A.loading) A.loading = fetch(`assets/sounds/sounds.json?v=${window.BF_VERSION || ''}`).then(r => r.ok ? r.json() : {}).then(j => { A.list = j; }).catch(() => { A.list = {}; }); return; }
+    const n = A.list[name]; if (!n) return;
+    const key = `${name}_${Math.random() * n | 0}`;
+    const go = buf => { const c = this.ctx, s = c.createBufferSource(), g = c.createGain(); s.buffer = buf; s.playbackRate.value = .93 + Math.random() * .14; g.gain.value = Math.min(1.3, vol * 1.1); s.connect(g);
+      if (c.createStereoPanner) { const p = c.createStereoPanner(); p.pan.value = Math.max(-.8, Math.min(.8, pan)); g.connect(p); p.connect(this.master); } else g.connect(this.master); s.start(); };
+    if (A.bufs[key]) { go(A.bufs[key]); return; }
+    if (A.bufs[key] === 0) return; A.bufs[key] = 0; // loading
+    fetch(`assets/sounds/${key}.m4a?v=${window.BF_VERSION || ''}`).then(r => r.arrayBuffer()).then(b => this.ctx.decodeAudioData(b)).then(buf => { A.bufs[key] = buf; go(buf); }).catch(() => { delete A.bufs[key]; });
+  }
   // ---------- fallback voices (the device's built-in speech) ----------
   say(text, { pitch = 1, rate = 1.05, lang } = {}) {
     if (!this.on || this.voiceOn === false || !window.speechSynthesis) return;

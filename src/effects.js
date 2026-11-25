@@ -59,6 +59,29 @@ class Cloud {
 }
 const R = (a, b) => a + Math.random() * (b - a);
 
+/** Blood pools on the ground (Blood & gore setting): dark red stains that spread under the fallen, then soak away. */
+export class BloodPools {
+  constructor(scene, cap = 160) {
+    const g = new THREE.CircleGeometry(1, 12).rotateX(-Math.PI / 2), pos = g.attributes.position; // ragged edge
+    for (let i = 1; i < pos.count; i++) { const k = .75 + Math.random() * .4; pos.setX(i, pos.getX(i) * k); pos.setZ(i, pos.getZ(i) * k); }
+    const m = new THREE.MeshLambertMaterial({ color: 0x5c0707, transparent: true, opacity: .82, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    this.mesh = new THREE.InstancedMesh(g, m, cap); this.mesh.count = 0; this.mesh.frustumCulled = false; this.mesh.renderOrder = 1; scene.add(this.mesh);
+    this.list = []; this.cap = cap; this.next = 0; this.o = new THREE.Object3D();
+  }
+  /** A stain at (x, y, z) growing to radius r over a couple of seconds; it lasts `life` seconds. */
+  add(x, y, z, r = .7, life = 90) { const p = { x, y: y + .03, z, r, t: 0, life, a: Math.random() * 6.28 }; if (this.list.length < this.cap) this.list.push(p); else this.list[this.next++ % this.cap] = p; }
+  update(dt) {
+    const o = this.o; let n = 0;
+    for (const p of this.list) {
+      p.t += dt; if (p.t > p.life) continue;
+      const s = p.r * Math.min(1, .25 + p.t / 2.5) * Math.min(1, (p.life - p.t) / 8); // spreads, then shrinks away at the end
+      o.position.set(p.x, p.y, p.z); o.rotation.set(0, p.a, 0); o.scale.set(s, 1, s * .8); o.updateMatrix(); this.mesh.setMatrixAt(n++, o.matrix);
+    }
+    this.mesh.count = n; this.mesh.instanceMatrix.needsUpdate = true;
+  }
+  clear() { this.list = []; this.mesh.count = 0; }
+}
+
 export class FX {
   constructor(scene) { const t = spriteTex(); this.soft = new Cloud(scene, false, t); this.glow = new Cloud(scene, true, t); this.wind = [.25, .1]; }
   setScale(px) { this.soft.mat.uniforms.uScale.value = px; this.glow.mat.uniforms.uScale.value = px; }
@@ -81,5 +104,7 @@ export class FX {
   sparks(x, y, z, n = 6) { for (let i = 0; i < n; i++) this.glow.add(x, y, z, R(-2, 2), R(.5, 3), R(-2, 2), R(.15, .35), .14, .04, 1, R(.75, .95), .4, 1, 9, 2); }
   dust(x, y, z, n = 10, spread = 1.5, tint = [.55, .48, .38]) { for (let i = 0; i < n; i++) { const a = R(0, 6.28), s = R(.5, 1) * spread; this.soft.add(x + Math.cos(a) * .3, y + .2, z + Math.sin(a) * .3, Math.cos(a) * s, R(.2, .9), Math.sin(a) * s, R(1, 2), .6, 2.2, tint[0], tint[1], tint[2], .5, -.1, 1.5); } }
   splash(x, y, z, n = 10) { for (let i = 0; i < n; i++) { const a = R(0, 6.28), s = R(.3, 1.4); this.soft.add(x, y + .05, z, Math.cos(a) * s, R(1.5, 3.2), Math.sin(a) * s, R(.5, .9), .25, .6, .85, .92, .95, .8, 7, .5); } }
-  update(dt) { this.soft.update(dt, this.wind); this.glow.update(dt, this.wind); }
+  /** Blood & gore setting: a spray of blood from a hit, thrown away from the attacker (dx, dz). */
+  blood(x, y, z, dx = 0, dz = 0, n = 6) { for (let i = 0; i < n; i++) { const s = R(.6, 1.8); this.soft.add(x + R(-.1, .1), y + R(-.15, .15), z + R(-.1, .1), dx * s + R(-.7, .7), R(.4, 2.2), dz * s + R(-.7, .7), R(.35, .7), R(.07, .14), R(.03, .08), R(.32, .45), .02, .02, .95, 9, 1.2); } }
+  update(dt) { this.soft.update(dt, this.wind); this.glow.update(dt, this.wind); this.pools?.update(dt); }
 }

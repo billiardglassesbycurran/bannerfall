@@ -33,6 +33,8 @@ const MODELS = {
   horse: { file: 'animal_horse.glb', animal: true, height: 2.3 },
   deer: { file: 'animal_elk.glb', animal: true, height: 2.1 }, // realistic elk (WildMesh 3D, Sketchfab, CC BY) with its own texture and clips
   eagle: { file: 'animal_eagle.glb', animal: true, height: .9 }, // "White Eagle Animation Fast Fly" by GremorySaiyan (Sketchfab, CC BY)
+  cow: { file: 'animal_cow.glb', animal: true, height: 1.5, rot: [[0, 1, 0], [0, 0, 1], [1, 0, 0]] },   // "Animated-cow" by emptypen2477 (Sketchfab, CC BY)
+  sheep: { file: 'animal_sheep.glb', animal: true, height: .95 }, // "Sheep anim" by blam (Sketchfab, CC BY)
   bear: { file: 'animal_bear.glb', animal: true, height: 1.5, bright: .82 }, // realistic brown bear (WildMesh 3D, Sketchfab, CC BY)
 };
 const CLIP_FILES = ['char_knight.glb', 'rig_tools.glb', 'rig_ranged.glb']; // where the KayKit characters' clips come from
@@ -49,20 +51,21 @@ const KINDS = {
   peasant: { model: 'rogue', show: [], gear: ['axe'], clips: { ...WALK, attack: '1H_Melee_Attack_Chop', work: 'Chopping' }, atk: { from: .3, rate: 1.2, len: .6 } },
 };
 // Realistic Mixamo soldiers (replace the KayKit ones above). parts = which pieces of the character show.
-const SS = { idle: 'ss_idle', walk: 'ss_walk', run: 'ss_run', death: 'ss_death' }, GS = { idle: 'gs_idle', walk: 'gs_walk', run: 'gs_run', death: 'gs_death' };
-const BOW = { idle: 'bow_idle', walk: 'bow_walk', run: 'bow_run', death: 'ss_death' }, XB = { idle: 'xb_idle', walk: 'xb_walk', run: 'bow_run', death: 'ss_death', attack: 'ss_atk4', aim: 'xb_fire', shoot: 'xb_fire' };
+// standing still: legs and hips from a relaxed stance (feet side by side, 'idle' = Mixamo "Unarmed Idle"), arms and weapon from the weapon's own idle
+const SS = { idle: 'idle+ss_idle', walk: 'ss_walk', run: 'ss_run', death: 'ss_death' }, GS = { idle: 'idle+gs_idle', walk: 'gs_walk', run: 'gs_run', death: 'gs_death' };
+const BOW = { idle: 'idle+bow_idle', walk: 'bow_walk', run: 'bow_run', death: 'ss_death' }, XB = { idle: 'idle+xb_idle', walk: 'xb_walk', run: 'bow_run', death: 'ss_death', attack: 'ss_atk4', aim: 'xb_fire', shoot: 'xb_fire' };
 Object.assign(KINDS, {
   sword: { model: 'paladin', parts: ['Body', 'Helmet', 'Sword', 'Shield'], show: [], clips: { ...SS, attack: 'ss_atk2' }, atk: { from: .35, rate: 1.3, len: .7 } },
   spear: { model: 'paladin', parts: ['Body', 'Helmet', 'Shield'], show: [], gear: ['spear'], clips: { ...SS, attack: 'ss_atk4' }, atk: { from: .3, rate: 1.4, len: .6 } },
   legion: { model: 'paladin', look: 'bronze', parts: ['Body', 'Helmet', 'Sword', 'Shield'], show: [], clips: { ...SS, attack: 'ss_atk3' }, atk: { from: .45, rate: 1.4, len: .7 } },
-  hero: { model: 'paladin', look: 'gold', parts: ['Body', 'Helmet', 'Sword'], show: [], clips: { ...GS, attack: 'gs_slash' }, atk: { from: .3, rate: 1.25, len: .7 }, size: 1.04 },
+  hero: { model: 'paladin', look: 'gold', parts: ['Body', 'Helmet', 'Sword'], show: [], clips: { ...GS, attack: 'gs_slash', spin: 'gs_spin', slam: 'gs_slash2' }, atk: { from: .3, rate: 1.25, len: .7 }, size: 1.04 },
   guard: { model: 'cguard1', look: 'steel', show: [], gear: ['greatsword', 'crest'], clips: { ...GS, attack: 'gs_slash' }, atk: { from: .3, rate: 1.25, len: .7 }, size: 1.06 },
   halberd: { model: 'cguard2', look: 'black', show: [], gear: ['halberd', 'crest'], clips: { ...GS, attack: 'gs_attack' }, atk: { from: .3, rate: 1.3, len: .7 } },
   berserker: { model: 'brute', show: [], clips: { ...GS, attack: 'gs_attack' }, atk: { from: .3, rate: 1.4, len: .6 } },
   archer: { model: 'mxarcher', parts: ['Body', 'Helmet', 'Extra', 'Bow'], show: [], ranged: 'bow', clips: { ...BOW, attack: 'ss_atk4', aim: 'bow_draw', shoot: 'bow_draw' } },
   crossbow: { model: 'mxarcher', parts: ['Body', 'Helmet', 'Extra'], show: [], gear: ['xbow'], ranged: 'xbow', clips: XB },
   repeater: { model: 'mxarcher', look: 'lacquer', parts: ['Body', 'Helmet', 'Extra'], show: [], gear: ['xbow'], ranged: 'xbow', clips: XB },
-  peasant: { model: 'brute', hide: ['Weapon'], show: [], gear: ['axe'], clips: { idle: 'xb_idle', walk: 'xb_walk', run: 'bow_run', death: 'ss_death', attack: 'gs_attack', work: 'gs_attack' }, atk: { from: .3, rate: 1.3, len: .6 } },
+  peasant: { model: 'brute', hide: ['Weapon'], show: [], gear: ['axe'], clips: { idle: 'idle+xb_idle', walk: 'xb_walk', run: 'bow_run', death: 'ss_death', attack: 'gs_attack', work: 'gs_attack' }, atk: { from: .3, rate: 1.3, len: .6 } },
 });
 // God mode monsters
 Object.assign(KINDS, {
@@ -77,6 +80,8 @@ const HORSE = { model: 'horse', show: [], clips: BEAST, noAttack: 1, pace: { wal
 Object.assign(KINDS, {
   deer: { model: 'deer', show: [], clips: { idle: 'Eat', walk: 'Walk', run: 'Run', death: 'Death' }, noAttack: 1, pace: { walk: 1.3, run: 5.5, runAt: 2 } }, // grazes when standing
   bear: { model: 'bear', show: [], clips: { idle: 'Eat', walk: 'Walk', run: 'Run', attack: 'Attack', death: 'Death' }, atk: { from: .2, rate: 1.2, len: 1.1 }, pace: { walk: 1.1, run: 5, runAt: 1.8 } },
+  cow: { model: 'cow', show: [], clips: { idle: 'Idle', walk: 'Walk', run: 'Run', death: 'Death' }, noAttack: 1, pace: { walk: 1.2, run: 4.5, runAt: 1.8 } },
+  sheep: { model: 'sheep', show: [], clips: { idle: 'Eat', walk: 'Walk', run: 'Run', death: 'Death' }, noAttack: 1, pace: { walk: .9, run: 3.5, runAt: 1.6 } }, // grazes when standing
   eagle: { model: 'eagle', show: [], clips: { idle: 'Fly', walk: 'Fly', run: 'Fly', death: 'Fly' }, noAttack: 1, pace: { walk: 1, run: 99, runAt: 99 } },
   h_bay: { ...HORSE },
   h_light: { ...HORSE, coat: { Main: 0x7a4a26, Main_Dark: 0x4a2a14, Main_Light: 0xa8743e, Hair: 0x2a1a10 } },
@@ -210,6 +215,7 @@ function bake(gltf, all, names, M = {}) {
     act.stop(); mixer.uncacheClip(c); root.position.set(0, 0, 0);
   }
   root.updateMatrixWorld(true);
+  if (M.rot) { const R = new THREE.Matrix4().makeBasis(...M.rot.map(a => new THREE.Vector3(...a))); for (let i = 0; i < data.length; i += 16) { m.fromArray(data, i).premultiply(R); data.set(m.elements, i); } } // models exported lying on their side: rot = where the model's x, y and z axes should point
   // normalise: measure the figure standing idle, then scale to soldier height with the feet on the ground
   const idle = table[names.find(n => /^Idle/.test(n)) || names.find(n => /idle/i.test(n) && !n.includes('+')) || names[0]], v = new THREE.Vector3(), acc = new THREE.Vector3(), bm = new THREE.Matrix4(); let lo = 1e9, hi = -1e9, back = -1e9, wide = 0;
   for (const mesh of parts) {
@@ -393,7 +399,7 @@ export class AnimBatch {
     if (shadows) { rig.depthMat = rig.depthMat || patch(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }), true, rig); m.customDepthMaterial = rig.depthMat; }
     m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); scene.add(m); this.meshes = [m];
     const c = n => (def.clips[n] && rig.table[def.clips[n]]) || null, idle = c('idle') || Object.values(rig.table)[0];
-    this.C = { idle, walk: c('walk') || idle, run: c('run') || c('walk') || idle, attack: c('attack') || idle, death: c('death') || idle, work: c('work'), aim: c('aim'), shoot: c('shoot') };
+    this.C = { idle, walk: c('walk') || idle, run: c('run') || c('walk') || idle, attack: c('attack') || idle, death: c('death') || idle, work: c('work'), aim: c('aim'), shoot: c('shoot'), spin: c('spin'), slam: c('slam') }; // spin/slam: the Commander's special attacks
     this.t = new Float32Array(cap); this.cur = new Int16Array(cap).fill(-1);
     const pw = this.C.walk.pace, pr = this.C.run.pace; // Mixamo clips: the speed they were captured at
     this.P = pw ? { walk: pw, run: pr || pw * 2.2, runAt: Math.max(pw * 1.6, Math.min(4.2, (pw + (pr || pw * 2.2)) / 2)) } : PACE;
@@ -413,6 +419,7 @@ export class AnimBatch {
       else { c = C.aim; t = bow ? Math.min(c.dur, .15 + (o.draw || 0) * (c.dur - .2)) : (this.t[i] += dt) % c.dur; }
       held = true;
     }
+    else if (o.spec && C[o.spec] && swT < C[o.spec].dur * .95) { c = C[o.spec]; t = Math.min(c.dur, swT * 1.15); held = true; } // a special attack plays its own clip
     else if (!C.aim && !this.def.noAttack && swT < A.len) { c = C.attack; t = Math.min(c.dur, A.from + swT * A.rate); held = true; }
     else {
       const P = this.def.pace || this.P;

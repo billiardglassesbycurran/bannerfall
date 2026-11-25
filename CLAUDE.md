@@ -114,7 +114,8 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
 - **Realistic soldiers (v0.31+): Mixamo** (Adobe, free inside games, *not* CC0 — don't publish the raw FBX). Raw downloads in
   `assets/incoming/mixamo/` (git-ignored); `tools/blender/mixamo.py char|clips` makes `assets/anim/mx_paladin|mx_archer|mx_peasant.glb`
   (finger bones dropped, ~3.5k tris, one texture + normal map; props named Sword/Shield/Bow/Helmet/Extra) and `mx_clips.glb`
-  (30 clips: ss_* sword&shield, gs_* great sword, bow_*, xb_* rifle-held crossbow, f_* farming, sit). In anim.js `MODELS.*.mixamo`:
+  (30 clips: ss_* sword&shield, gs_* great sword, bow_*, xb_* rifle-held crossbow, f_* farming, sit). Standing still (v0.43) uses composite
+  clips `idle+ss_idle` etc. (legs/hips from the relaxed 'idle' = Unarmed Idle, arms + weapon from the weapon's idle; same mechanism as riders). In anim.js `MODELS.*.mixamo`:
   no re-proportioning, clips keep only rotations + hip motion (scaled to each body), loop clips are taken in place and their
   speed measured (`table[n].pace`), `parts` picks the pieces, `MX_SLOT` maps gear onto Mixamo hands (`gripr` for crossbows),
   `bright` lifts dark textures, looks: gold (Commander), bronze (legion), lacquer (repeater), raider (berserker/light cav).
@@ -130,11 +131,20 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
   straight-line flight 5 m up, `fire` breath = splash shot + `fx.breath`), troll, demon, skeleton (Mixamo), warwagon, battlecar
   (procedural parts in models.js; `dragonParts` is the stand-in if the model can't load). Their models are `lazy` in anim.js:
   `loadLazy()` runs only when a God-mode game starts. Dragon = Sketchfab CC-BY (credit in CREDITS.md); `mixamo.py creature` mode.
+- **Animal sounds + gore** (v0.43): `assets/sounds/<animal>_<n>.m4a` + `sounds.json` cut by `tools/animal_sounds.py` from Wikimedia Commons
+  recordings (raw in `assets/incoming/sounds/`, credits in CREDITS.md; the two cow clips are CC BY-SA). `Sound.animal(name, vol, pan)`;
+  main.js `app.call(name, x, z)` (distance + left/right pan), `animalCalls()` lets nearby animals call now and then (`CALL_EVERY`/`CALL_GAP`),
+  angry bears growl, hurt animals cry (`a.hurtAt` set in `hurtAnimal`). Settings "Blood & gore" (`settings.gore`, off by default):
+  `fx.blood()` sprays on hits, `BloodPools` (effects.js, instanced stains) under the fallen; `bleeds(u)` skips ships/siege/machines.
 - **Voices** (v0.35): recorded lines in `assets/voices/<role>_<kind>_<n>.m4a` + `voices.json`, made by `tools/voices.py` (Piper TTS,
   LibriTTS-R speakers chosen by pitch per role; roars/engine synthesised). `Sound.voice(role, kind)` plays them (falls back to the
   device's speech); `voiceRole(u)` in main.js picks commander / soldier / knight / archer / villager / troll / demon / undead / dragon / car.
 - Any troop can hunt animals (`command` → attack task on an animal res, `hurtAnimal`); God units (`d.god`) also attack their own side
   when targeted (rts.js tap, `command`, shots `any` → friendly splash).
+- **Commander special attacks** (v0.43, `ABIL` in game.js, `useAbility`; POV buttons `#povabil`, keys R/T/Y, also on the command card):
+  Whirlwind (`spin`: all foes within 3 m, x2.2, knock-back; clip `gs_spin`), Earthshaker (`slam`: x4 in front, x1.5 splash,
+  2 s stun = `u.stunT` skips `updateUnit`; clip `gs_slash2`), Spear Throw (`spear`: x3 shot at a foe within 16 m). Special clips play via
+  pose `spec` (AnimBatch). War Cry, Rally and Charge were removed at the owner's request. `unitsNear` now covers the whole 256 map (was 128).
 - `src/battle.js` — Battle mode field: 3 capturable banners, reserves + reinforcement waves, army breaks if all banners held.
 - Ships (v0.37): fishboat, transport (10), warship (archer galley), fireship (`d.fire`, `vsShip`), cog (big transport, 20),
   galleon (`d.cannon`: broadside from the side facing the target, `fx.muzzle`, 'cannon' sound, splash hits ships). Models in
@@ -182,7 +192,12 @@ Bannerfall is a medieval RTS built with **Three.js**. The player commands from a
   they charge anyone within 4.5 m or whoever hurts them (`a.angry`), give up 22 m from home (`calmT`); bites are in
   `Game.bears()` (`onBear` warns the player); `nearestRes` never auto-picks a living bear.
   Hunting (v0.42): peasants walk up and strike with their own `dmg`/`cd` (no more spear throw); elk (8 hp) kick a close attacker
-  for 4 (`a.kick`, handled in `Game.bears()`), a charging bear slides round trees; 1 peasant loses to a bear, ~5 win. Drawn by `bearBatch` in main.js
+  for 4 (`a.kick`, handled in `Game.bears()`), a charging bear slides round trees; 1 peasant loses to a bear, ~5 win.
+  Animal movement (v0.43, `updateAnimals`): rest (`wT`) → pick a spot near home → walk there (`going`), turning at a capped rate and
+  slowing in sharp turns (no instant spins); blocked = pause and try elsewhere.
+  Farm animals (v0.43): `addFarm` puts 3 cows + 4 sheep ~8 m behind each Town Hall (inside its sight); `a.farm` = 'cow'|'sheep' (`FARM`
+  hp/meat), tame (slow, short flee), cows kick, sheep don't. Drawn per species (`SPECIES` in main.js). The cow file is exported on its
+  side: anim.js `MODELS.x.rot` = where the model's x/y/z axes should point (applied to the baked bones). Drawn by `bearBatch` in main.js
   (`animal_bear.glb`, `KINDS.bear` with an Attack clip, `swT` from `a.biteAt`). Eagles: scenery only (`EAGLES` in main.js,
   `animal_eagle.glb`), circling 11-16 m up. `animal.py --atlas` packs a multi-material animal into one texture (the game
   uses one map per animated model). Castle trains elite **Royal Guard** (`guard`: Mixamo Castle Guard 01 `cguard1` = `mx_guard01.glb`, look 'steel',

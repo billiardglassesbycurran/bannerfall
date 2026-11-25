@@ -16,9 +16,9 @@ const wakeGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
 let nextId = 1;
 /** Commander abilities: name, cooldown (s), what it does. */
 export const ABIL = {
-  cry: { name: 'War Cry', cd: 45, desc: 'Troops nearby: +50 morale, +25% damage for 12 s. Nearby enemies lose heart' },
-  charge: { name: 'Charge', cd: 30, desc: 'You and nearby riders surge forward: +60% speed for 4.5 s and every first hit is a charge' },
-  rally: { name: 'Rally', cd: 60, desc: 'Every fleeing soldier nearby turns and fights again, at full morale, healed a little' },
+  spin: { name: 'Whirlwind', key: 'R', cd: 16, desc: 'A spinning great-sword sweep: hits every enemy within 3 m hard and throws them back' },
+  slam: { name: 'Earthshaker', key: 'T', cd: 20, desc: 'A crushing overhead blow: four times the damage to the enemy in front; everyone close by is hurt and stunned for 2 s' },
+  spear: { name: 'Spear Throw', key: 'Y', cd: 9, desc: 'Hurl a spear at an enemy up to 16 m away for heavy damage' },
 };
 export const RANKS = ['', 'Veteran', 'Elite', 'Champion'];
 const MAX_POP = 200;
@@ -243,7 +243,7 @@ export class Game {
     for (const u of this.units) if (u.alive && !u.boarded) { const k = ((u.x / 8) | 0) + ((u.z / 8) | 0) * 32; let l = this.hash.get(k); if (!l) this.hash.set(k, l = []); l.push(u); }
   }
   unitsNear(x, z, r, fn) {
-    const x0 = Math.max(0, ((x - r) / 8) | 0), x1 = Math.min(15, ((x + r) / 8) | 0), z0 = Math.max(0, ((z - r) / 8) | 0), z1 = Math.min(15, ((z + r) / 8) | 0);
+    const G = SIZE / 8 - 1, x0 = Math.max(0, ((x - r) / 8) | 0), x1 = Math.min(G, ((x + r) / 8) | 0), z0 = Math.max(0, ((z - r) / 8) | 0), z1 = Math.min(G, ((z + r) / 8) | 0); // 8 m cells over the whole map
     for (let gz = z0; gz <= z1; gz++) for (let gx = x0; gx <= x1; gx++) { const l = this.hash.get(gx + gz * 32); if (l) for (const u of l) fn(u); }
   }
   nearestEnemy(src, r, inclBld = true) {
@@ -474,12 +474,29 @@ export class Game {
     if (u.team === 0 && this.time - (this.lastPromo || -9) > 4) { this.lastPromo = this.time; this.toast(`${u.d.hero ? 'Your Commander' : 'A ' + u.d.name} is now ${r === 1 ? 'a Veteran' : r === 2 ? 'Elite' : 'a Champion'} ${'★'.repeat(r)}`, 2.5); }
   }
   abilityLeft(u, k) { return Math.max(0, (u.abil?.[k] || 0) - this.time); }
+  /** The Commander's special attacks (ABIL). Returns false when recharging, or (Spear Throw) when no enemy is in range. */
   useAbility(u, k) {
-    if (!u?.alive || !u.d.hero || this.abilityLeft(u, k) > 0) return false;
-    (u.abil || (u.abil = {}))[k] = this.time + ABIL[k].cd; const T = this.time;
-    if (k === 'cry') this.unitsNear(u.x, u.z, 13, o => { if (!o.alive || o.d.ship || Math.hypot(o.x - u.x, o.z - u.z) > 13) return; if (o.team === u.team) { o.morale = Math.min(100, (o.morale ?? 100) + 50); o.cryT = T + 12; } else this.shake(o, 22); });
-    if (k === 'charge') { u.chargeT = T + 4.5; u.run = 20; this.unitsNear(u.x, u.z, 10, o => { if (o.alive && o.team === u.team && o.d.horse && !o.d.ship) { o.chargeT = T + 4.5; o.run = 20; } }); }
-    if (k === 'rally') for (const o of this.units) if (o.alive && o.team === u.team && o !== u && Math.hypot(o.x - u.x, o.z - u.z) < 20 && o.morale !== undefined) { if (o.routed) { o.routed = 0; if (o.task.type === 'move') this.setTask(o, { type: 'idle' }); } o.morale = 100; o.hp = Math.min(o.maxHp, o.hp + o.maxHp * .15); }
+    if (!u?.alive || !u.d.hero || !ABIL[k] || this.abilityLeft(u, k) > 0) return false;
+    const T = this.time, fx = Math.sin(u.yaw), fz = Math.cos(u.yaw), dmg = u.d.dmg * (1 + .1 * (u.vet || 0)), foe = o => o.alive && o.team !== u.team && !o.d.ship && !o.boarded && !o.d.fly;
+    let spear = null;
+    if (k === 'spear') { // the enemy most nearly in front, within 16 m
+      let bs = -1e9; this.unitsNear(u.x, u.z, 16, o => { if (!foe(o)) return; const dx = o.x - u.x, dz = o.z - u.z, d = Math.hypot(dx, dz); if (d > 16) return; const s = (dx * fx + dz * fz) / (d || 1) * 10 - d; if (s > bs) { bs = s; spear = o; } });
+      if (!spear) return false;
+    }
+    (u.abil || (u.abil = {}))[k] = T + ABIL[k].cd;
+    if (k === 'spin') { // Whirlwind: everyone within 3 m is hit and thrown back
+      u.swingT = 0; u.spec = 'spin'; u.specAt = T;
+      this.unitsNear(u.x, u.z, 4.5, o => { if (!foe(o)) return; const dx = o.x - u.x, dz = o.z - u.z, d = Math.hypot(dx, dz) || 1; if (d - (o.d.rad || .4) > 3) return; this.damage(o, dmg * 2.2, u); if (o.alive && !o.d.horse) this.step(o, dx / d * 1.4, dz / d * 1.4); });
+    }
+    if (k === 'slam') { // Earthshaker: triple damage in front, splash and a 2 s stun around the blow
+      u.swingT = 0; u.spec = 'slam'; u.specAt = T;
+      const cx = u.x + fx * 1.6, cz = u.z + fz * 1.6; let main = null, md = 2.6, hit = 0;
+      this.unitsNear(cx, cz, 4, o => { if (!foe(o)) return; const d = Math.hypot(o.x - cx, o.z - cz); if (d < md) { md = d; main = o; } });
+      this.unitsNear(cx, cz, 4, o => { if (!foe(o) || Math.hypot(o.x - cx, o.z - cz) - (o.d.rad || .4) > 2.8) return; this.damage(o, o === main ? dmg * 4 : dmg * 1.5, u); hit++; if (o.alive) { o.stunT = T + 2; o.path = null; } });
+      if (!hit) { const b = this.blds.find(b => b.alive && b.team !== u.team && this.edgeDist({ x: cx, z: cz }, b) < 1.5); if (b) this.damage(b, dmg * 2, u); }
+      u.slamAt = { x: cx, z: cz };
+    }
+    if (k === 'spear') { u.swingT = 0; u.spec = null; this.face?.(u, Math.atan2(spear.x - u.x, spear.z - u.z), 1); this.shoot(u, spear, dmg * 3); const s = this.shots[this.shots.length - 1]; if (s) { s.mesh.scale.set(1.4, 1.4, 2.6); s.spear = true; } }
     this.onAbility?.(u, k); return true;
   }
   kill(t) {
@@ -583,7 +600,7 @@ export class Game {
     }
     u.repath -= dt;
     const wp = u.path[u.pi]; if (!wp) { u.path = null; return true; }
-    const dx = wp.x - u.x, dz = wp.z - u.z, d = Math.hypot(dx, dz), sp = u.d.spd * (u.chargeT > this.time ? 1.6 : 1) * dt;
+    const dx = wp.x - u.x, dz = wp.z - u.z, d = Math.hypot(dx, dz), sp = u.d.spd * dt;
     if (d <= sp + .05) { u.x = wp.x; u.z = wp.z; u.pi++; if (u.pi >= u.path.length) { u.path = null; return true; } }
     else this.step(u, dx / d * sp, dz / d * sp);
     u.speedNow = u.d.spd; this.face(u, Math.atan2(dx, dz), dt);
@@ -602,7 +619,7 @@ export class Game {
   updateUnit(u, dt) {
     u.cd -= dt; u.swingT += dt; u.speedNow = 0; u.think -= dt;
     { const mv = Math.hypot(u.x - u.px, u.z - u.pz); u.px = u.x; u.pz = u.z; u.run = mv > u.d.spd * dt * .55 ? Math.min(20, u.run + mv) : Math.max(0, u.run - dt * 5); }
-    if (u.chargeT > this.time) u.run = Math.max(u.run, 7);
+    if (u.stunT > this.time && !u.possessed) { u.path = null; return; } // stunned (Earthshaker): reeling, can't move or fight
     u.braced = u.d.vsHorse && u.task.type !== 'move' && u.run < .5;
     if (u.d.regen && u.hp < u.maxHp) u.hp = Math.min(u.maxHp, u.hp + u.d.regen * dt);
     if (u.d.heal && !u.possessed) { // healers mend wounded friends nearby, and walk to the nearest wounded one when idle
@@ -653,7 +670,7 @@ export class Game {
             u.cd = u.d.cd; u.swingT = 0;
             if (u.d.ranged) { this.shoot(u, e, u.d.dmg); if (e.kind === 'unit' && !e.d.ranged && dist(u, e) < 2.2 && !u.d.horse) u.cd *= 1.7; } // archers are clumsy up close
             else {
-              const charge = (u.d.horse || u.chargeT > this.time) && u.run > 6 && e.kind === 'unit'; // cavalry charge: a running start hits twice as hard and shakes the line
+              const charge = u.d.horse && u.run > 6 && e.kind === 'unit'; // cavalry charge: a running start hits twice as hard and shakes the line
               this.damage(e, u.d.dmg * (charge ? 2 : 1), u); if (charge) { u.run = 0; this.shake(e, 15); this.onCharge?.(u, e); }
             }
           }
@@ -715,7 +732,9 @@ export class Game {
           const got = takeRes(r, RATE[r.rt] * (r.animal ? 1.4 : 1) * dt * this.gatherMul(u.team) * (this.civ[u.team].gather?.[r.rt] || 1) * this.T[u.team].gm[r.rt] * (r.fish ? this.T[u.team].fish : 1));
           u.carry = u.carry || { rt: r.rt, amt: 0 }; u.carry.amt += got; u.work = true;
           if (u.swingT > .7) { u.swingT = 0; this.onWork?.(u, r.rt === 'w' ? 'chop' : r.rt === 'g' || r.rt === 's' ? 'stone' : null); }
-        } else this.goTo(u, r.x, r.z, r.r + (u.d.ship ? 1.6 : .8), dt);
+        } else if (this.goTo(u, r.x, r.z, r.r + (u.d.ship ? 1.6 : .8), dt)) { // the path ended just short (a carcass or bush off the cell grid): walk straight in
+          const dx = r.x - u.x, dz = r.z - u.z, l = Math.hypot(dx, dz) || 1, sp = Math.min(u.d.spd * dt, l); this.step(u, dx / l * sp, dz / l * sp); this.face(u, Math.atan2(dx, dz), dt);
+        }
         break;
       }
       case 'farm': {
@@ -879,7 +898,7 @@ export class Game {
         u.aimK = (u.aimK || 0) + ((engaged ? 1 : 0) - (u.aimK || 0)) * Math.min(1, dt * 6);
         u.drawK = clamp(1 - u.cd / u.d.cd, 0, 1);
       }
-      u.batch.set(u.slot, { x: u.x, y, z: u.z, yaw: u.yaw, scale: u.scale, s: Math.sin(u.phase) * .7 * k, swing: sw, tilt, hidden: u.id === hideId || !!u.boarded || (u.fowHidden = u.team !== 0 && !!this.fow && !this.fow.see(u.x, u.z)), aim: u.aimK || 0, draw: u.drawK || 0, fl: u.d.fly ? this.time * (u.speedNow > .1 ? 6 : 3.5) + u.id : 0, dt, spd: u.speedNow, swT: u.swingT, dead: u.dead, dT: u.deathT, work: u.task.type === 'gather' || u.task.type === 'build' || u.task.type === 'farm' || u.task.type === 'repair' });
+      u.batch.set(u.slot, { x: u.x, y, z: u.z, yaw: u.yaw, scale: u.scale, s: Math.sin(u.phase) * .7 * k, swing: sw, tilt, hidden: u.id === hideId || !!u.boarded || (u.fowHidden = u.team !== 0 && !!this.fow && !this.fow.see(u.x, u.z)), aim: u.aimK || 0, draw: u.drawK || 0, fl: u.d.fly ? this.time * (u.speedNow > .1 ? 6 : 3.5) + u.id : 0, dt, spd: u.speedNow, swT: u.swingT, spec: u.spec && Math.abs(u.swingT - (this.time - u.specAt)) < .1 ? u.spec : null, dead: u.dead, dT: u.deathT, work: u.task.type === 'gather' || u.task.type === 'build' || u.task.type === 'farm' || u.task.type === 'repair' });
       if (u.d.ship) {
         if (!u.wake && u.alive) { u.wake = new THREE.Mesh(wakeGeo, wakeMaterial().clone()); this.scene.add(u.wake); }
         if (u.wake) {

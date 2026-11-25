@@ -16,6 +16,19 @@ the **LibriTTS-R** voice model (en_US-libritts_r-medium; its dataset, openslr.or
 public-domain LibriVox audiobooks). Made with `tools/voices.py`. Dragon roars and the Battle Car engine are synthesised from
 scratch in the same script.
 
+## Animal sounds (assets/sounds)
+
+Cut from free recordings on Wikimedia Commons with `tools/animal_sounds.py` (trimmed, faded, loudness evened, re-encoded):
+
+| Clips | Source | Licence |
+|---|---|---|
+| cow_0 | ["Single Cow Moo.ogg"](https://commons.wikimedia.org/wiki/File:Single_Cow_Moo.ogg) by MichaeltheFox8621 | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) — this clip is shared under the same licence |
+| cow_1 | ["Mudchute cow 1.ogg"](https://commons.wikimedia.org/wiki/File:Mudchute_cow_1.ogg) by Secretlondon | [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) — this clip is shared under the same licence |
+| sheep_0, sheep_1 | ["Sheep bleating.ogg"](https://commons.wikimedia.org/wiki/File:Sheep_bleating.ogg) by earthcalling | Public domain |
+| bear_0–2 | ["Bear growl.ogg"](https://commons.wikimedia.org/wiki/File:Bear_growl.ogg) by Shizhao | [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) |
+| elk_0 | ["American Elk Bugling.ogg"](https://commons.wikimedia.org/wiki/File:American_Elk_Bugling.ogg) by Jim Pisarowicz | Public domain |
+| eagle_0 | ["Yellowstone sound library - Bald Eagle - 003.mp3"](https://commons.wikimedia.org/wiki/File:Yellowstone_sound_library_-_Bald_Eagle_-_003.mp3) by NPS & MSU Acoustic Atlas / Jennifer Jerrett | Public domain |
+
 ## Nature models (assets/nature)
 
 Photo-scanned **CC0** models from [Poly Haven](https://polyhaven.com), reduced to a few hundred triangles each with
@@ -72,4 +85,6 @@ Models made with Tripo (tripo.com) go here too, with the account/plan they were 
 |---|---|---|
 | animal_elk.glb (the wild deer/elk herds) | ["Realistic Animated Elk 3D Model"](https://sketchfab.com/3d-models/realistic-animated-elk-3d-model-787834f9caa2474d9f1814b807c072d7) by WildMesh 3D (Sketchfab), 5 of its 53 clips kept | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | animal_bear.glb (bears in the wilds) | ["Realistic Animated Bear 3D Model"](https://sketchfab.com/3d-models/realistic-animated-bear-3d-model-bffc3c87d2d148ff8533e1cc8a11c9f1) by WildMesh 3D (Sketchfab), 5 of its 81 clips kept, textures packed into one | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
+| animal_cow.glb (cows grazing by each town) | ["Animated-cow"](https://sketchfab.com/3d-models/animated-cow-a47ed54e35fc4dbfadeadde68219cb70) by emptypen2477 (Sketchfab), 4 of its 27 clips kept | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
+| animal_sheep.glb (sheep grazing by each town) | ["Sheep anim"](https://sketchfab.com/3d-models/sheep-anim-dfdefe7cb9364b2aa2988321c79db1a9) by blam (Sketchfab) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | animal_eagle.glb (eagles circling overhead) | ["White Eagle Animation Fast Fly"](https://sketchfab.com/3d-models/white-eagle-animation-fast-fly-30203bf39e5145f19c79e83c550139d3) by GremorySaiyan (Sketchfab) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |

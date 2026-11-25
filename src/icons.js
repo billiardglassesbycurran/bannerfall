@@ -101,7 +101,7 @@ export function techSymbol(key, t) {
 export function actionSymbol(label, sub = '') {
   const L = label.replace(/<[^>]*>|&#\d+;/g, '').trim(), S = sub.replace(/<[^>]*>/g, '');
   const m = [[/^Attack/, 'attack'], [/^Patrol/, 'patrol'], [/^Stop/, 'stop'], [/^(Aggressive|Defensive|Hold)/, 'stance'], [/^Food/, 'wheat'], [/^Wood/, 'wood'], [/^Gold/, 'coin'], [/^Stone/, 'stone'],
-    [/^Build/, /econ/.test(S) ? 'house' : /milit/.test(S) ? 'sword' : 'wall'], [/^Economy/, 'house'], [/^Military/, 'sword'], [/^Defences/, 'wall'], [/^Repair/, 'hammer'], [/^Return/, 'unload'], [/^(Mount|Dismount)/, 'horse'], [/^War Cry/, 'horn'], [/^Charge/, 'horse'],
+    [/^Build/, /econ/.test(S) ? 'house' : /milit/.test(S) ? 'sword' : 'wall'], [/^Economy/, 'house'], [/^Military/, 'sword'], [/^Defences/, 'wall'], [/^Repair/, 'hammer'], [/^Return/, 'unload'], [/^(Mount|Dismount)/, 'horse'], [/^Whirlwind/, 'swords'], [/^Earthshaker/, 'stone'], [/^Spear Throw/, 'attack'], [/^Charge/, 'horse'],
     [/^Rally$/, /point/.test(S) ? 'flag' : 'heart'], [/^Rally/, 'flag'], [/^Follow/, 'flag'], [/Bell|All Clear/, 'bell'], [/^(Demolish|Sure)/, 'demolish'], [/^Buy/, 'coin'], [/^Sell/, 'scales'], [/^Fish/, 'fish'],
     [/^Unload/, 'unload'], [/^Board/, 'ship'], [/^\+\d/, 'people'], [/^Peasant ×/, 'people']];
   for (const [re, k] of m) if (re.test(L)) return k;

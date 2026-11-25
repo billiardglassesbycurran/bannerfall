@@ -34,15 +34,15 @@ export class AI {
     else this.survival();
   }
 
-  // ---------- the enemy Commander uses War Cry, Charge and Rally too ----------
+  // ---------- the enemy Commander uses Whirlwind, Earthshaker and Spear Throw too ----------
   heroTactics() {
     const g = this.g; if (g.diff === 0) return; // Easy: no abilities
     for (const h of this.my(u => u.d.hero)) {
-      let foes = 0, near = 1e9, routed = 0;
-      g.unitsNear(h.x, h.z, 16, o => { if (!o.alive) return; const d = dist(o, h); if (o.team !== this.team && o.d.acq) { if (d < 12) foes++; near = Math.min(near, d); } else if (o.team === this.team && o.routed) routed++; });
-      if (routed >= 3) g.useAbility(h, 'rally');
-      if (foes >= 4) g.useAbility(h, 'cry');
-      if (near > 6 && near < 14 && h.task.type === 'attack') g.useAbility(h, 'charge');
+      let close = 0, near = 1e9;
+      g.unitsNear(h.x, h.z, 16, o => { if (!o.alive || o.team === this.team || o.d.ship) return; const d = dist(o, h); if (d < 3.2) close++; if (o.d.acq || o.d.hero) near = Math.min(near, d); });
+      if (close >= 3) g.useAbility(h, 'spin');
+      else if (close >= 1 && h.task.type === 'attack') g.useAbility(h, 'slam');
+      if (near > 5 && near < 14 && h.task.type === 'attack') g.useAbility(h, 'spear');
     }
   }
   // ---------- helpers ----------

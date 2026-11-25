@@ -1,6 +1,6 @@
 // The map: heightfield, walkability grid, resources (trees, berries, gold), decoration, water and sky.
 import * as THREE from 'three';
-import { clamp, lerp, smooth, fbm, vnoise, hash2, mulberry32, segDist, TAU } from './util.js';
+import { clamp, lerp, smooth, fbm, vnoise, hash2, mulberry32, segDist, TAU, angDiff } from './util.js';
 import { Builder, P, M, U, bake, jitter, shadeAO } from './geo.js';
 import { tileFbm, cloudTexture } from './textures.js';
 import { GM } from './gltfmodels.js';
@@ -194,6 +194,17 @@ function addHerd(x, z, n) {
     resources.push(res); animals.push(res);
   }
 }
+/** Farm animals grazing by each town: cows (more meat, they kick) and sheep. Tame: they barely run when hunted. */
+const FARM = { cow: { hp: 14, amt: 220, r: .85 }, sheep: { hp: 6, amt: 110, r: .5 } };
+function addFarm(x, z, kind, n) {
+  const F = FARM[kind];
+  for (let i = 0, t = 0; i < n && t < 40; t++) {
+    const a = rr(0, TAU), d = rr(.5, 2.5), px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d;
+    if (!cellFree0(px | 0, pz | 0)) continue;
+    const res = { id: nextResId++, kind: 'res', rt: 'f', animal: true, farm: kind, x: px, z: pz, hx: x, hz: z, amt: F.amt, max: F.amt, r: F.r, cells: [], alive: true, hp: F.hp, maxHp: F.hp, yaw: rr(0, TAU), wT: rr(0, 6), tx: px, tz: pz, fleeT: 0 };
+    resources.push(res); animals.push(res); i++;
+  }
+}
 /** A bear: lots of meat, but it charges anyone who comes too close (and fights back when hunted). */
 function addBear(x, z) {
   if (!cellFree0(x | 0, z | 0)) return;
@@ -244,6 +255,8 @@ if (MAP.river) for (const s0 of [40, 52, 72, 92, 108, 148, 164, 184, 204, 216]) 
 }
 // deer: a herd near each town, more roaming the wilds (mirrored so it's fair)
 H(addHerd, 40, 92, 4); H(addHerd, 16, 86, 3); F(addHerd, 50, 72, 4); H(addHerd, 30, 120, 3); F(addHerd, 24, 58, 4); F(addHerd, 70, 112, 4); F(addHerd, 40, 32, 3);
+// farm animals: a few cows and sheep grazing close to each town (an easy first meal)
+H(addFarm, 17.5, 107, 'cow', 3); H(addFarm, 22.5, 112, 'sheep', 4); // behind the town, ~8 m from the Town Hall (inside its sight)
 // bears: a few out in the wilds, well away from both towns (mirrored so it's fair)
 for (let k = 0, t = 0; k < 4 && t < 900; t++) {
   const x = rr(20, SIZE - 20), z = rr(20, SIZE - 20);
@@ -267,24 +280,39 @@ export function updateAnimals(dt, t) {
       if (!e.alive || e.boarded || Math.hypot(a.x - a.hx, a.z - a.hz) > 22) { a.angry = null; a.tx = a.hx; a.tz = a.hz; a.wT = 6; a.calmT = t + 6; }
       else { a.tx = e.x; a.tz = e.z; }
     }
-    const fleeing = a.fleeT > t, charging = a.bear && a.angry, sp = charging ? 4.4 : a.bear ? (a.calmT > t ? 2.2 : .7) : fleeing ? 4.2 : .9; a.spd = sp;
-    if (!fleeing && !charging && (a.wT -= dt) <= 0) { a.wT = 3 + Math.random() * 6; const ang = Math.random() * TAU, d = Math.random() * (a.bear ? 8 : 5); a.tx = a.hx + Math.cos(ang) * d; a.tz = a.hz + Math.sin(ang) * d; }
-    const dx = a.tx - a.x, dz = a.tz - a.z, l = Math.hypot(dx, dz), stop = charging ? 1.5 : .15;
-    if (l > stop && (fleeing || charging || a.wT < 2.5 || a.calmT > t)) { const nx = a.x + dx / l * sp * dt, nz = a.z + dz / l * sp * dt; if (cellWalk(nx | 0, nz | 0)) { a.x = nx; a.z = nz; a.moving = true; }
+    // wander: rest a while, pick a spot nearby, walk there (turning smoothly), rest again; flee, charge or head home when needed
+    const fleeing = a.fleeT > t, charging = a.bear && a.angry, homing = a.bear && a.calmT > t;
+    const sp = charging ? 4.4 : homing ? 2.2 : fleeing ? (a.farm ? 2.4 : 4.2) : a.bear ? .7 : a.farm ? .6 : .9;
+    if (!fleeing && !charging && !homing && !a.going && (a.wT -= dt) <= 0) {
+      const ang = Math.random() * TAU, d = 1.5 + Math.random() * (a.bear ? 7 : a.farm ? 2.5 : 4);
+      a.tx = a.hx + Math.cos(ang) * d; a.tz = a.hz + Math.sin(ang) * d; a.going = true; a.goT = 12;
+    }
+    const dx = a.tx - a.x, dz = a.tz - a.z, l = Math.hypot(dx, dz), stop = charging ? 1.5 : .3, active = fleeing || charging || homing || a.going;
+    if (active && l > stop) {
+      const diff = angDiff(a.yaw, Math.atan2(dx, dz)), turn = (charging || fleeing ? 7 : a.bear ? 1.8 : 2.4) * dt;
+      a.yaw += clamp(diff, -turn, turn);
+      const k = .2 + .8 * Math.max(0, Math.cos(diff)), step = sp * k * dt, fx = Math.sin(a.yaw), fz = Math.cos(a.yaw); // slow down while turning sharply
+      const nx = a.x + fx * step, nz = a.z + fz * step;
+      if (cellWalk(nx | 0, nz | 0)) { a.x = nx; a.z = nz; a.moving = true; a.spd = sp * k; }
       else if (charging && cellWalk(nx | 0, a.z | 0)) { a.x = nx; a.moving = true; } else if (charging && cellWalk(a.x | 0, nz | 0)) { a.z = nz; a.moving = true; } // a charging bear slides round trees
-      else if (charging) { const s = Math.sign(Math.sin(t * .7 + a.id)) || 1, px = a.x - dz / l * s * sp * dt, pz = a.z + dx / l * s * sp * dt; if (cellWalk(px | 0, pz | 0)) { a.x = px; a.z = pz; a.moving = true; } }
-      else { a.tx = a.x; a.tz = a.z; a.moving = false; } a.yaw = Math.atan2(dx, dz); }
-    else { a.moving = false; if (charging && l > .01) a.yaw = Math.atan2(dx, dz); }
+      else if (charging) { const s = Math.sign(Math.sin(t * .7 + a.id)) || 1, px = a.x - fz * s * step, pz = a.z + fx * s * step; if (cellWalk(px | 0, pz | 0)) { a.x = px; a.z = pz; a.moving = true; } }
+      else { a.going = false; a.wT = .5 + Math.random() * 1.5; a.tx = a.x; a.tz = a.z; a.moving = false; } // something in the way: pause, then try another way
+      if (a.going && (a.goT -= dt) <= 0) a.going = false;
+    } else {
+      a.moving = false;
+      if (a.going) { a.going = false; a.wT = 3 + Math.random() * (a.farm ? 9 : 6); } // arrived: graze a while
+      if (charging && l > .01) { const diff = angDiff(a.yaw, Math.atan2(dx, dz)), turn = 7 * dt; a.yaw += clamp(diff, -turn, turn); } // face the one it's mauling
+    }
     a.y = heightAt(a.x, a.z);
   }
 }
 /** Hit a deer (hunting). Returns true when it falls. */
 export function hurtAnimal(a, dmg, from, t) {
-  if (a.hp <= 0) return false; a.hp -= dmg;
+  if (a.hp <= 0) return false; a.hp -= dmg; a.hurtAt = t; // main.js plays its cry
   if (a.hp <= 0) { a.hp = 0; a.moving = false; a.deadAt = t; return true; }
   if (a.bear) { if (from?.kind === 'unit' && from.alive && !from.d?.ship) a.angry = from; return false; } // bears turn on the hunter
-  if (from?.kind === 'unit' && from.alive && Math.hypot(a.x - from.x, a.z - from.z) < 2.6) a.kick = from; // an elk lashes out at whoever hits it up close (Game.bears), then runs
-  const dx = a.x - from.x, dz = a.z - from.z, l = Math.hypot(dx, dz) || 1; a.tx = a.x + dx / l * 7; a.tz = a.z + dz / l * 7; a.fleeT = t + 2.2; return false;
+  if (a.farm !== 'sheep' && from?.kind === 'unit' && from.alive && Math.hypot(a.x - from.x, a.z - from.z) < 2.6) a.kick = from; // an elk or cow lashes out at whoever hits it up close (Game.bears), then runs
+  const run = a.farm ? 3 : 7, dx = a.x - from.x, dz = a.z - from.z, l = Math.hypot(dx, dz) || 1; a.tx = a.x + dx / l * run; a.tz = a.z + dz / l * run; a.fleeT = t + (a.farm ? 1.3 : 2.2); return false;
 }
 
 // ---------------- terrain mesh ----------------

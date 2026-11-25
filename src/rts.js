@@ -94,7 +94,7 @@ export class RTSView {
     for (const r of resources) {
       if (!r.alive || r.amt <= 0 || r.fowHidden) continue;
       if (Math.abs(r.x - this.focus.x) > R || Math.abs(r.z - this.focus.z) > R) continue; // far off screen
-      const h = r.animal ? (r.bear ? 1.4 : 1.6) : r.fish ? .3 : r.rt === 'w' ? 4.5 : r.rt === 'f' ? .9 : 1.2;
+      const h = r.animal ? (r.bear ? 1.4 : r.farm === 'sheep' ? .9 : r.farm ? 1.4 : 1.6) : r.fish ? .3 : r.rt === 'w' ? 4.5 : r.rt === 'f' ? .9 : 1.2;
       const y0 = r.fish ? 0 : r.animal && r.y !== undefined ? r.y : heightAt(r.x, r.z);
       const s = this.hitScore(sx, sy, r.x, y0, r.z, h, r.rt === 'w' ? .8 : Math.max(.5, r.r || .5), allow, v1, v2) * (r.rt === 'w' ? 1.15 : 1); // trees are everywhere: a nearer bush/rock/animal wins a tie
       if (s < bs) { bs = s; best = r; }

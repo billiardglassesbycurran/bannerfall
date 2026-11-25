@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { FOW, FogOfWar } from './fow.js'; // must load before any material is made
 import { MAP, MAP_LIST, SIZE, BASES, FIELD, WL, syncAnimals, animals, useAnimatedDeer, CLOUDS, buildDistant, buildTerrain, buildWater, buildSky, buildResources, buildBridge, buildFish, updateFish, heightAt } from './world.js';
 import { BD, DIFF, MODES, CIVS, CIV_LIST, UD, TECH, AGES } from './data.js';
-import { FX } from './effects.js';
+import { FX, BloodPools } from './effects.js';
 import { Tutorial } from './tutorial.js';
 import { Field } from './battle.js';
 import { Atmosphere, isNight, DAY } from './sky.js';
@@ -13,7 +13,7 @@ import { MISSIONS, progress, saveProgress } from './campaign.js';
 import { saveGame, loadSave, applySave, saveInfo, clearSave } from './save.js';
 import { Sound } from './audio.js';
 import { Figures, ghostObject, RINGS, COLORS, CIV_COLOR, setTeamColors, SHIP_LEN } from './models.js';
-import { Game } from './game.js';
+import { Game, ABIL } from './game.js';
 import { AI } from './ai.js';
 import { RTSView } from './rts.js';
 import { POVView } from './pov.js';
@@ -88,9 +88,10 @@ buildFish(scene);
 const figures = new Figures(scene, Q.shadow > 0);
 // deer: animated when the animated models are on
 // bears get their own animated batch (WildMesh bear, CC BY)
-const deerList = animals.filter(a => !a.bear), bearList = animals.filter(a => a.bear);
-const deerBatch = ANIM.on && ANIM.rigs.deer && deerList.length ? new AnimBatch(scene, 0, 'deer', deerList.length, Q.shadow > 0, 0) : null;
-const bearBatch = deerBatch && ANIM.rigs.bear && bearList.length ? new AnimBatch(scene, 0, 'bear', bearList.length, Q.shadow > 0, 0) : null;
+// cows and sheep (farm animals by each town) too: one batch per kind of animal
+const SPECIES = ['deer', 'bear', 'cow', 'sheep'].map(k => ({ k, list: animals.filter(a => (a.bear ? 'bear' : a.farm || 'deer') === k) })).filter(s => s.list.length);
+const animalsAnimated = ANIM.on && SPECIES.every(s => ANIM.rigs[s.k]);
+for (const s of SPECIES) s.batch = animalsAnimated ? new AnimBatch(scene, 0, s.k, s.list.length, Q.shadow > 0, 0) : null;
 // eagles: a few circling high over the land (scenery only: not part of the game)
 const EAGLES = [];
 if (ANIM.on && ANIM.rigs.eagle) {
@@ -103,7 +104,7 @@ if (ANIM.on && ANIM.rigs.eagle) {
 }
 const eagleBatch = EAGLES.length ? new AnimBatch(scene, 0, 'eagle', EAGLES.length, false, 0) : null;
 if (eagleBatch) EAGLES.forEach(() => eagleBatch.alloc());
-if (deerBatch && (bearBatch || !bearList.length)) { useAnimatedDeer(); deerList.forEach(() => deerBatch.alloc()); bearList.forEach(() => bearBatch.alloc()); }
+if (animalsAnimated) { useAnimatedDeer(); for (const s of SPECIES) s.list.forEach(() => s.batch.alloc()); }
 
 // ---------------- film look: bloom, ambient-occlusion (PC), colour grading ----------------
 const GRADE = {
@@ -144,11 +145,11 @@ for (const el of document.querySelectorAll('#home [data-sym]')) el.innerHTML = s
 { const v = document.getElementById('homever'); if (v) v.textContent = 'v' + (window.BF_VERSION || ''); }
 { const e = document.querySelector('#home .embers'); if (e) for (let i = 0; i < 26; i++) { const s = document.createElement('i'); s.style.left = (Math.random() * 100).toFixed(1) + '%'; s.style.animationDelay = (-Math.random() * 14).toFixed(1) + 's'; s.style.animationDuration = (9 + Math.random() * 9).toFixed(1) + 's'; s.style.setProperty('--dx', ((Math.random() - .5) * 120).toFixed(0) + 'px'); s.style.setProperty('--sz', (2 + Math.random() * 3).toFixed(1) + 'px'); e.appendChild(s); } } // rising embers
 for (const [id, k] of [['bAll', 'helmet'], ['bIdle', 'zzz'], ['bBox', 'box'], ['bLead', 'crown']]) { const el = $(id); if (el) el.innerHTML = symbolHtml(k) + el.innerHTML.replace(/^(&#\d+;|[\u2500-\u2bff\u{1F300}-\u{1FAFF}])\s*/u, ''); }
-const fx = new FX(scene), sound = new Sound();
+const fx = new FX(scene), sound = new Sound(); fx.pools = new BloodPools(scene);
 const atmo = new Atmosphere({ scene, sun, hemi, renderer, base: { sun: sun.intensity, hemi: hemi.intensity }, low: qLevel === 'low', sound });
 // ---------------- player settings (saved on this device) ----------------
 const SET_DEFAULT = { look: 1, cam: 1, vol: .7, music: true, voice: true, big: false, auto: true, fog: true, mapBot: false, mapOff: false, cycle: true, animOn: true,
-  bright: 1, sat: 1, haze: 1, bloom: 1, mist: 1, film: false, ao: !isTouch, rings: true }; // the last row is the Look panel (+ team rings)
+  bright: 1, sat: 1, haze: 1, bloom: 1, mist: 1, film: false, ao: !isTouch, rings: true, gore: false }; // the last row is the Look panel (+ team rings, blood & gore)
 app.settings = { ...SET_DEFAULT }; try { Object.assign(app.settings, JSON.parse(localStorage.getItem('bf.settings') || '{}')); } catch { /* ignore */ }
 function applySettings() {
   sound.setMusic?.(app.settings.music !== false); sound.voiceOn = app.settings.voice !== false;
@@ -159,12 +160,32 @@ function applySettings() {
   renderer.toneMapping = S.film ? THREE.ACESFilmicToneMapping : THREE.NeutralToneMapping;
   GRADE.uniforms.uSat.value = 1.08 * (S.sat ?? 1) * (S.film ? 1.04 : 1); GRADE.uniforms.uVig.value = S.film ? .5 : .32;
   if (bloomPass) bloomPass.strength = .18 * (S.bloom ?? 1) * (S.film ? 1.3 : 1);
-  setAO(S.ao); RINGS.on = S.rings !== false;
+  setAO(S.ao); RINGS.on = S.rings !== false; if (!S.gore) fx.pools.clear();
   try { localStorage.setItem('bf.settings', JSON.stringify(app.settings)); } catch { /* ignore */ }
 }
 app.fx = fx; app.sound = sound;
 // sound volume falls off with distance from what you're looking at
 const earDist = (x, z) => { const f = app.mode === 'pov' && pov.unit ? pov.unit : rts.focus; return Math.hypot(x - f.x, z - f.z); };
+/** Blood & gore: who bleeds (people, horses, beasts; not ships, siege engines or war machines). */
+const bleeds = u => !u.d.ship && u.d.cls !== 'siege' && !['warwagon', 'battlecar', 'skeleton'].includes(u.type);
+/** Animal calls: louder the closer they are, and panned left/right by where they are on screen. */
+const earPan = (x, z) => { const f = app.mode === 'pov' && pov.unit ? pov.unit : rts.focus, e = camera.matrixWorld.elements, dx = x - f.x, dz = z - f.z; return (dx * e[0] + dz * e[2]) / Math.max(8, Math.hypot(dx, dz)); };
+app.call = (name, x, z, vol = 1) => { const R = app.mode === 'pov' ? 55 : 45 + rts.dist, k = Math.max(0, 1 - earDist(x, z) / R); sound.animal(name, vol * k * k * 1.4, earPan(x, z)); };
+/** Now and then an animal near the camera calls out (so you hear the cows before you see them); hurt animals cry out. */
+const CALL_EVERY = { cow: 22, sheep: 18, bear: 30, elk: 60 }, CALL_GAP = { cow: 4, sheep: 3, bear: 3, elk: 14, eagle: 9 };
+function animalCalls(dt) {
+  const g = app.game; if (!g || app.paused || !sound.on || (app.callT = (app.callT || 0) - dt) > 0) return; app.callT = .25;
+  const now = g.time, last = app.callLast || (app.callLast = {}), R = app.mode === 'pov' ? 55 : 45 + rts.dist, ok = sp => now - (last[sp] ?? -99) > CALL_GAP[sp];
+  for (const a of animals) {
+    if (!a.alive || a.fowHidden) continue;
+    const sp = a.bear ? 'bear' : a.farm || 'elk';
+    if (a.hurtAt > (a.heard ?? -1)) { a.heard = a.hurtAt; if (app.settings.gore) { const y = (a.y ?? 0) + (a.farm === 'sheep' ? .5 : .9); fx.blood(a.x, y, a.z, 0, 0, 7); if (a.hp <= 0) fx.pools.add(a.x, a.y ?? 0, a.z, a.bear || a.farm === 'cow' ? 1.1 : .8); } if (now - (last[sp + 'h'] ?? -99) > .8) { last[sp + 'h'] = now; app.call(sp, a.x, a.z, 1.2); } continue; } // a cry of pain (or its last one)
+    if (a.hp <= 0 || earDist(a.x, a.z) > R || !ok(sp)) continue;
+    const every = a.bear && a.angry ? 2.5 : CALL_EVERY[sp];
+    if (Math.random() < .25 / every) { last[sp] = now; app.call(sp, a.x, a.z, a.bear && a.angry ? 1.2 : 1); }
+  }
+  if (eagleBatch && ok('eagle')) { const et = app.eagleT || 0; for (const e of EAGLES) { const an = e.ph + et * e.w, x = e.cx + Math.cos(an) * e.R, z = e.cz + Math.sin(an) * e.R; if (earDist(x, z) < R && Math.random() < .25 / 25) { last.eagle = now; app.call('eagle', x, z, .8); break; } } }
+}
 app.sfx = (name, x, z, vol = 1) => sound.play(name, x === undefined ? vol : vol * Math.max(0, 1 - earDist(x, z) / (app.mode === 'pov' ? 45 : 30 + rts.dist)));
 addEventListener('pointerdown', () => sound.init(), { capture: true });
 addEventListener('keydown', () => sound.init(), { capture: true });
@@ -343,7 +364,7 @@ function setupGame(mode, diff, civ = 'franks', enemyCiv, god) {
   const mis = mode === 'campaign' ? MISSIONS[app.missionId || 0] : null; if (mis) { mode = 'skirmish'; diff = mis.diff; }
   if (god === undefined) god = !!app.cfg.god && !tut && !mis; // God mode: never in the tutorial or campaign
   app.campaign = null;
-  app.game?.fow?.dispose(); app.game?.rings?.dispose();
+  app.game?.fow?.dispose(); app.game?.rings?.dispose(); fx.pools.clear();
   if (app.game?.field) for (const f of app.game.field.flags) f.mesh.removeFromParent();
   app.tut = null; document.getElementById('tutor').classList.add('hide');
   if (!CIVS[civ]) civ = 'franks';
@@ -357,6 +378,7 @@ function setupGame(mode, diff, civ = 'franks', enemyCiv, god) {
   if (god) loadLazy(); // dragon, troll, demon and skeleton models (only God-mode games download them)
   g.onEnd = res => setTimeout(() => showEnd(res), 1600);
   g.onUnitDeath = u => {
+    if (app.settings.gore && bleeds(u)) { fx.blood(u.x, u.y + .8, u.z, 0, 0, 10); fx.pools.add(u.x, u.y, u.z, (u.d.horse ? 1.1 : .75) * (u.scale || 1)); }
     if (app.sel.includes(u)) app.select(app.sel.filter(e => e !== u));
     if (pov.unit === u) { app.toast('You have fallen!', 3); setTimeout(() => { if (pov.unit === u) exitPOV(); }, 1500); }
   };
@@ -367,6 +389,7 @@ function setupGame(mode, diff, civ = 'franks', enemyCiv, god) {
     const melee = src?.d?.melee, y = t.kind === 'bld' ? t.y + 1.2 : t.y + 1.1;
     if (melee) { const metal = (t.d.arm || 0) >= 2; if (metal && Math.random() < .6) fx.sparks(t.x, y, t.z, 5); app.sfx(metal ? 'clang' : 'thud', t.x, t.z, .7); }
     else if (t.kind === 'bld') fx.dust(t.x, t.y + .5, t.z, 3, .8);
+    if (app.settings.gore && t.kind === 'unit' && bleeds(t)) { const dx = t.x - (src?.x ?? t.x), dz = t.z - (src?.z ?? t.z), l = Math.hypot(dx, dz) || 1; fx.blood(t.x, y, t.z, dx / l, dz / l, Math.min(14, 3 + amt / 3 | 0)); if (amt > 12 && Math.random() < .5) fx.pools.add(t.x + dx / l * .6, t.y, t.z + dz / l * .6, .3); }
   };
   g.onShoot = (src, kind, f, t) => {
     if (kind === 'fire' && f && t) { fx.breath(f.x, f.y, f.z, t.x, (t.y ?? f.y - 6) + 1, t.z); app.sfx('collapse', src.x, src.z, .35); if (src.type === 'dragon' && src.team === 0 && Math.random() < .5) sound.voice('dragon', 'attack'); return; } // dragon / fire-ship fire (and a roar)
@@ -385,9 +408,10 @@ function setupGame(mode, diff, civ = 'franks', enemyCiv, god) {
     else if (t.toAge) app.toast(`The enemy has reached the ${AGES[t.toAge]}.`, 3);
   };
   g.onAbility = (u, k) => {
-    fx.dust(u.x, u.y, u.z, k === 'charge' ? 10 : 18, k === 'charge' ? 1.5 : 4); app.sfx(k === 'cry' ? 'horn' : k === 'rally' ? 'fanfare' : 'thud', u.x, u.z, 1);
-    if (u.team === 0 && k === 'cry' && app.settings.voice) sound.say(`For the ${g.civ[0].name}!`, { pitch: .65, rate: 1.1 });
-    if (u.team === 0) app.toast({ cry: 'War Cry! Your soldiers fight harder.', charge: 'Charge!', rally: 'Rally! Fleeing soldiers return to the fight.' }[k], 2);
+    if (k === 'spin') { fx.dust(u.x, u.y, u.z, 16, 3); fx.sparks(u.x, u.y + 1.1, u.z, 10); app.sfx('clang', u.x, u.z, 1); setTimeout(() => app.sfx('clang', u.x, u.z, .8), 180); }
+    if (k === 'slam') { const p = u.slamAt || u; fx.dust(p.x, u.y, p.z, 24, 3.5, [.5, .44, .36]); fx.sparks(p.x, u.y + .3, p.z, 12); app.sfx('stone', p.x, p.z, 1); }
+    if (k === 'spear') app.sfx('arrow', u.x, u.z, 1);
+    if (u.team === 0 && k !== 'spear') app.toast({ spin: 'Whirlwind!', slam: 'Earthshaker! Enemies around the blow are stunned.' }[k], 1.6);
   };
   g.onPromote = u => { if (u.team === 0) app.sfx('chime', u.x, u.z, .7); };
   g.onCharge = (u, e) => { fx.dust(e.x, e.y, e.z, 8, .8); app.sfx('thud', e.x, e.z, 1); };
@@ -468,7 +492,7 @@ function enterPOV(unit) {
   $('hud').classList.add('hide'); $('pov').classList.remove('hide'); $('joyIdle').classList.toggle('hide', !isTouch);
   $('pvn').textContent = (unit.d.hero ? '⚑ ' : '') + unit.d.name;
   app.toast(`You are now playing as ${unit.d.hero ? 'your Commander' : 'a ' + unit.d.name}.`, 2.5);
-  $('povhelp').textContent = isTouch ? 'Left thumb: move · Right thumb: look' : 'Drag mouse to look around · W/S/↑/↓ move · A/D sidestep · ←/→ or Q/E turn · Click or Space strike · Shift sprint · F follow · V 1st/3rd · Tab back · Double-click: mouse-look';
+  $('povhelp').textContent = isTouch ? 'Left thumb: move · Right thumb: look' : 'Drag mouse to look around · W/S/↑/↓ move · A/D sidestep · ←/→ or Q/E turn · Click or Space strike · Shift sprint · R Whirlwind · T Earthshaker · Y Spear · F follow · V 1st/3rd · Tab back · Double-click: mouse-look';
   $('povhelp').classList.remove('hide'); clearTimeout(enterPOV.t); enterPOV.t = setTimeout(() => $('povhelp').classList.add('hide'), 6000);
 }
 function exitPOV() {
@@ -503,10 +527,12 @@ onBtn('bView', () => pov.setFirst(!pov.first));
 $('bStrike').addEventListener('pointerdown', e => { e.stopPropagation(); pov.holding = true; pov.strike(); });
 for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) $('bStrike').addEventListener(ev, () => { pov.holding = false; });
 onBtn('bFollow', () => pov.toggleFollow());
-for (const [id, k] of [['bCry', 'cry'], ['bCharge', 'charge'], ['bRally', 'rally']]) onBtn(id, () => { if (pov.unit && !app.game.useAbility(pov.unit, k)) app.toast(`Recharging: ${Math.ceil(app.game.abilityLeft(pov.unit, k))}s`, 1.2); });
+const ABTN = [['bSpin', 'spin'], ['bSlam', 'slam'], ['bSpear', 'spear']]; // the Commander's special attacks (ABIL in game.js)
+for (const [id, k] of ABTN) onBtn(id, () => { const u = pov.unit; if (!u) return; if (pov.yaw !== undefined) u.yaw = pov.yaw; // aim where you're looking
+  if (!app.game.useAbility(u, k)) app.toast(app.game.abilityLeft(u, k) > 0 ? `Recharging: ${Math.ceil(app.game.abilityLeft(u, k))}s` : 'No enemy within 16 m to throw at.', 1.2); });
 setInterval(() => { // ability buttons in 3rd person: only for the Commander, greyed out while recharging
   const u = app.mode === 'pov' && pov.unit?.d.hero ? pov.unit : null; $('povabil').classList.toggle('hide', !u); if (!u) return;
-  for (const [id, k, key] of [['bCry', 'cry', 'R'], ['bCharge', 'charge', 'C'], ['bRally', 'rally', 'T']]) { const left = Math.ceil(app.game.abilityLeft(u, k)), b = $(id); b.classList.toggle('cool', left > 0); b.querySelector('small').textContent = left ? left + 's' : (isTouch ? 'ready' : key); }
+  for (const [id, k] of ABTN) { const key = ABIL[k].key, left = Math.ceil(app.game.abilityLeft(u, k)), b = $(id); b.classList.toggle('cool', left > 0); b.querySelector('small').textContent = left ? left + 's' : (isTouch ? 'ready' : key); }
 }, 250);
 onBtn('bAct', () => pov.act());
 onBtn('bMount', () => pov.toggleMount());
@@ -585,13 +611,13 @@ onBtn('hTut', () => { app.cfg.mode = 'tutorial'; try { localStorage.setItem('bf.
 onBtn('bBack', showHome);
 const openSettings = () => {
   const S = app.settings; $('sLook').value = S.look; $('sCam').value = S.cam; $('sVol').value = S.vol; $('sMusic').checked = S.music; $('sVoice').checked = S.voice; $('sBig').checked = S.big; $('sAuto').checked = S.auto; $('sFog').checked = S.fog; $('sMapBot').checked = S.mapBot; $('sCycle').checked = S.cycle; $('sAnim').checked = S.animOn !== false;
-  for (const k of ['bright', 'sat', 'haze', 'bloom', 'mist']) $('s_' + k).value = S[k] ?? 1; $('s_film').checked = !!S.film; $('s_rings').checked = S.rings !== false; $('s_ao').checked = !!S.ao; $('s_ao').disabled = qLevel !== 'high';
+  for (const k of ['bright', 'sat', 'haze', 'bloom', 'mist']) $('s_' + k).value = S[k] ?? 1; $('s_film').checked = !!S.film; $('s_rings').checked = S.rings !== false; $('s_gore').checked = !!S.gore; $('s_ao').checked = !!S.ao; $('s_ao').disabled = qLevel !== 'high';
   $('settings').classList.remove('hide');
 };
 onBtn('bSettings', openSettings); onBtn('bSettings2', openSettings);
 onBtn('bSetBack', () => { $('settings').classList.add('hide'); });
 for (const [id, key, num] of [['sLook', 'look', 1], ['sCam', 'cam', 1], ['sVol', 'vol', 1], ['sMusic', 'music'], ['sVoice', 'voice'], ['sBig', 'big'], ['sAuto', 'auto'], ['sFog', 'fog'], ['sMapBot', 'mapBot'], ['sCycle', 'cycle'], ['sAnim', 'animOn'],
-  ['s_bright', 'bright', 1], ['s_sat', 'sat', 1], ['s_haze', 'haze', 1], ['s_bloom', 'bloom', 1], ['s_mist', 'mist', 1], ['s_film', 'film'], ['s_ao', 'ao'], ['s_rings', 'rings']])
+  ['s_bright', 'bright', 1], ['s_sat', 'sat', 1], ['s_haze', 'haze', 1], ['s_bloom', 'bloom', 1], ['s_mist', 'mist', 1], ['s_film', 'film'], ['s_ao', 'ao'], ['s_rings', 'rings'], ['s_gore', 'gore']])
   $(id).addEventListener('input', e => { app.settings[key] = num ? +e.target.value : e.target.checked; applySettings(); });
 $('sAnim').addEventListener('change', () => { if (!app.game) location.reload(); else app.toast('Animated soldiers: applies after you return to the main menu.', 3); }); // models load at start-up
 onBtn('s_reset', () => { Object.assign(app.settings, { bright: 1, sat: 1, haze: 1, bloom: 1, mist: 1, film: false, ao: !isTouch }); applySettings(); openSettings(); });
@@ -738,7 +764,7 @@ addEventListener('keydown', e => {
     if (e.code === 'KeyF') pov.toggleFollow();
     if (e.code === 'KeyG') pov.act();
     if (e.code === 'KeyM') pov.toggleMount();
-    if (pov.unit?.d.hero) { const k = { KeyR: 'cry', KeyC: 'charge', KeyT: 'rally' }[e.code]; if (k) $({ cry: 'bCry', charge: 'bCharge', rally: 'bRally' }[k]).click(); }
+    if (pov.unit?.d.hero) { const b = ABTN.find(([, k]) => 'Key' + ABIL[k].key === e.code); if (b) $(b[0]).click(); }
     if (e.code === 'Space') { e.preventDefault(); pov.holding = true; pov.strike(); }
   }
 });
@@ -774,11 +800,11 @@ renderer.setAnimationLoop(() => {
     rts.lookAt(SIZE / 2 + Math.cos(menuYaw * .7) * 16, SIZE / 2 + Math.sin(menuYaw * .7) * 16); rts.update(real);
   }
   if (g) g.syncVisuals(dt, pov.first && pov.unit ? pov.unit.id : -1);
-  if (deerBatch && (bearBatch || !bearList.length)) {
-    const gt = g ? g.time : t, pose = a => ({ x: a.x, y: a.y ?? heightAt(a.x, a.z), z: a.z, yaw: a.yaw, scale: 1, dt, spd: a.moving ? (a.spd || .9) : 0, dead: a.hp <= 0, dT: a.hp <= 0 ? gt - (a.deadAt ?? gt - 9) : 0, hidden: !a.alive || a.fowHidden, swT: a.bear ? gt - a.biteAt : 9 });
-    deerList.forEach((a, i) => deerBatch.set(i, pose(a))); deerBatch.flush();
-    if (bearBatch) { bearList.forEach((a, i) => bearBatch.set(i, pose(a))); bearBatch.flush(); }
+  if (animalsAnimated) {
+    const gt = g ? g.time : t, pose = a => ({ x: a.x, y: a.y ?? heightAt(a.x, a.z), z: a.z, yaw: a.yaw, scale: 1, dt, spd: a.moving ? Math.max(.25, a.spd || .9) : 0, dead: a.hp <= 0, dT: a.hp <= 0 ? gt - (a.deadAt ?? gt - 9) : 0, hidden: !a.alive || a.fowHidden, swT: a.bear ? gt - a.biteAt : 9 });
+    for (const s of SPECIES) { s.list.forEach((a, i) => s.batch.set(i, pose(a))); s.batch.flush(); }
   }
+  animalCalls(real);
   if (eagleBatch) { const et = (app.eagleT = (app.eagleT || 0) + dt); EAGLES.forEach((e, i) => { const a = e.ph + et * e.w, s = Math.sign(e.w); eagleBatch.set(i, { x: e.cx + Math.cos(a) * e.R, y: e.h + Math.sin(a * 2.3) * 1.5, z: e.cz + Math.sin(a) * e.R, yaw: Math.atan2(-Math.sin(a) * s, Math.cos(a) * s), scale: 1.5, dt, spd: 1 }); }); eagleBatch.flush(); }
   else syncAnimals(t);
   water.userData.update(t); U.time.value = t; updateFish(t);
